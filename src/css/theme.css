@@ -1,0 +1,6 @@
+:root{
+--bg:#f6f8fa;--panel:#fff;--line:#d0d7de;--text:#24292f;--accent:#0969da;
+}
+body{background:var(--bg);color:var(--text)}
+.tb-sidebar,.tb-header,footer{background:var(--panel)}
+button{background:var(--accent);color:white;border:none;padding:8px 12px;border-radius:6px}
