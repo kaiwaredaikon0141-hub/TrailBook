@@ -62,6 +62,125 @@ TrailBook の設計判断を記録する。
 
 
 
+---
+
+# Decision 0007
+
+Title
+
+FolderScanner is a Service
+
+Date
+
+2026-08
+
+Status
+
+Accepted
+
+Decision
+
+FolderScannerをService Layerへ配置する。
+
+Reason
+
+Directoryの走査はアプリケーション処理であり、
+UIやBrowser APIの接続処理から分離するため。
+
+Alternatives
+
+fileディレクトリに配置する
+
+Appに直接実装する
+
+Rejected
+
+Consequences
+
+FolderScannerはService LayerからModelを生成する。
+
+---
+
+# Decision 0008
+
+Title
+
+Release 0.2 Does Not Parse GPX Content
+
+Date
+
+2026-08
+
+Status
+
+Accepted
+
+Decision
+
+Release 0.2ではGPXファイルの存在だけを検出し、
+内容解析は行わない。
+
+Reason
+
+GPXParser、Track、WaypointはRelease 0.3の責務であり、
+Release 0.2のFolder Libraryに含めないため。
+
+Alternatives
+
+GPX内容を同時に解析する
+
+Rejected
+
+Consequences
+
+Release 0.2ではGPXファイルの一覧と件数だけを扱う。
+
+---
+
+# Decision 0009
+
+Title
+
+Release 0.2 Library Events
+
+Date
+
+2026-08
+
+Status
+
+Accepted
+
+Decision
+
+Release 0.2では、ライブラリ操作に次のイベントを使用する。
+
+folder:open-requested
+
+library:loadedのペイロードは{ library }とする。
+
+library:load-failedのペイロードは{ error }とする。
+
+フォルダ選択のキャンセルではlibrary:load-failedを発行しない。
+
+Reason
+
+UIとServiceの依存を分離し、
+キャンセルと実際の失敗を区別するため。
+
+Alternatives
+
+UIからFolderScannerを直接呼び出す
+
+キャンセルを失敗イベントとして扱う
+
+Rejected
+
+Consequences
+
+Appがイベントを中継し、
+TreeViewとStatusBarはライブラリイベントを購読する。
+
 議論途中の内容は記録しない。
 
 

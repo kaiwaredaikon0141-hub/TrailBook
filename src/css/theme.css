@@ -1,0 +1,65 @@
+:root{
+
+    --bg:#f4f5f7;
+
+    --panel:#ffffff;
+
+    --border:#d8d8d8;
+
+    --accent:#2563eb;
+}
+
+body{
+
+    background:var(--bg);
+}
+
+.toolbar{
+
+    background:var(--panel);
+
+    border-bottom:1px solid var(--border);
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:center;
+
+    padding:0 16px;
+
+    font-weight:600;
+}
+
+.sidebar{
+
+    background:white;
+
+    border-right:1px solid var(--border);
+
+    padding:12px;
+}
+
+.map{
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    color:#777;
+}
+
+.statusbar{
+
+    background:white;
+
+    border-top:1px solid var(--border);
+
+    display:flex;
+
+    align-items:center;
+
+    padding-left:12px;
+}
