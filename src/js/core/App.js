@@ -6,11 +6,21 @@ import GPXParser from "../services/GPXParser.js";
 import Toolbar from "../ui/Toolbar.js";
 import TreeView from "../ui/TreeView.js";
 import StatusBar from "../ui/StatusBar.js";
+import MapView from "../ui/MapView.js";
 
 /**
  * TrailBook Application
  */
 export default class App {
+
+    #presentationState = {
+        selectedFileHandle: null,
+        selectedFileName: null,
+        parsedResult: null,
+        status: "idle"
+    };
+
+    #requestId = 0;
 
     /**
      * Creates the application coordinator.
@@ -24,6 +34,7 @@ export default class App {
         this.toolbar = null;
         this.treeView = null;
         this.statusBar = null;
+        this.mapView = null;
         this.folderScanner = new FolderScanner();
         this.gpxLoader = new GPXLoader();
         this.gpxParser = new GPXParser();
@@ -63,9 +74,11 @@ export default class App {
 
         this.toolbar = new Toolbar(this.config.version);
 
-        this.treeView = new TreeView();
+        this.treeView = new TreeView(this.eventBus);
 
         this.statusBar = new StatusBar();
+
+        this.mapView = new MapView(this.config, this.eventBus);
     }
 
     /**
@@ -91,7 +104,7 @@ export default class App {
 
             this.treeView.element,
 
-            this.mapArea
+            this.mapView.element
 
         );
 
@@ -143,24 +156,46 @@ export default class App {
 
         this.eventBus.on("gpx:parse-requested", ({ fileHandle }) => {
 
-            this.parseGPX(fileHandle);
+            this.handleGPXRequest(fileHandle);
 
         });
 
-        this.eventBus.on("gpx:parsed", () => {
+        this.eventBus.on("gpx:parsed", ({ fileHandle, result }) => {
 
-            console.log("GPX parsed successfully.");
+            this.handleGPXParsed(fileHandle, result);
 
         });
 
         this.eventBus.on("gpx:parse-failed", ({ fileHandle, error }) => {
 
-            console.error(
-                `Failed to parse GPX: ${fileHandle.name}`,
-                error
-            );
+            this.handleGPXFailed(fileHandle, error);
 
-            this.statusBar.showGPXError();
+        });
+
+        this.eventBus.on("map:clear-requested", () => {
+
+            this.clearPresentation();
+
+        });
+
+        this.eventBus.on("map:display-failed", ({ error }) => {
+
+            console.error("Map display failed.", error);
+
+            this.mapView.showError();
+
+            if (this.#presentationState.selectedFileHandle) {
+
+                this.#setPresentationState("error", {
+                    parsedResult: null
+                });
+
+                this.treeView.setError(
+                    this.#presentationState.selectedFileHandle
+                );
+            }
+
+            this.statusBar.showMapError();
 
         });
 
@@ -168,6 +203,8 @@ export default class App {
             "click",
             () => this.eventBus.emit("folder:open-requested")
         );
+
+        this.mapView.initialize();
 
     }
 
@@ -206,7 +243,7 @@ export default class App {
      * @param {FileSystemFileHandle} fileHandle
      * @returns {Promise<void>}
      */
-    async parseGPX(fileHandle) {
+    async parseGPX(fileHandle, requestId) {
 
         try {
 
@@ -216,6 +253,10 @@ export default class App {
                 loaded.sourceFileName
             );
 
+            if (!this.#isCurrentRequest(fileHandle, requestId)) {
+                return;
+            }
+
             this.eventBus.emit("gpx:parsed", {
                 fileHandle,
                 result
@@ -223,11 +264,155 @@ export default class App {
 
         } catch (error) {
 
+            if (!this.#isCurrentRequest(fileHandle, requestId)) {
+                return;
+            }
+
             this.eventBus.emit("gpx:parse-failed", {
                 fileHandle,
                 error
             });
         }
+    }
+
+    /**
+     * Starts parsing for a selected GPX file or refocuses an existing display.
+     *
+     * @param {FileSystemFileHandle} fileHandle
+     * @returns {void}
+     */
+    handleGPXRequest(fileHandle) {
+
+        const isSameFile =
+            this.#presentationState.selectedFileHandle === fileHandle;
+
+        if (isSameFile && this.#presentationState.status === "loading") {
+            return;
+        }
+
+        if (isSameFile && this.#presentationState.status === "loaded") {
+            this.mapView.refocus();
+
+            return;
+        }
+
+        const requestId = ++this.#requestId;
+
+        this.#setPresentationState("loading", {
+            selectedFileHandle: fileHandle,
+            selectedFileName: fileHandle.name,
+            parsedResult: null
+        });
+
+        this.treeView.setLoading(fileHandle);
+
+        this.mapView.clear();
+
+        this.mapView.resetView();
+
+        this.mapView.showLoading();
+
+        this.statusBar.showGPXLoading(fileHandle.name);
+
+        this.parseGPX(fileHandle, requestId);
+    }
+
+    /**
+     * Applies a successful parse result to the current presentation.
+     *
+     * @param {FileSystemFileHandle} fileHandle
+     * @param {object} result
+     * @returns {void}
+     */
+    handleGPXParsed(fileHandle, result) {
+
+        if (this.#presentationState.selectedFileHandle !== fileHandle) {
+            return;
+        }
+
+        try {
+
+            this.mapView.displayGPX(result);
+
+            this.#setPresentationState("loaded", {
+                parsedResult: result
+            });
+
+            this.treeView.setLoaded(fileHandle);
+
+            this.statusBar.showGPXLoaded(fileHandle.name);
+
+        } catch (error) {
+
+            this.eventBus.emit("map:display-failed", { error });
+        }
+    }
+
+    /**
+     * Applies a failed parse result to the current presentation.
+     *
+     * @param {FileSystemFileHandle} fileHandle
+     * @param {Error} error
+     * @returns {void}
+     */
+    handleGPXFailed(fileHandle, error) {
+
+        if (this.#presentationState.selectedFileHandle !== fileHandle) {
+            return;
+        }
+
+        console.error(`Failed to parse GPX: ${fileHandle.name}`, error);
+
+        this.#setPresentationState("error", {
+            parsedResult: null
+        });
+
+        this.treeView.setError(fileHandle);
+
+        this.mapView.clear();
+
+        this.mapView.showError();
+
+        this.statusBar.showGPXFailed(fileHandle.name);
+    }
+
+    /**
+     * Clears the active GPX presentation.
+     *
+     * @returns {void}
+     */
+    clearPresentation() {
+
+        this.#requestId += 1;
+
+        this.#setPresentationState("idle", {
+            selectedFileHandle: null,
+            selectedFileName: null,
+            parsedResult: null
+        });
+
+        this.mapView.clear();
+
+        this.mapView.resetView();
+
+        this.treeView.clearSelection();
+
+        this.statusBar.showReady();
+    }
+
+    #setPresentationState(status, values = {}) {
+
+        this.#presentationState = {
+            ...this.#presentationState,
+            ...values,
+            status
+        };
+    }
+
+    #isCurrentRequest(fileHandle, requestId) {
+
+        return requestId === this.#requestId &&
+            this.#presentationState.selectedFileHandle === fileHandle;
     }
 
 }

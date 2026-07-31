@@ -260,43 +260,43 @@ Tasks
 
 
 
-□ GPX Selection
+■ GPX Selection
 
 
 
-□ Presentation State
+■ Presentation State
 
 
 
-□ Leaflet Local Distribution
+■ Leaflet Local Distribution
 
 
 
-□ MapView
+■ MapView
 
 
 
-□ LayerManager
+■ LayerManager
 
 
 
-□ Track Polyline
+■ Track Polyline
 
 
 
-□ Waypoint Marker
+■ Waypoint Marker
 
 
 
-□ Auto Zoom
+■ Auto Zoom
 
 
 
-□ Loading and Error State
+■ Loading and Error State
 
 
 
-□ Clear Display
+■ Clear Display
 
 
 

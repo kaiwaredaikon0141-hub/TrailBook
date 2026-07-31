@@ -3,7 +3,15 @@ export default class TreeView {
     /**
      * Creates an empty library tree view.
      */
-    constructor() {
+    constructor(eventBus) {
+
+        this.eventBus = eventBus;
+
+        this.fileNodes = new Map();
+
+        this.fileStates = new Map();
+
+        this.selectedElement = null;
 
         this.element = this.create();
 
@@ -39,6 +47,12 @@ export default class TreeView {
 
         const rootList = this.element.querySelector(".tree-root");
 
+        this.fileNodes.clear();
+
+        this.fileStates.clear();
+
+        this.selectedElement = null;
+
         rootList.replaceChildren(this.createFolderItem(library.rootFolder));
     }
 
@@ -73,7 +87,38 @@ export default class TreeView {
 
             const fileItem = document.createElement("li");
 
+            fileItem.className = "gpx-file";
+
+            fileItem.setAttribute("role", "treeitem");
+
+            fileItem.setAttribute("aria-selected", "false");
+
+            fileItem.tabIndex = 0;
+
             fileItem.textContent = fileHandle.name;
+
+            this.fileNodes.set(fileHandle, fileItem);
+
+            this.fileStates.set(fileHandle, "idle");
+
+            fileItem.addEventListener(
+                "click",
+                () => this.activateFile(fileHandle)
+            );
+
+            fileItem.addEventListener(
+                "keydown",
+                event => {
+
+                    if (event.key !== "Enter" && event.key !== " ") {
+                        return;
+                    }
+
+                    event.preventDefault();
+
+                    this.activateFile(fileHandle);
+                }
+            );
 
             children.append(fileItem);
         });
@@ -84,6 +129,125 @@ export default class TreeView {
         }
 
         return item;
+    }
+
+    /**
+     * Activates a GPX file without serializing its handle into the DOM.
+     *
+     * @param {FileSystemFileHandle} fileHandle
+     * @returns {void}
+     */
+    activateFile(fileHandle) {
+
+        const state = this.fileStates.get(fileHandle);
+
+        if (state === "loading") {
+            return;
+        }
+
+        this.selectFile(fileHandle);
+
+        this.eventBus.emit("gpx:parse-requested", { fileHandle });
+    }
+
+    /**
+     * Marks a file as loading and selected.
+     *
+     * @param {FileSystemFileHandle} fileHandle
+     * @returns {void}
+     */
+    setLoading(fileHandle) {
+
+        this.clearTransientStates();
+
+        this.selectFile(fileHandle);
+
+        this.fileStates.set(fileHandle, "loading");
+
+        this.fileNodes.get(fileHandle)?.classList.add("is-loading");
+    }
+
+    /**
+     * Marks a file as successfully loaded.
+     *
+     * @param {FileSystemFileHandle} fileHandle
+     * @returns {void}
+     */
+    setLoaded(fileHandle) {
+
+        this.clearTransientStates();
+
+        this.fileStates.set(fileHandle, "loaded");
+    }
+
+    /**
+     * Marks a file as failed while keeping it selected.
+     *
+     * @param {FileSystemFileHandle} fileHandle
+     * @returns {void}
+     */
+    setError(fileHandle) {
+
+        this.clearTransientStates();
+
+        this.selectFile(fileHandle);
+
+        this.fileStates.set(fileHandle, "error");
+
+        this.fileNodes.get(fileHandle)?.classList.add("is-error");
+    }
+
+    /**
+     * Clears selection and transient file states.
+     *
+     * @returns {void}
+     */
+    clearSelection() {
+
+        this.fileStates.forEach((state, fileHandle) => {
+
+            this.fileStates.set(fileHandle, "idle");
+        });
+
+        this.fileNodes.forEach(fileNode => {
+
+            fileNode.classList.remove("is-loading", "is-error");
+
+            fileNode.setAttribute("aria-selected", "false");
+
+            fileNode.classList.remove("is-selected");
+        });
+
+        this.selectedElement = null;
+    }
+
+    selectFile(fileHandle) {
+
+        this.fileNodes.forEach(fileNode => {
+
+            const isSelected = fileNode === this.fileNodes.get(fileHandle);
+
+            fileNode.classList.toggle("is-selected", isSelected);
+
+            fileNode.setAttribute("aria-selected", String(isSelected));
+        });
+
+        this.selectedElement = this.fileNodes.get(fileHandle) || null;
+    }
+
+    clearTransientStates() {
+
+        this.fileNodes.forEach((fileNode, fileHandle) => {
+
+            fileNode.classList.remove("is-loading", "is-error");
+
+            const state = this.fileStates.get(fileHandle);
+
+            if (state === "loading" || state === "error") {
+
+                this.fileStates.set(fileHandle, "idle");
+            }
+        });
     }
 
 }
