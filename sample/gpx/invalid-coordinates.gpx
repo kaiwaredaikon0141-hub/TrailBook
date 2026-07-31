@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk><name>Invalid Points</name><trkseg>
+    <trkpt lat="91" lon="0" />
+    <trkpt lat="35" lon="135" />
+    <trkpt lat="missing" lon="135" />
+  </trkseg></trk>
+</gpx>

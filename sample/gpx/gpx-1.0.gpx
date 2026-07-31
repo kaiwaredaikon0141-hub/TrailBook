@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.0" creator="TrailBook" xmlns="http://www.topografix.com/GPX/1/0">
+  <metadata><name>Version 1.0</name></metadata>
+  <trk><name>Morning Track</name><trkseg>
+    <trkpt lat="35.0000" lon="135.0000"><ele>42.5</ele><time>2026-08-01T08:00:00Z</time></trkpt>
+  </trkseg></trk>
+</gpx>

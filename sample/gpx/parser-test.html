@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>TrailBook GPX Parser Test</title>
+    <style>
+        body { font-family: sans-serif; margin: 2rem; }
+        .pass { color: green; }
+        .fail { color: red; }
+    </style>
+</head>
+<body>
+    <h1>GPX Parser Test</h1>
+    <ul id="results"></ul>
+    <script type="module">
+        import GPXParser from "../../src/js/services/GPXParser.js";
+
+        const parser = new GPXParser();
+        const results = document.querySelector("#results");
+
+        function assert(condition, message) {
+            if (!condition) {
+                throw new Error(message);
+            }
+        }
+
+        function run(name, test) {
+            const item = document.createElement("li");
+
+            try {
+                test();
+                item.className = "pass";
+                item.textContent = `PASS: ${name}`;
+            } catch (error) {
+                item.className = "fail";
+                item.textContent = `FAIL: ${name} - ${error.message}`;
+                console.error(name, error);
+            }
+
+            results.append(item);
+        }
+
+        const valid = (body, version = "1.1") =>
+            `<gpx version="${version}">${body}</gpx>`;
+
+        run("GPX 1.0", () => {
+            const result = parser.parse(valid(
+                "<trk><name>one</name><trkseg><trkpt lat='1' lon='2'/></trkseg></trk>",
+                "1.0"
+            ));
+            assert(result.tracks.length === 1, "track missing");
+        });
+
+        run("GPX 1.1 and metadata", () => {
+            const result = parser.parse(valid(
+                "<metadata><keywords>a,b</keywords></metadata><wpt lat='1' lon='2'/>",
+                "1.1"
+            ));
+            assert(result.metadata.keywords === "a,b", "keywords changed");
+            assert(result.waypoints.length === 1, "waypoint missing");
+        });
+
+        run("Prefixed namespace", () => {
+            const result = parser.parse(
+                "<g:gpx xmlns:g='urn:g' version='1.1'><g:trk><g:trkseg><g:trkpt lat='1' lon='2'/></g:trkseg></g:trk></g:gpx>"
+            );
+            assert(result.tracks.length === 1, "prefixed track missing");
+        });
+
+        run("Namespace-free XML", () => {
+            const result = parser.parse(valid("<trk><trkseg><trkpt lat='1' lon='2'/></trkseg></trk>"));
+            assert(result.tracks.length === 1, "namespace-free track missing");
+        });
+
+        run("Multiple tracks", () => {
+            const result = parser.parse(valid(
+                "<trk><trkseg><trkpt lat='1' lon='2'/></trkseg></trk><trk><trkseg><trkpt lat='3' lon='4'/></trkseg></trk>"
+            ));
+            assert(result.tracks.length === 2, "track count mismatch");
+        });
+
+        run("Multiple segments stay separate", () => {
+            const result = parser.parse(valid(
+                "<trk><trkseg><trkpt lat='1' lon='2'/></trkseg><trkseg><trkpt lat='3' lon='4'/></trkseg></trk>"
+            ));
+            assert(result.tracks[0].segments.length === 2, "segments were joined");
+        });
+
+        run("Invalid coordinates and empty track", () => {
+            const result = parser.parse(valid(
+                "<trk><trkseg><trkpt lat='91' lon='2'/></trkseg></trk>"
+            ));
+            assert(result.tracks.length === 0, "invalid track remained");
+            assert(result.warnings.some(warning => warning.code === "INVALID_TRACK_POINT"), "point warning missing");
+            assert(result.warnings.some(warning => warning.code === "EMPTY_TRACK"), "track warning missing");
+        });
+
+        run("Invalid waypoint", () => {
+            const result = parser.parse(valid("<wpt lat='-91' lon='2'/><wpt lat='1' lon='2'/>"));
+            assert(result.waypoints.length === 1, "invalid waypoint remained");
+            assert(result.warnings.some(warning => warning.code === "INVALID_WAYPOINT"), "waypoint warning missing");
+        });
+
+        run("Broken XML fails", () => {
+            let failed = false;
+            try {
+                parser.parse("<gpx><trk>");
+            } catch (error) {
+                failed = error.code === "XML_PARSE_FAILED";
+            }
+            assert(failed, "broken XML did not fail");
+        });
+
+        run("Invalid root fails", () => {
+            let failed = false;
+            try {
+                parser.parse("<not-gpx />");
+            } catch (error) {
+                failed = error.code === "GPX_ROOT_INVALID";
+            }
+            assert(failed, "invalid root did not fail");
+        });
+
+        run("Extensions are ignored", () => {
+            const result = parser.parse(valid(
+                "<extensions><vendor>ignored</vendor></extensions><trk><trkseg><trkpt lat='1' lon='2'><extensions><vendor>ignored</vendor></extensions></trkpt></trkseg></trk>"
+            ));
+            assert(result.warnings.length === 0, "extension created warning");
+        });
+
+        run("Missing and unknown version warn", () => {
+            const missing = parser.parse("<gpx><trk><trkseg><trkpt lat='1' lon='2'/></trkseg></trk></gpx>");
+            const unknown = parser.parse("<gpx version='2.0'><trk><trkseg><trkpt lat='1' lon='2'/></trkseg></trk></gpx>");
+            assert(missing.warnings[0].code === "MISSING_VERSION", "missing version warning missing");
+            assert(unknown.warnings[0].code === "UNKNOWN_VERSION", "unknown version warning missing");
+        });
+
+        run("Invalid elevation is nullable", () => {
+            const result = parser.parse(valid("<trk><trkseg><trkpt lat='1' lon='2'><ele>bad</ele></trkpt></trkseg></trk>"));
+            assert(result.tracks[0].segments[0].points[0].elevation === null, "elevation was not null");
+            assert(result.warnings[0].code === "INVALID_ELEVATION", "elevation warning missing");
+        });
+    </script>
+</body>
+</html>

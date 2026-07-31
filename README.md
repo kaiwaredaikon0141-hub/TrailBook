@@ -11,11 +11,12 @@ architecture documents before making changes.
 
 ## Current Release
 
-Release 0.2: Folder Library
+Release 0.3: GPX Parser
 
 The current implementation can open a directory, recursively find subfolders
-and `.gpx` files, and display the resulting folder tree. GPX content parsing is
-planned for Release 0.3.
+and `.gpx` files, and parse an explicitly requested GPX file into Track,
+TrackSegment, TrackPoint, Waypoint, and Metadata models. GPX parsing does not
+start automatically when a library is opened.
 
 ## Technical Constraints
 

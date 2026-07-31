@@ -332,27 +332,27 @@ Tasks
 
 
 
-□ GPXLoader
+■ GPXLoader
 
 
 
-□ GPXParser
+■ GPXParser
 
 
 
-□ Track Model
+■ Track Model
 
 
 
-□ Waypoint Model
+■ Waypoint Model
 
 
 
-□ Metadata
+■ Metadata
 
 
 
-□ Error Handling
+■ Error Handling
 
 
 

@@ -49,4 +49,14 @@ export default class StatusBar {
         this.element.textContent = "ライブラリを開けませんでした";
     }
 
+    /**
+     * Displays a concise GPX parsing error.
+     *
+     * @returns {void}
+     */
+    showGPXError() {
+
+        this.element.textContent = "GPXを解析できませんでした";
+    }
+
 }

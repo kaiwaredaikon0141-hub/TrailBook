@@ -1,6 +1,8 @@
 import Config from "./Config.js";
 import EventBus from "./EventBus.js";
 import FolderScanner, { pickFolder } from "../services/FolderScanner.js";
+import GPXLoader from "../services/GPXLoader.js";
+import GPXParser from "../services/GPXParser.js";
 import Toolbar from "../ui/Toolbar.js";
 import TreeView from "../ui/TreeView.js";
 import StatusBar from "../ui/StatusBar.js";
@@ -23,6 +25,8 @@ export default class App {
         this.treeView = null;
         this.statusBar = null;
         this.folderScanner = new FolderScanner();
+        this.gpxLoader = new GPXLoader();
+        this.gpxParser = new GPXParser();
 
         this.workspace = null;
         this.mapArea = null;
@@ -137,6 +141,29 @@ export default class App {
 
         });
 
+        this.eventBus.on("gpx:parse-requested", ({ fileHandle }) => {
+
+            this.parseGPX(fileHandle);
+
+        });
+
+        this.eventBus.on("gpx:parsed", () => {
+
+            console.log("GPX parsed successfully.");
+
+        });
+
+        this.eventBus.on("gpx:parse-failed", ({ fileHandle, error }) => {
+
+            console.error(
+                `Failed to parse GPX: ${fileHandle.name}`,
+                error
+            );
+
+            this.statusBar.showGPXError();
+
+        });
+
         this.toolbar.pickFolderButton.addEventListener(
             "click",
             () => this.eventBus.emit("folder:open-requested")
@@ -170,6 +197,36 @@ export default class App {
             }
 
             this.eventBus.emit("library:load-failed", { error });
+        }
+    }
+
+    /**
+     * Loads and parses one explicitly requested GPX file.
+     *
+     * @param {FileSystemFileHandle} fileHandle
+     * @returns {Promise<void>}
+     */
+    async parseGPX(fileHandle) {
+
+        try {
+
+            const loaded = await this.gpxLoader.load(fileHandle);
+            const result = this.gpxParser.parse(
+                loaded.text,
+                loaded.sourceFileName
+            );
+
+            this.eventBus.emit("gpx:parsed", {
+                fileHandle,
+                result
+            });
+
+        } catch (error) {
+
+            this.eventBus.emit("gpx:parse-failed", {
+                fileHandle,
+                error
+            });
         }
     }
 

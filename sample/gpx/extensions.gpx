@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1" xmlns:x="urn:vendor">
+  <extensions><x:heartRate>150</x:heartRate></extensions>
+  <trk><name>Extensions Ignored</name><trkseg><trkpt lat="3" lon="4">
+    <extensions><x:cadence>80</x:cadence></extensions>
+  </trkpt></trkseg></trk>
+</gpx>
