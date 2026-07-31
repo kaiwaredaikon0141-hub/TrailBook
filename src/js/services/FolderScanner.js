@@ -21,11 +21,13 @@ export async function pickFolder() {
 }
 
 /**
- * Builds a library model from a directory handle.
+ * Scans a directory and builds a library model.
  */
 export default class FolderScanner {
 
     /**
+     * Scans the selected directory recursively.
+     *
      * @param {FileSystemDirectoryHandle} rootHandle
      * @returns {Promise<Library>}
      */

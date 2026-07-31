@@ -10,6 +10,9 @@ import StatusBar from "../ui/StatusBar.js";
  */
 export default class App {
 
+    /**
+     * Creates the application coordinator.
+     */
     constructor() {
 
         this.config = Config;
@@ -31,6 +34,8 @@ export default class App {
 
     /**
      * Application Entry Point
+        *
+        * @returns {void}
      */
     initialize() {
 
@@ -47,6 +52,8 @@ export default class App {
 
     /**
      * Create UI Components
+        *
+        * @returns {void}
      */
     createComponents() {
 
@@ -59,6 +66,8 @@ export default class App {
 
     /**
      * Create Main Layout
+        *
+        * @returns {void}
      */
     createLayout() {
 
@@ -95,6 +104,8 @@ export default class App {
 
     /**
      * Register Events
+        *
+        * @returns {void}
      */
     bindEvents() {
 
@@ -133,6 +144,11 @@ export default class App {
 
     }
 
+    /**
+     * Opens and scans a library selected by the user.
+     *
+     * @returns {Promise<void>}
+     */
     async loadLibrary() {
 
         try {

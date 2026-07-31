@@ -4,6 +4,8 @@
 export default class Library {
 
     /**
+     * Creates a library model.
+     *
      * @param {string} name
      * @param {import("./Folder.js").default} rootFolder
      * @param {number} folderCount

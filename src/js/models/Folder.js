@@ -4,6 +4,8 @@
 export default class Folder {
 
     /**
+     * Creates a folder model.
+     *
      * @param {string} name
      * @param {FileSystemDirectoryHandle} handle
      */

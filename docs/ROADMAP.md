@@ -280,23 +280,23 @@ Tasks
 
 
 
-□ FolderScanner
+■ FolderScanner
 
 
 
-□ Folder Model
+■ Folder Model
 
 
 
-□ Library Model
+■ Library Model
 
 
 
-□ Folder Tree
+■ Folder Tree
 
 
 
-□ Library Update
+■ Library Update
 
 
 

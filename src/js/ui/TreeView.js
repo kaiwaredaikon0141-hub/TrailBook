@@ -1,11 +1,19 @@
 export default class TreeView {
 
+    /**
+     * Creates an empty library tree view.
+     */
     constructor() {
 
         this.element = this.create();
 
     }
 
+    /**
+     * Creates the tree view container.
+     *
+     * @returns {HTMLElement}
+     */
     create() {
 
         const aside = document.createElement("aside");
@@ -25,6 +33,7 @@ export default class TreeView {
      * Renders a library without changing its model order.
      *
      * @param {import("../models/Library.js").default} library
+     * @returns {void}
      */
     render(library) {
 
@@ -33,6 +42,12 @@ export default class TreeView {
         rootList.replaceChildren(this.createFolderItem(library.rootFolder));
     }
 
+    /**
+     * Creates a tree item for a folder and its children.
+     *
+     * @param {import("../models/Folder.js").default} folder
+     * @returns {HTMLLIElement}
+     */
     createFolderItem(folder) {
 
         const item = document.createElement("li");
