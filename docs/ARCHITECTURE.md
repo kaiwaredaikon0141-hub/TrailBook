@@ -97,6 +97,8 @@ src/
 
         core/
 
+            state/
+
         ui/
 
         services/
@@ -143,6 +145,9 @@ ThemeManager
 
 ・設定管理
 
+Presentation StateはRelease 0.4ではApp内部の非永続private stateとして保持する。
+FolderやLibraryへ解析結果を保存しない。
+
 ---
 
 # UI Layer
@@ -168,6 +173,35 @@ PropertyView
 Dialog
 
 Panel
+
+MapViewは地図表示用DOMと表示状態を担当する。
+LeafletのLayer生成やBounds計算はLayerManagerへ委譲する。
+
+MapViewはFileSystemFileHandle、GPX XML、GPXParser、Folder、Library、
+TreeView内部状態を扱わない。
+
+---
+
+# Map Layer
+
+map/
+
+LayerManagerはLeaflet Layer APIとの接続を担当する。
+
+責務
+
+・TrackごとのLayer生成
+
+・TrackSegmentごとのPolyline生成
+
+・Waypoint Marker生成
+
+・表示中Layerの保持と解除
+
+・Track Bounds計算
+
+LayerManagerはファイル読み込み、GPX解析、TreeView、StatusBar、
+FileSystemFileHandle、アプリ全体の選択状態を知らない。
 
 ---
 

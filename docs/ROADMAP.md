@@ -1,81 +1,5 @@
 \# ROADMAP.md
 
-
-
-Version : 1.0
-
-Status  : Official
-
-
-
-Depends :
-
-
-
-PROJECT.md
-
-
-
-ARCHITECTURE.md
-
-
-
-CODING\_RULES.md
-
-
-
-\---
-
-
-
-\# Development Strategy
-
-
-
-TrailBook は
-
-
-
-小さく完成させる
-
-
-
-↓
-
-
-
-安定させる
-
-
-
-↓
-
-
-
-次へ進む
-
-
-
-を繰り返す。
-
-
-
-未完成な巨大機能は作らない。
-
-
-
-各 Release は
-
-
-
-単独で動作すること。
-
-
-
-\---
-
-
-
 \# Version Policy
 
 
@@ -145,58 +69,6 @@ Library
 
 
 Phase 3
-
-
-
-Map
-
-
-
-↓
-
-
-
-Phase 4
-
-
-
-Search
-
-
-
-↓
-
-
-
-Phase 5
-
-
-
-Statistics
-
-
-
-↓
-
-
-
-Phase 6
-
-
-
-Advanced Features
-
-
-
-↓
-
-
-
-Version 1.0
-
-
-
-\---
 
 
 
@@ -372,7 +244,7 @@ GPXを解析できる
 
 
 
-TreeView
+TreeView GPX Selection and Map Display
 
 
 
@@ -380,7 +252,7 @@ Goal
 
 
 
-ライブラリ表示
+TreeViewでGPXを選択し、そのGPXのTrackを地図へ表示する
 
 
 
@@ -388,27 +260,43 @@ Tasks
 
 
 
-□ Folder表示
+□ GPX Selection
 
 
 
-□ GPX表示
+□ Presentation State
 
 
 
-□ Icon
+□ Leaflet Local Distribution
 
 
 
-□ Expand
+□ MapView
 
 
 
-□ Collapse
+□ LayerManager
 
 
 
-□ Selection
+□ Track Polyline
+
+
+
+□ Waypoint Marker
+
+
+
+□ Auto Zoom
+
+
+
+□ Loading and Error State
+
+
+
+□ Clear Display
 
 
 
@@ -416,7 +304,7 @@ Done Definition
 
 
 
-Explorerのように閲覧可能
+選択したGPXのTrackを地図へ表示できる
 
 
 

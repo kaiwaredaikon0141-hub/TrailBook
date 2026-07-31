@@ -64,6 +64,149 @@ TrailBook の設計判断を記録する。
 
 ---
 
+---
+
+# Decision 0010
+
+Title
+
+Release 0.4 Uses Single GPX Display
+
+Date
+
+2026-08
+
+Status
+
+Accepted
+
+Decision
+
+Release 0.4では、TreeViewで選択した一つのGPXだけを地図へ表示する。
+別のGPXを選択した場合、以前の表示を置き換える。
+
+Reason
+
+単一選択の操作が分かりやすく、大量GPXでの表示負荷と状態管理を抑えられるため。
+
+Alternatives
+
+クリックごとに複数GPXを追加表示する
+
+Rejected
+
+Consequences
+
+複数GPX比較は将来のReleaseで追加する。
+
+---
+
+# Decision 0011
+
+Title
+
+Leaflet is Locally Bundled
+
+Date
+
+2026-08
+
+Status
+
+Accepted
+
+Decision
+
+Release 0.4ではLeafletをCDNではなく、src/vendor/leaflet/へローカル同梱する。
+
+Reason
+
+地図表示ライブラリ本体へのCDN依存を避け、オフラインファーストの構成に近づけるため。
+
+Alternatives
+
+CDNから読み込む
+
+Rejected
+
+Consequences
+
+通常のWeb地図タイルはネットワーク依存であり、
+オフライン時に背景地図が表示できない可能性は残る。
+オフラインタイル、キャッシュ、独自タイル管理はRelease 0.4の対象外とする。
+
+---
+
+# Decision 0012
+
+Title
+
+Presentation State Stays in App
+
+Date
+
+2026-08
+
+Status
+
+Accepted
+
+Decision
+
+Release 0.4では、selectedFileHandle、selectedFileName、parsedResult、statusを
+App内部の非永続Presentation Stateとして保持する。
+FolderやLibraryへ解析結果は保存しない。
+
+Reason
+
+Release 0.4の表示状態は小さく、独立Stateモジュールを追加せずに
+Appの調停責務内で管理できるため。
+
+Alternatives
+
+src/js/state/AppState.jsとして分離する
+
+Rejected
+
+Consequences
+
+状態が複雑化した場合は、将来の設計判断としてAppStateへの分離を検討する。
+
+---
+
+# Decision 0013
+
+Title
+
+App Mediates Map Display Events
+
+Date
+
+2026-08
+
+Status
+
+Accepted
+
+Decision
+
+Release 0.4ではAppがgpx:parsedを受け、MapViewへ表示を依頼する。
+MapViewはGPX解析イベントを直接購読しない。
+
+Reason
+
+MapViewを地図表示に限定し、GPXParserとの結合を避けるため。
+
+Alternatives
+
+MapViewがgpx:parsedを直接購読する
+
+Rejected
+
+Consequences
+
+Appのイベント接続は増えるが、Presentation Stateと表示経路を一箇所で管理できる。
+
 # Decision 0007
 
 Title
