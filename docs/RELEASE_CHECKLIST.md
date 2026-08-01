@@ -604,7 +604,7 @@ Architecture Status: Completed
 Decision Status: Completed
 Event Contract Status: Completed
 Test Plan Status: Completed
-Production Implementation Status: In progress — Unit 3 completed、Unit 4 not started
+Production Implementation Status: In progress — Unit 4 completed、Unit 5 not started
 Current production version: `1.0.0`
 Planning baseline commit: `29d7db7`
 
@@ -615,7 +615,7 @@ Planning baseline commit: `29d7db7`
 | 1 | Planning and architecture | Completed | Release 1.0 |
 | 2 | TrackStyleService and zoom-based width | Completed | Unit 1 |
 | 3 | SelectionState、Map click、highlight | Completed | Unit 2 |
-| 4 | UI settings persistence foundation | Pending | Unit 1 |
+| 4 | UI settings persistence foundation | Completed | Unit 1 |
 | 5 | Folder color UI and inheritance | Pending | Unit 3、Unit 4 |
 | 6 | Monochrome Map Mode | Pending | Unit 4 |
 | 7 | Integrated acceptance、performance、documentation、Release finalization | Pending | Unit 2〜6 |
@@ -663,13 +663,13 @@ Planned production files:
 - [ ] root Folder color
 - [ ] path hash fallbackと最終fallback
 - [ ] 色未設定Folder配下で既存GPX path hash色が維持される
-- [ ] valid `#RRGGBB`とinvalid color
-- [ ] schema version 1 read / write
-- [ ] corrupted localStorage JSON
-- [ ] unknown / future schema version
-- [ ] localStorage read / write / quota / security failure
-- [ ] root名変更と同名Library collision behavior
-- [x] module import — production module 29 / 29（`SelectionState.js`を含む）
+- [x] valid `#RGB` / `#RRGGBB` normalizationとinvalid color拒否 — Unit 4 static test Pass
+- [x] schema version 1 read / write — Unit 4 static test Pass
+- [x] corrupted localStorage JSON — Unit 4 session fallback Pass
+- [x] unknown / future schema version — fail closed Pass
+- [x] localStorage read / write / quota / security failure — session fallback Pass
+- [x] root名変更と同名Library collision behavior — Library ID pure test Pass
+- [x] module import — production module 30 / 30（`DisplaySettingsStore.js`を含む）
 - [x] circular dependency — 0件
 - [x] EventBus request / changed contract — Unit 3 static test Pass
 - [x] SelectionState単一path、clear reason、Library切り替え — Unit 3 static test Pass
@@ -693,9 +693,9 @@ Planned production files:
 - [ ] parent inheritance、child override、root inheritance
 - [ ] Defaultへ戻す、Cancel、Escape、focus return
 - [ ] reload後のFolder色復元
-- [ ] root Folder名変更時はDefault
-- [ ] 同名Libraryが設定を共有する既知制限
-- [ ] localStorage unavailableでもsession操作継続
+- [x] root Folder名変更時は別Library ID — Unit 4 Chrome Pass
+- [x] 同名Libraryが設定を共有する既知制限 — Unit 4 Chrome Pass
+- [x] localStorage unavailableでもsession操作継続 — Unit 4 Chrome Pass
 - [x] zoom bucket内でrestyleなし — Chrome browser acceptance Pass
 - [x] zoom bucket境界で表示中Trackだけrestyle — Chrome / Edge browser acceptance Pass
 - [ ] Folder色変更で対象配下だけrestyle
@@ -789,7 +789,7 @@ Unit 3 Implementation Status: Completed
 Unit 3 Static Test Status: Completed
 Unit 3 Browser Acceptance Status: Completed
 Unit 3 Status: Completed
-Unit 4 Status: Not started
+Unit 4 Status: Completed
 
 実装内容:
 
@@ -879,6 +879,88 @@ Known behavior:
 - overlapping TrackではLeafletの描画順で最前面にある1件を選択する。
 - `TreeView.js`は997行である。以後のUI追加では1,000行規則を守るためhelper抽出を優先する。
 
+### Unit 4 UI Settings Persistence Foundation
+
+Unit 4 Implementation Status: Completed
+Unit 4 Static Test Status: Completed
+Unit 4 Browser Acceptance Status: Completed
+Unit 4 Status: Completed
+Unit 5 Status: Not started
+
+実装内容:
+
+- `DisplaySettingsStore`は固定key`trailbook.uiSettings`を起動時に一度読み、schema version 1を検証する。
+- schemaは`{ version: 1, libraries: { [libraryId]: { folderColors } } }`とし、Folder color UIやTrack color適用より先に永続化責務だけを提供する。
+- `createLibraryId(rootFolderName)`はtrim済みroot名をURL encodingし、空名を`unnamed`へfallbackして`root-name:<name>`を返す。caseを保持し、FileHandle、構造hash、GPX hash、追加走査を使用しない。
+- Appは起動時にStoreを生成し、Library loadが完了した時点だけactive Library IDを更新する。未選択時は`null`、load failure時は以前の正常なidentityを維持する。
+- root Folder pathの空文字とnested Folder pathを保存できるが、Unit 4ではTreeView、Track style、SelectionState、Queue、cache、Searchへ接続しない。
+- valid colorは`#RGB`または`#RRGGBB`だけとし、`#RRGGBB`大文字へ正規化する。alpha、CSS color name、`rgb()`は拒否する。
+- plain objectだけを読み、配列、`null`、control character、不正separator、危険keyを拒否する。内部dictionaryはprototypeを持たず、unknown fieldはschema 1では無視する。
+- storage未定義、SecurityError、QuotaExceededError、JSON parse failure、schema mismatchではViewerを止めずsession memoryへfallbackする。storage内容、GPX、FileHandleをConsoleへ出力しない。
+- same value、存在しないremove、空のLibrary clearでは保存処理を行わない。変更APIの戻り値はsession内状態が変更された場合だけ`true`とする。
+
+DisplaySettingsStore API:
+
+- `createLibraryId(rootFolderName)`
+- `setActiveLibrary(rootFolderName)`
+- `getActiveLibraryId()`
+- `getFolderColors(libraryId)`
+- `getFolderColor(libraryId, folderPath)`
+- `setFolderColor(libraryId, folderPath, color)`
+- `removeFolderColor(libraryId, folderPath)`
+- `clearLibraryFolderColors(libraryId)`
+- `getStatus()`
+
+Static test result:
+
+| Test | Result | Notes |
+| --- | --- | --- |
+| Library ID / schema / API / failure fallback | Pass | 68 assertions。trim、empty、Unicode、separator、control character、schema、color、dangerous key、partial invalid、read / write failure、reload、future schema fail-closed |
+| App Library identity integration | Pass | 8 assertions。initial null、successful load、Store同期、load failure時の既存Library / identity維持 |
+| production module import | Pass | 30 / 30。`DisplaySettingsStore.js`を含む |
+| circular dependency | Pass | 0件 |
+| TreeView line count | Pass | 997行、差分なし |
+| Config version | Pass | `1.0.0` |
+
+#### Unit 4 Browser Acceptance Result
+
+| Test item | Windows Chrome | Windows Edge |
+| --- | --- | --- |
+| `trailbook.uiSettings` / schema version 1 | Pass | Pass |
+| root名からLibrary ID生成 | Pass | Pass — Library読込で確認 |
+| 日本語root名 | Pass | Not separately recorded |
+| 異なるroot名を別Libraryとして識別 | Pass | Pass — Library切り替えで確認 |
+| 同名root Folderの同一ID | Pass — 既知制限を確認 | Not separately recorded |
+| FileHandle / FolderHandle / GPX内容を保存しない | Pass | Not separately recorded |
+| malformed JSON後も起動 | Pass | Pass |
+| malformed JSONを設定として採用しない | Pass | Not separately recorded |
+| unknown schema version後も起動 | Pass | Not separately recorded |
+| unknown versionをversion 1で自動上書きしない | Pass | Not separately recorded |
+| storage key削除後も起動 | Pass | Not separately recorded |
+| storageなしのsession fallback | Pass | Not separately recorded |
+| storage failureでもViewer継続 | Pass | Not separately recorded |
+| Library読込成功後のactive ID更新 | Pass | Pass — Library読込で確認 |
+| Library切り替え時のactive ID更新 | Pass | Pass |
+| Library読込失敗時のLibrary / active ID整合 | Pass | Not separately recorded |
+| Library未選択時のactive ID `null` | Pass | Not separately recorded |
+| Zoom連動線幅 | Pass | Not separately recorded |
+| Track click / highlight | Pass | Pass |
+| Tree / Search同期 | Pass | Not separately recorded |
+| Folder / root一括 | Pass | Not separately recorded |
+| Clear / Library切り替え / Waypoint | Pass | Library切り替え Pass |
+| Console errorなし | Pass | Pass |
+| storage内容のConsole出力なし | Pass | Not separately recorded |
+| 不要なconsole log / warningなし | Pass | Not separately recorded |
+
+Known limitations:
+
+- 同名root Folderは同じLibrary IDとなり、設定が衝突し得る。
+- root Folder名変更時は別Libraryとして扱う。
+- localStorage削除時は保存済みUI設定がDefaultへ戻る。
+- Unit 4時点ではFolder color UIとTrack色適用を実装していない。
+
+Chrome / Edge browser acceptanceと既存Viewer regressionを完了し、Unit 4をCompletedとする。Unit 5は開始していない。
+
 ### Unit 6 Candidate — Monochrome Map Mode
 
 - 背景OSM tileだけをグレースケール化し、Track、Waypoint、UIにはfilterを掛けない。
@@ -892,7 +974,7 @@ Known behavior:
 
 Storage key: `trailbook.uiSettings`
 Schema version: `1`
-Library identity: exact root Folder nameから`root-name:<name>`
+Library identity: trim済みroot Folder nameをURL encodingした`root-name:<name>`。空名は`unnamed`
 Folder identity: current Library内のrelative path。rootは空文字。
 
 保存失敗、削除、破損、未知versionではDefault色へ戻るかsession内設定だけで継続する。GPXの内容、更新日時、Folder構造へ影響させない。

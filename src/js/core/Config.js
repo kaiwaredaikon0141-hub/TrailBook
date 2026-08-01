@@ -6,6 +6,11 @@ const Config = {
 
     version: "1.0.0",
 
+    uiSettings: {
+        storageKey: "trailbook.uiSettings",
+        schemaVersion: 1
+    },
+
     map: {
 
         center: {

@@ -9,6 +9,7 @@ import GPXParser from "../services/GPXParser.js";
 import GPXDisplayQueue from "../services/GPXDisplayQueue.js";
 import SearchService from "../services/SearchService.js";
 import TrackStyleService from "../services/TrackStyleService.js";
+import DisplaySettingsStore from "../services/DisplaySettingsStore.js";
 import DisplayState from "../state/DisplayState.js";
 import SelectionState from "../state/SelectionState.js";
 import Toolbar from "../ui/Toolbar.js";
@@ -48,6 +49,9 @@ export default class App {
         this.trackStyleService = new TrackStyleService(
             this.config.map.trackStyle
         );
+        this.displaySettingsStore = new DisplaySettingsStore(
+            this.config.uiSettings
+        );
         this.displayState = new DisplayState();
         this.selectionState = new SelectionState();
         this.displayQueue = new GPXDisplayQueue(2);
@@ -56,6 +60,7 @@ export default class App {
         ).name;
         this.workspace = null;
         this.currentLibrary = null;
+        this.currentLibraryId = null;
     }
 
     initialize() {
@@ -289,6 +294,9 @@ export default class App {
         });
 
         this.currentLibrary = library;
+        this.currentLibraryId = this.displaySettingsStore.setActiveLibrary(
+            library.name
+        );
         this.statusBar.showLibraryLoaded(library);
 
         if (library.gpxFileCount === 0) {

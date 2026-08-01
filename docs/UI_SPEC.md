@@ -744,7 +744,9 @@ Unit 2ではNormal列だけを実装する。Selected main / Selected outline、
 
 Folder colorはLibrary再選択またはpage reload後に復元する。root Folder名変更、同名Library衝突、localStorage削除、破損値、未知schemaではDefault色へ戻る場合があるが、GPX表示は継続する。
 
-GPX、Folder、FileHandle、解析geometryを保存しない。storage failureはblocking dialogにせず、色設定が現在sessionだけ有効であることをStatusBarで通知する。
+GPX、Folder、FileHandle、解析geometryを保存しない。storage failureはViewerを止めずsession memoryで継続する。Unit 4はStoreの診断statusだけを提供し、StatusBar等のUI feedbackはFolder color UIを接続する後続Unitで扱う。
+
+Unit 4のstorage contractは固定key`trailbook.uiSettings`、schema version 1とする。`libraries`は`root-name:<URL encoded root Folder name>`をkeyとするplain object、`folderColors`はFolder relative pathから正規化済み`#RRGGBB`へのplain objectである。root pathは空文字を許可する。Folder color UI、swatch、Trackへの色適用はUnit 5まで追加しない。
 
 ## Release 1.1 accessibility
 

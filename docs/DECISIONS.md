@@ -444,6 +444,8 @@ Consequences: root Folder名変更時は新LibraryとしてDefault色になる�
 
 GPX内容、TrackPoint、Waypoint、解析geometry、FileHandle、FolderHandle、GPX XML、解析cacheを保存しない。前回表示TrackとMap位置はRelease 1.1では保存しない。将来これらのUI状態を追加する場合もschema migrationと新しいDecisionを必要とする。
 
+Implementation Note: schema version 1は`{ version: 1, libraries: { [libraryId]: { folderColors: { [folderPath]: "#RRGGBB" } } } }`とする。root Folder nameはtrim後にURL encodingし、空名を`unnamed`へfallbackして`root-name:<name>`を生成する。unknown fieldは無視し、危険key、配列、`null`、不正path / colorを取り込まない。read / write failure時はlocalStorageからsession memoryへfallbackする。
+
 ## Decision Status
 
 - Accepted: 正式採用

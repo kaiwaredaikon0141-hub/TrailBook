@@ -548,28 +548,32 @@ Folder color変更時は対象Folder配下の登録GPXだけを再解決し、�
 
 ```json
 {
-  "schemaVersion": 1,
-  "libraries": [
-    {
-      "libraryId": "root-name:TrailBook",
-      "rootFolderName": "TrailBook",
+  "version": 1,
+  "libraries": {
+    "root-name:TrailBook": {
       "folderColors": {
         "": "#E53935",
         "Vehicles": "#D32F2F",
         "Vehicles/Roadster": "#1976D2"
       }
     }
-  ]
+  }
 }
 ```
 
-保存対象はschema version、Library識別情報、Folder relative pathと明示色だけとする。GPX内容、TrackPoint、Waypoint、解析geometry、FileHandle、FolderHandle、GPX XML、解析cacheを保存しない。外部通信もしない。
+保存対象はschema version、Library ID、Folder relative pathと明示色だけとする。Library IDのroot名部分はtrim後にURL encodingし、空名は`unnamed`へfallbackする。大文字小文字は保持し、separatorとcontrol characterを安全にidentityへ含める。GPX内容、TrackPoint、Waypoint、解析geometry、FileHandle、FolderHandle、GPX XML、解析cacheを保存しない。外部通信もしない。
 
 JSON parse failure、invalid color、未知schema version、quota / security errorでは保存値を無視し、path hash fallbackまたはsession内設定でViewerを継続する。破損値を暗黙に上書きせず、次の明示設定操作まで保持しない。localStorage削除時はDefault色へ戻るだけである。
 
-`DisplaySettingsStore.migrate(payload)`はpure functionとして分離する。初期schema 1にはlegacy migrationを持たず、version 1を検証して読み込み、未知または新しいversionはfail closedで無視する。将来version追加時は旧versionから新versionへの明示migration testを追加する。
+schema検証と正規化はStore内のpure処理としてstorage accessから分離する。初期schema 1にはlegacy migrationを持たず、version 1を検証して読み込み、未知または新しいversionはfail closedで無視する。将来version追加時は旧versionから新versionへの明示migrationとtestを追加する。
 
 schema version 1から将来fieldを追加できるが、前回表示TrackやMap位置はRelease 1.1で保存しない。
+
+Unit 4では`DisplaySettingsStore`をproductionへ実装し、constructor injectionされたstorageを起動時に一度だけ読む。top-level keyは`version`と`libraries`、Library entryは`folderColors`を持つplain objectとし、unknown fieldはschema 1では無視する。配列、`null`、危険key、invalid path / colorを保存状態へ取り込まず、内部dictionaryにはprototypeを持たせない。
+
+色は`#RGB`または`#RRGGBB`だけを受理し、`#RRGGBB`大文字へ正規化する。root Folder pathの`""`は有効とし、nested pathはTree metadataと同じ`/`区切りを使用する。alpha、CSS color name、`rgb()`、control character、backslash、不正separator、`__proto__`、`constructor`、`prototype` segmentを拒否する。
+
+storage未定義、read / JSON parse / write failure、quota / security errorではlocalStorageを切り離し、同じStore instanceのsession memoryで操作を継続する。Storeはstorage内容や例外文字列をConsoleへ出さず、`getStatus()`で`available`または`session-only`を診断可能にする。Unit 4ではFolder colorをTrackへ適用せず、UI feedbackも追加しない。
 
 ### Monochrome Map Mode — Unit 6 Candidate
 
