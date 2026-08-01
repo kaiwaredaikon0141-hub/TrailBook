@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.6.0
+
+Released: 2026-08-01
+
+### Added
+
+- Independent GPX display checkboxes with separate primary selection
+- Session-scoped GPX result cache and bounded display queue
+- Path-keyed Leaflet layers, stable GPX colors, and multi-GPX bounds fitting
+- Individual GPX removal, loading/error handling, and display summaries
+
 ## v0.5.0
 
 Released: 2026-08-01

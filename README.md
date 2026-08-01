@@ -11,12 +11,13 @@ architecture documents before making changes.
 
 ## Current Release
 
-Release 0.5.0: TreeView Scalability and Navigation
+Release 0.6.0: Multiple GPX Display
 
 The current implementation can open a directory, recursively find subfolders
 and `.gpx` files, parse an explicitly requested GPX file into Track,
-TrackSegment, TrackPoint, Waypoint, and Metadata models, display one selected
-GPX on a Leaflet map, and navigate large libraries through a lazy TreeView.
+TrackSegment, TrackPoint, Waypoint, and Metadata models, navigate large
+libraries through a lazy TreeView, and display multiple GPX files on the map
+independently.
 
 ## Technical Constraints
 

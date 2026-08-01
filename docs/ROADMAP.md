@@ -358,9 +358,11 @@ Done Definition
 
 \# Release 0.6
 
+Multiple GPX Display
 
+Status
 
-Property
+Completed
 
 
 
@@ -368,7 +370,7 @@ Goal
 
 
 
-情報表示
+複数のGPXを任意にON/OFFし、地図上へ同時表示できる
 
 
 
@@ -376,27 +378,29 @@ Tasks
 
 
 
-□ Distance
+■ GPX Display Toggle
 
 
 
-□ Time
+■ DisplayState
 
 
 
-□ Elevation
+■ GPX Display Queue
 
 
 
-□ Speed
+■ Session Result Cache
 
 
 
-□ Metadata
+■ Path-keyed Layer Groups
 
 
 
-□ Thumbnail
+■ Stable Display Colors
+
+■ Multi-GPX Bounds
 
 
 
@@ -404,7 +408,7 @@ Done Definition
 
 
 
-Track情報確認
+複数GPXを独立して表示・非表示でき、個別Layer削除と単一GPX主選択を維持できる
 
 
 

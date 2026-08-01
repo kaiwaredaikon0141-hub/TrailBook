@@ -494,3 +494,23 @@ Release 0.5では、展開フォルダだけを遅延生成するTreeViewを提�
 - 同じライブラリの再読み込みでは展開、フォーカス、スクロール位置だけを復元する
 - GPXの選択状態と解析状態はライブラリ再読み込み時に解除する
 - 仮想スクロール、複数GPX表示、検索、編集、統計、Replay、HeatMapは対象外とする
+
+# 16. Release 0.6 Multiple GPX Display
+
+Release 0.6では、GPX行のcheckboxで複数GPXを個別に地図表示する。
+
+- GPX行クリックとEnterは主選択だけを変更する
+- 表示中の主選択GPXでは、そのGPXのBoundsへ再フォーカスする
+- 非表示GPXの主選択では地図を移動しない
+- TreeItemのSpaceまたはcheckboxで表示をON/OFFする
+- `aria-selected`は主選択、checkboxの`checked`は表示状態を表す
+- GPXごとに独立したLeaflet LayerGroupを保持する
+- OFF時は対象GPXのTrackとWaypointだけを削除する
+- 解析結果はセッション中のcacheに保持し、Library切り替えで破棄する
+- 解析Queueは最大2件のFIFOとする
+- TrackSegment間は接続しない
+- Waypointは既存のLeaflet標準Markerを使用する
+- 表示色は相対パスの安定ハッシュから固定パレットで決定する
+- 表示中GPX全体のBoundsへ250ms debounce後に自動fitする
+- 表示クリアは全GPXをOFFにし、主選択とcacheは維持する
+- フォルダ一括表示、Canvas renderer、検索、編集、統計、Replay、HeatMapは対象外とする
