@@ -2,8 +2,8 @@
 
 Version: 1.1
 Status: Official
-Current Release: 0.9.0
-Next Release: 1.0 Official
+Current Release: 1.0.0 Stable Viewer
+Next Release: Not assigned
 
 ## Version Policy
 
@@ -183,11 +183,11 @@ Done Definition:
 - `vehicleType`
 - `vehicleColor`
 
-## Next Release
+## Current Release
 
 ### Release 1.0 — Stable Viewer
 
-Status: Next
+Status: Completed
 
 Goal: Release 0.9までの機能を変更せず、個人利用環境で安全・安定・再現可能に使える正式安定版にする。
 
@@ -221,6 +221,7 @@ Performance Baseline:
 - 各測定は複数回行い、中央値を記録する。
 - cold解析とwarm cache再表示を分離する。
 - Release 0.9.0比で20%を超える明確かつ再現可能な性能悪化を許容しない。
+- Unit 2 baselineを履歴として維持した。Unit 7のChrome / Edge手動確認では明確な性能回帰はなく定性的受け入れに合格したが、同一条件の数値再測定と20%比較はDeferredとする。
 
 Out of Scope:
 
@@ -235,12 +236,21 @@ Out of Scope:
 Done Definition:
 
 - 対応環境で統合受け入れtestに合格する。
-- 806 GPX baselineと比較し、20%を超える再現可能な性能悪化がない。
+- 806 GPXのUnit 2 baselineを維持し、定性的受け入れで明確な性能回帰がないことを確認する。数値再測定と20%比較は将来候補へDeferredとする。
 - TreeViewが1,000行規則へ適合し、既存挙動を維持する。
 - localhost起動、offline範囲、外部通信、データ保護、既知制限が文書化される。
-- Android、iPhone、iPadの最新Chromeを実機確認し、合格端末だけをbest effortとして記録する。未確認または必要API不足の端末は既知の制限へ記録する。
+- Mobile実機結果を記録し、合格端末だけをbest effortとする。iPhone Chromeは非対応、Android ChromeとiPad Chromeは未確認として既知の制限へ記録する。
 - TrailBook本体のlicense未指定方針と第三者licenseが明確に分離される。
 - Release checklistの必須項目が完了し、個人利用向けStable Viewerとして再現可能に起動できる。
+
+Completed内容:
+
+- 個人利用向けStable Viewer
+- startup / compatibility UX
+- TreeView metadata / path責務の限定的な整理
+- favicon、Console、未使用code候補を含むrelease quality cleanup
+- README、LICENSE、third-party notices
+- Windows Chrome / Edge統合受け入れ
 
 ## Future Design Boundaries
 
@@ -301,7 +311,7 @@ Release 0.9では、車両情報の読み込み、保存、編集、色変更を
 
 編集機能はRelease 0.9の対象外とする。
 
-## Future Releases
+## Future Candidates
 
 Release番号は設計承認時に決定する。
 
@@ -310,6 +320,9 @@ Release番号は設計承認時に決定する。
 - Vehicle Metadata / Track Style
 - GPX Editing Foundation
 - TrackPoint Editing
+- Mobile Viewer UX
+- Waypoint Performance Optimization
+- Unit 2-equivalent Performance Remeasurement
 - Replay
 - HeatMap
 - Bookmark

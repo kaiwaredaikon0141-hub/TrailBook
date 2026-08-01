@@ -4,10 +4,10 @@ TrailBookは、GPXを含むFolderをLibraryとして閲覧する、個人利用�
 
 ## Current Status
 
-- Current Release: `0.9.0` Search
-- Next Release: `1.0` Stable Viewer（作業中）
+- Current Release: `1.0.0` Stable Viewer
+- Release 1.0 Stable Viewer: Completed
 
-Release 1.0は一般公開版ではなく、Release 0.9までのViewer機能を個人利用環境で安全・安定・再現可能に使うための品質Releaseです。
+Release 1.0は一般公開版ではなく、Folder Library、GPX表示、SearchなどのViewer機能を個人利用環境で安全・安定・再現可能に使うための正式安定版です。
 
 ## Implemented Features
 

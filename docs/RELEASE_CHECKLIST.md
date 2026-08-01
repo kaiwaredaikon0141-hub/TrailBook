@@ -1,7 +1,7 @@
 # TrailBook Release Checklist
 
-Version: 1.0 planning
-Status: Active
+Version: 1.0.0
+Status: Ready for final commit and tag
 Baseline: v0.9.0
 
 ## Purpose
@@ -435,8 +435,8 @@ Unit 6 Browser Attribution Status: Completed
 ### Unit 6 Documentation Review
 
 - [x] READMEだけで起動可能
-- [x] Current Releaseは0.9.0
-- [x] Release 1.0は作業中
+- [x] Unit 6 review時点のCurrent Releaseは0.9.0
+- [x] Unit 6 review時点でRelease 1.0は作業中
 - [x] 対応環境記述は正確
 - [x] Mobile結果は正確
 - [x] offline範囲と外部通信説明は正確
@@ -527,9 +527,43 @@ Manual Chrome / Edge testing found no observable performance regression. Search�
 
 Chrome / Edge統合受け入れと定性的性能確認に明確な回帰はなく、Release 1.0完了処理へ進行可能と判定する。
 
+## Unit 8 Release 1.0 Finalization
+
+Unit 8 Implementation Status: Completed
+Unit 8 Documentation Status: Completed
+Unit 8 Version Status: Completed
+Release 1.0 Status: Ready for final commit and tag
+
+### Release 1.0 Final State
+
+- Version: `1.0.0`
+- Unit 1 Status: Completed
+- Unit 2 Status: Completed
+- Unit 3 Status: Completed
+- Unit 4 Status: Completed
+- Unit 5 Status: Completed
+- Unit 6 Status: Completed
+- Unit 7 Status: Completed
+- Unit 8 Status: Completed
+- Chrome integration: Completed
+- Edge integration: Completed
+- Performance qualitative acceptance: Passed
+- Numerical performance remeasurement: Deferred
+- Mobile: Unsupported
+- Known limitations: Documented
+- License: Documented
+- Third-party notices: Documented
+- OpenStreetMap attribution: Confirmed
+- `git diff --check`: Pending final
+- Final commit: Pending
+- Tag: Pending
+- Push: Pending
+
+Unit 2 baselineは履歴として維持する。Unit 7では数値を推測せず、同一条件の再測定と20%比較を実施していない。将来必要になった場合はUnit 2と同じ手順で再測定できる。
+
 ## Performance Acceptance
 
-Post-TreeView-split measurement status: Pending — Windows Chrome / EdgeでUnit 2と同じ手順による実ブラウザ再測定が必要。
+Post-TreeView-split measurement status: Deferred — Windows Chrome / EdgeでUnit 2と同じ手順による実ブラウザ再測定が将来必要になった場合に実施する。
 
 - [x] v0.9.0 baselineを同一条件で最低3回測定し、中央値を記録した。
 - [x] coldとwarm cacheを分離して記録した。
@@ -552,7 +586,7 @@ Post-TreeView-split measurement status: Pending — Windows Chrome / EdgeでUnit
 ## Release Procedure
 
 - [ ] Scope、Out of Scope、既知の制限を最終確認した。
-- [ ] Config、README、CHANGELOG、ROADMAP、START_HEREをRelease 1.0完了状態へ更新した。
+- [x] Config、README、CHANGELOG、ROADMAP、START_HEREをRelease 1.0完了状態へ更新した。
 - [ ] version更新前後のtest結果を記録した。
 - [ ] working treeとrelease対象fileを確認した。
 - [ ] release commitを作成した。

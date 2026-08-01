@@ -4,9 +4,10 @@ TrailBookの開発を始める人とAIのための入口です。
 
 ## Current Status
 
-- Current Release: `v0.9.0` Search
-- Completed: Release 0.1からRelease 0.9
-- Next Release: Release 1.0 Stable Viewer
+- Current Version: `1.0.0`
+- Current Release: Stable Viewer
+- Completed: Release 0.1からRelease 1.0
+- Next Release: 未定。`ROADMAP.md`のFuture Candidatesから設計承認後に決定する。
 - Branch: `main`
 
 Gitの状態は作業開始時に必ず再確認する。
@@ -32,7 +33,7 @@ GPXを独自形式へ取り込むのではなく、ユーザーのGPX資産を�
 9. `CONTRIBUTING.md` — 作業規約
 10. `GLOSSARY.md` — 用語
 11. リポジトリルートの`README.md`、`CHANGELOG.md` — 公開概要とリリース履歴
-12. Release 1.0作業時は`RELEASE_CHECKLIST.md` — baseline、受け入れtest、完了条件
+12. `RELEASE_CHECKLIST.md` — Release 1.0のbaseline、受け入れtest、完了記録
 
 ## Current Architecture
 
@@ -49,13 +50,15 @@ GPXを独自形式へ取り込むのではなく、ユーザーのGPX資産を�
 - `SearchView`は検索入力、結果表示、ARIAとキーボード操作を担当する。
 - `SearchEntry`は`kind`、`path`、`name`だけを保持し、FileHandleやGPX内容を持たない。
 
-## Release 0.9 Completed Scope
+## Release 1.0 Completed Scope
 
-Release 0.9 Searchは完了している。
+Release 1.0 Stable Viewerは完了している。Release 0.9までのFolder Library、GPX Parser、複数GPX表示、Folder / root一括表示、Waypoint option、Searchを維持し、個人利用向けの起動・互換性UX、品質整理、文書、licenseと第三者表記を確定した。
 
 GPXファイル名、Folder名、相対パスをmetadataから検索する。検索のためにGPX内容を解析せず、query入力だけでは表示Queue、解析cache、主選択、表示状態、Mapへ影響させない。
 
-次のReleaseは個人利用向け正式安定版のRelease 1.0 Stable Viewerである。一般公開、配布artifact、OSS license決定、新機能追加は対象外とする。Release範囲と将来拡張境界は`ROADMAP.md`を正本とする。
+現在の制限としてMobile UIは非対応であり、Android ChromeとiPad Chromeは未確認である。大量GPX表示中のWaypoint ONは操作が重くなるため、大量LibraryではWaypoint OFFを推奨する。OSM背景tileはオンライン接続を必要とする。
+
+次Release番号は未定である。Mobile Viewer UX、Waypoint性能最適化、数値性能再測定、日付表示、車両metadata、GPX Editing Foundation、TrackPoint Editingなどは`ROADMAP.md`のFuture Candidatesであり、Release 1.0には含まれない。
 
 ## Non-Negotiable Rules
 

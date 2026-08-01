@@ -4,11 +4,11 @@
 
 ## Current Status
 
-- Current Release: `0.9.0` Search
-- Completed: Release 0.1からRelease 0.9
-- Next Release: Release 1.0 Stable Viewer（作業中）
+- Current Release: `1.0.0` Stable Viewer
+- Completed: Release 0.1からRelease 1.0
+- Next Release: 未定
 
-Release 1.0は個人利用向け正式安定版の品質確定を目的とし、一般公開や新しいLibrary機能の追加を目的としません。
+Release 1.0は個人利用向け正式安定版として完了しています。一般公開版ではなく、次Releaseは`ROADMAP.md`のFuture Candidatesから設計承認後に決定します。
 
 ## Read Order
 
@@ -24,9 +24,9 @@ Release 1.0は個人利用向け正式安定版の品質確定を目的とし、
 10. [CONTRIBUTING.md](CONTRIBUTING.md) — Gitと変更手順
 11. [GLOSSARY.md](GLOSSARY.md) — 用語
 
-Release 1.0の作業と受け入れ確認では[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)も使用します。
+Release 1.0のUnit 1〜8（scope確定、baseline、TreeView限定分割、起動・互換性UX、品質整理、文書・license、統合受け入れ、Release確定）は[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)に記録しています。
 
-## Implemented Through Release 0.9
+## Implemented Through Release 1.0
 
 - Folder Libraryと再帰走査
 - GPX Parser
@@ -36,12 +36,14 @@ Release 1.0の作業と受け入れ確認では[RELEASE_CHECKLIST.md](RELEASE_CH
 - GPX個別、Folder、root一括表示
 - Waypoint表示option
 - Folder名、GPXファイル名、相対pathのSearch
+- 初回起動、非対応環境、read-only Folder選択の案内
+- Stable Viewer向け品質整理、利用文書、licenseと第三者表記
 
 実装済み範囲の詳細は[CHANGELOG.md](../CHANGELOG.md)、Release順序は[ROADMAP.md](ROADMAP.md)を正本とします。
 
 ## Future Features
 
-Statistics、Replay、HeatMap、GPX Metadata Index、日付表示、車両metadata、GPX編集、Cloud Sync、Mobile Viewer UX、Plugin、AI Searchなどは将来候補です。現在のRelease 0.9および作業中のRelease 1.0機能ではありません。
+Statistics、Replay、HeatMap、GPX Metadata Index、日付表示、車両metadata、GPX編集、Cloud Sync、Mobile Viewer UX、Waypoint性能最適化、数値性能再測定、Plugin、AI Searchなどは将来候補です。Release 1.0の実装済み機能ではありません。
 
 ## Source of Truth
 
