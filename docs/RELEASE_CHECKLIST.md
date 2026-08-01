@@ -128,9 +128,15 @@ Release 1.0では`input type="file" webkitdirectory`、複数GPXファイル選�
 
 ## v0.9.0 Performance Baseline Protocol
 
+Unit 2 Status: Completed
+
+本節の値をTreeView分割前の固定baselineとする。TreeView責務抽出後は同一条件で再測定し、本baselineと比較する。
+
 ### Fixed Conditions
 
-- Baseline commit / tag: `v0.9.0`
+- Production baseline: v0.9.0 code at commit `7076fdd`
+- Measurement working commit: `9455be8`
+- Difference: Release 1.0 planning documentation only. No production JavaScript, CSS, or HTML differences.
 - OS: Windows 10またはWindows 11の同一PC
 - Browser: 同一browser、同一version、通常profileの同一設定
 - Origin: 同一localhost origin
@@ -141,14 +147,15 @@ Release 1.0では`input type="file" webkitdirectory`、複数GPXファイル選�
 - Run count: 各項目で有効なrunを最低3回
 - Result: 有効runの中央値。平均値を合否判定に使わない
 - Comparison: TreeView責務抽出後も同じ手順、操作順、Library、browserで再測定する
+- Measurement helper: `sample/release/performance-baseline.html`。TrailBook本番moduleをimportせず、手動計測とMarkdown出力だけを行う
 
 ### Cold and Warm Definitions
 
 - Cold: 新しいLibrary sessionで、対象GPXの解析結果がTrailBookのsession cacheにない状態。
-- Warm: 同一Library sessionで一度表示を完了した後、全GPXをOFFにし、再度ONにする状態。
+- Warm再表示: 同一Library sessionで一度表示を完了した後、全GPXをOFFにし、再度ONにする状態。session cache上限は100件であり、806件すべてがwarmとは限らない。
 - Browser HTTP cacheとTrailBookのsession cacheを混同しない。
 - 各cold runの前にpageをreloadし、Libraryを選択し直す。
-- warm runは対応するcold runの直後に同一tab内で行う。
+- warm再表示は対応するcold runの直後に同一tab内で行い、cacheに存在した件数と再解析対象件数を可能な範囲で記録する。
 
 ### Timing Boundaries
 
@@ -159,52 +166,81 @@ Release 1.0では`input type="file" webkitdirectory`、複数GPXファイル選�
 - All GPX OFF: root Folder checkboxをOFFにしてから全Layerが消え、表示件数が0になるまで。
 - Warm redisplay: cold表示完了後に全OFFし、同一sessionでroot Folder checkboxを再度ONにして全表示が完了するまで。
 - Library switch: 別Libraryの選択確定から旧Library状態が消え、新LibraryのTreeが操作可能になるまで。
-- Pan / zoom: 全806 GPX表示後に連続pan、wheel zoom、zoom controlを同一操作順で行い、入力遅延、frame drop、固まりを5段階で記録する。
-- Memory: page load後、scan後、cold全表示後、全OFF後、warm再表示後、Library切り替え後のused JS heapを記録し、増減傾向を評価する。
+- Pan / zoom: 全806 GPX表示時と少数GPX表示時に連続pan、wheel zoom、zoom controlを同一操作順で行い、カクつき、操作遅延、tile遅延、Track layer追従をGood / Acceptable / Poorで記録する。
+- Memory: 起動直後、scan後、cold全表示後、全OFF後、Library切り替え後のused JS heapを取得可能な場合だけ記録し、増減傾向を評価する。
 
 ### Measurement Record
 
-計測単位は時間がms、memoryがMB、操作感が1（使用困難）から5（滑らか）とする。`—`は未測定であり、0を意味しない。
+計測単位は時間がms、memoryがMB、操作感がGood / Acceptable / Poorとする。空欄または`Not measured`は未測定であり、0を意味しない。
 
-| Metric | Run 1 | Run 2 | Run 3 | Median | Notes |
-| --- | ---: | ---: | ---: | ---: | --- |
-| Library scan (ms) | — | — | — | — | Browser session unavailable |
-| Initial Tree (ms) | — | — | — | — | Browser session unavailable |
-| Search end-to-end (ms) | — | — | — | — | Includes 150 ms debounce |
-| All GPX ON cold (ms) | — | — | — | — | Waypoint OFF |
-| All GPX OFF (ms) | — | — | — | — | After cold display |
-| Warm cache redisplay (ms) | — | — | — | — | Same Library session |
-| Library switch (ms) | — | — | — | — | Target Library must be recorded |
-| Pan / zoom score (1–5) | — | — | — | — | 806 GPX displayed |
+| Measurement | Run 1 | Run 2 | Run 3 | Median | Notes |
+|---|---:|---:|---:|---:|---|
+| Library scan | Not provided | Not provided | Not provided | 5207.7 | Initial Treeを含む |
+| Initial Tree | — | — | — | — | Included in Library scan。単独baselineなし |
+| Search | Not provided | Not provided | Not provided | 2876.3 | 手動end-to-end参考値。150 ms debounceと別windowでStopを押す人間の操作時間を含み、合格値には使用しない |
+| All ON cold | Not provided | Not provided | Not provided | 22371.3 | Waypoint OFF、page reload後、cache空 |
+| All OFF | 12920.7 | Not provided | Not provided | 3686.3 | Run 1はRun 2、3との差が大きい外れ値候補。中央値は変更しない |
+| Re-display | Not provided | Not provided | Not provided | 3132.5 | cache上限100件。806件すべてがwarmではない |
+| Library switch | Not provided | Not provided | Not provided | 3165.8 | 新Libraryが操作可能になるまで |
 
-| Memory checkpoint | Run 1 | Run 2 | Run 3 | Median | Trend / Notes |
-| --- | ---: | ---: | ---: | ---: | --- |
-| Page load (MB) | — | — | — | — | Browser session unavailable |
-| Library scan complete (MB) | — | — | — | — |  |
-| Cold all GPX displayed (MB) | — | — | — | — |  |
-| All GPX OFF (MB) | — | — | — | — |  |
-| Warm redisplay complete (MB) | — | — | — | — |  |
-| Library switch complete (MB) | — | — | — | — |  |
+個別run値は、上表に明記したAll OFF Run 1を除いて提供されていない。推測で補完せず、最低3回の人間測定から得られた中央値だけを固定する。
+
+### Search Performance Comparator
+
+手動end-to-end値とは別に、次の既存SearchService単体baselineを正式比較値とする。
+
+- Search対象: 806件
+- 実行回数: 1,000回
+- 合計: 約69 ms
+- 1検索あたり: 約0.069 ms
+- UI debounce: 150 ms
+
+Release 1.0のSearch性能は次の両方で判定する。
+
+1. SearchService単体値に20%を超える明確かつ再現可能な悪化がない。
+2. 実ブラウザで、入力から結果DOM表示まで目立つ遅延がない。
+
+| Display state | Rating | Observations |
+|---|---|---|
+| 全806 GPX表示時 | Not measured | 評価値未提供。カクつき、操作遅延、tile遅延、Track layer追従を確認対象とする |
+| 少数GPX表示時 | Not measured | 評価値未提供。カクつき、操作遅延、tile遅延、Track layer追従を確認対象とする |
+
+| Memory checkpoint | Used JS heap (MB) / Not available | Trend / Notes |
+| --- | ---: | --- |
+| 起動直後 | Not available | |
+| Library scan後 | Not available | |
+| 全表示後 | Not available | |
+| 全解除後 | Not available | |
+| Library切り替え後 | Not available | 継続的な増加がないか確認 |
 
 ### Measurement Environment Record
 
-- Measurement date: Not measured
-- PC / CPU: Not recorded
-- Installed memory: Not recorded
-- GPU: Not recorded
+- Measurement date: 2026-08-01
+- PC identifier: Not recorded
+- OS: Windows
 - OS build: Not recorded
-- Browser and version: Not recorded
-- Origin and server command: Not recorded
-- Library identity: 806 GPX Library requested; exact identity not recorded
-- GPX count / total size: 806 / total size not recorded
-- DevTools state: Not recorded
-- Power mode: Not recorded
-- Baseline result status: Pending — no controllable Chrome or Edge browser session was available during Unit 2
+- CPU: Intel Core Ultra 7 265KF
+- Installed memory: 32 GB
+- Browser: Google Chrome
+- Browser version: 150.0.7871.187
+- Origin: `http://localhost`
+- Production baseline commit: `7076fdd`
+- Measurement working commit: `9455be8`
+- TrailBook version: `0.9.0`
+- Library identifier: Not recorded
+- GPX count: 806
+- Folder count: Not recorded
+- Library size: Not recorded
+- Waypoint option: OFF
+- DevTools state: Open
+- Network state: Online
+- Memory API: Not available
+- Baseline result status: Completed — fixed as the pre-TreeView-split v0.9.0 production baseline
 
 ## Performance Acceptance
 
-- [ ] v0.9.0 baselineを同一条件で最低3回測定し、中央値を記録した。
-- [ ] coldとwarm cacheを分離して記録した。
+- [x] v0.9.0 baselineを同一条件で最低3回測定し、中央値を記録した。
+- [x] coldとwarm cacheを分離して記録した。
 - [ ] TreeView責務抽出後に同じ条件で再測定した。
 - [ ] v0.9.0比で20%を超える明確かつ再現可能な性能悪化がない。
 - [ ] 20%を超えた項目は原因、再現手順、採否を記録した。
