@@ -3,34 +3,31 @@ import EventBus from "./EventBus.js";
 import FolderScanner, { pickFolder } from "../services/FolderScanner.js";
 import GPXLoader from "../services/GPXLoader.js";
 import GPXParser from "../services/GPXParser.js";
+import GPXDisplayQueue from "../services/GPXDisplayQueue.js";
+import DisplayState from "../state/DisplayState.js";
 import Toolbar from "../ui/Toolbar.js";
 import TreeView from "../ui/TreeView.js";
 import StatusBar from "../ui/StatusBar.js";
 import MapView from "../ui/MapView.js";
 
 /**
- * TrailBook Application
+ * TrailBook application coordinator.
  */
 export default class App {
 
     #presentationState = {
         selectedFileHandle: null,
         selectedFileName: null,
-        parsedResult: null,
+        selectedFilePath: null,
         status: "idle"
     };
 
-    #requestId = 0;
+    #refocusTimer = null;
 
-    /**
-     * Creates the application coordinator.
-     */
     constructor() {
 
         this.config = Config;
-
         this.eventBus = new EventBus();
-
         this.toolbar = null;
         this.treeView = null;
         this.statusBar = null;
@@ -38,165 +35,80 @@ export default class App {
         this.folderScanner = new FolderScanner();
         this.gpxLoader = new GPXLoader();
         this.gpxParser = new GPXParser();
-
+        this.displayState = new DisplayState();
+        this.displayQueue = new GPXDisplayQueue(2);
         this.workspace = null;
         this.mapArea = null;
 
-        console.log(
-            `${this.config.appName} v${this.config.version}`
-        );
+        console.log(`${this.config.appName} v${this.config.version}`);
     }
 
-    /**
-     * Application Entry Point
-        *
-        * @returns {void}
-     */
     initialize() {
 
         console.log("Initializing application...");
-
         this.createComponents();
-
         this.createLayout();
-
         this.bindEvents();
-
         console.log("Application Ready.");
     }
 
-    /**
-     * Create UI Components
-        *
-        * @returns {void}
-     */
     createComponents() {
 
         this.toolbar = new Toolbar(this.config.version);
-
         this.treeView = new TreeView(this.eventBus);
-
         this.statusBar = new StatusBar();
-
         this.mapView = new MapView(this.config, this.eventBus);
     }
 
-    /**
-     * Create Main Layout
-        *
-        * @returns {void}
-     */
     createLayout() {
 
         const app = document.getElementById("app");
 
         this.workspace = document.createElement("main");
-
         this.workspace.className = "workspace";
 
         this.mapArea = document.createElement("section");
-
         this.mapArea.className = "map";
-
         this.mapArea.textContent = "Map Area";
 
-        this.workspace.append(
-
-            this.treeView.element,
-
-            this.mapView.element
-
-        );
+        this.workspace.append(this.treeView.element, this.mapView.element);
 
         app.replaceChildren(
-
             this.toolbar.element,
-
             this.workspace,
-
             this.statusBar.element
-
         );
     }
 
-    /**
-     * Register Events
-        *
-        * @returns {void}
-     */
     bindEvents() {
 
-        this.eventBus.on("app:ready", () => {
+        this.eventBus.on("app:ready", () => console.log("Event : app:ready"));
 
-            console.log("Event : app:ready");
-
-        });
-
-        this.eventBus.on("folder:open-requested", () => {
-
-            this.loadLibrary();
-
-        });
+        this.eventBus.on("folder:open-requested", () => this.loadLibrary());
 
         this.eventBus.on("library:loaded", ({ library }) => {
-
-            this.treeView.render(library);
-
-            this.statusBar.showLibraryLoaded(library);
-
+            void this.handleLibraryLoaded(library);
         });
 
         this.eventBus.on("library:load-failed", ({ error }) => {
-
             console.error("Failed to load library.", error);
-
             this.statusBar.showError();
-
         });
 
-        this.eventBus.on("gpx:parse-requested", ({ fileHandle }) => {
-
-            this.handleGPXRequest(fileHandle);
-
+        this.eventBus.on("gpx:selected", data => {
+            this.handleGPXSelected(data);
         });
 
-        this.eventBus.on("gpx:parsed", ({ fileHandle, result }) => {
-
-            this.handleGPXParsed(fileHandle, result);
-
+        this.eventBus.on("gpx:display-toggled", data => {
+            this.handleDisplayToggled(data);
         });
 
-        this.eventBus.on("gpx:parse-failed", ({ fileHandle, error }) => {
-
-            this.handleGPXFailed(fileHandle, error);
-
-        });
-
-        this.eventBus.on("map:clear-requested", () => {
-
-            this.clearPresentation();
-
-        });
+        this.eventBus.on("map:clear-requested", () => this.clearPresentation());
 
         this.eventBus.on("map:display-failed", ({ error }) => {
-
             console.error("Map display failed.", error);
-
             this.mapView.showError();
-
-            if (this.#presentationState.selectedFileHandle) {
-
-                this.#setPresentationState("error", {
-                    parsedResult: null
-                });
-
-                this.treeView.setError(
-                    this.#presentationState.selectedFileHandle
-                );
-            }
-
             this.statusBar.showMapError();
-
         });
 
         this.toolbar.pickFolderButton.addEventListener(
@@ -205,18 +117,11 @@ export default class App {
         );
 
         this.mapView.initialize();
-
     }
 
-    /**
-     * Opens and scans a library selected by the user.
-     *
-     * @returns {Promise<void>}
-     */
     async loadLibrary() {
 
         try {
-
             const handle = await pickFolder();
 
             if (!handle) {
@@ -224,11 +129,9 @@ export default class App {
             }
 
             const library = await this.folderScanner.scan(handle);
-
             this.eventBus.emit("library:loaded", { library });
 
         } catch (error) {
-
             if (error.name === "AbortError") {
                 return;
             }
@@ -237,182 +140,240 @@ export default class App {
         }
     }
 
-    /**
-     * Loads and parses one explicitly requested GPX file.
-     *
-     * @param {FileSystemFileHandle} fileHandle
-     * @returns {Promise<void>}
-     */
-    async parseGPX(fileHandle, requestId) {
+    async handleLibraryLoaded(library) {
 
-        try {
-
-            const loaded = await this.gpxLoader.load(fileHandle);
-            const result = this.gpxParser.parse(
-                loaded.text,
-                loaded.sourceFileName
-            );
-
-            if (!this.#isCurrentRequest(fileHandle, requestId)) {
-                return;
-            }
-
-            this.eventBus.emit("gpx:parsed", {
-                fileHandle,
-                result
-            });
-
-        } catch (error) {
-
-            if (!this.#isCurrentRequest(fileHandle, requestId)) {
-                return;
-            }
-
-            this.eventBus.emit("gpx:parse-failed", {
-                fileHandle,
-                error
-            });
-        }
-    }
-
-    /**
-     * Starts parsing for a selected GPX file or refocuses an existing display.
-     *
-     * @param {FileSystemFileHandle} fileHandle
-     * @returns {void}
-     */
-    handleGPXRequest(fileHandle) {
-
-        const isSameFile =
-            this.#presentationState.selectedFileHandle === fileHandle;
-
-        if (isSameFile && this.#presentationState.status === "loading") {
-            return;
-        }
-
-        if (isSameFile && this.#presentationState.status === "loaded") {
-            this.mapView.refocus();
-
-            return;
-        }
-
-        const requestId = ++this.#requestId;
-
-        this.#setPresentationState("loading", {
-            selectedFileHandle: fileHandle,
-            selectedFileName: fileHandle.name,
-            parsedResult: null
-        });
-
-        this.treeView.setLoading(fileHandle);
-
+        this.displayQueue.clear();
         this.mapView.clear();
-
         this.mapView.resetView();
+        this.displayState.setLibrary(library.rootFolder.handle);
 
-        this.mapView.showLoading();
+        await this.treeView.render(library);
 
-        this.statusBar.showGPXLoading(fileHandle.name);
-
-        this.parseGPX(fileHandle, requestId);
-    }
-
-    /**
-     * Applies a successful parse result to the current presentation.
-     *
-     * @param {FileSystemFileHandle} fileHandle
-     * @param {object} result
-     * @returns {void}
-     */
-    handleGPXParsed(fileHandle, result) {
-
-        if (this.#presentationState.selectedFileHandle !== fileHandle) {
-            return;
-        }
-
-        try {
-
-            this.mapView.displayGPX(result);
-
-            this.#setPresentationState("loaded", {
-                parsedResult: result
-            });
-
-            this.treeView.setLoaded(fileHandle);
-
-            this.statusBar.showGPXLoaded(fileHandle.name);
-
-        } catch (error) {
-
-            this.eventBus.emit("map:display-failed", { error });
-        }
-    }
-
-    /**
-     * Applies a failed parse result to the current presentation.
-     *
-     * @param {FileSystemFileHandle} fileHandle
-     * @param {Error} error
-     * @returns {void}
-     */
-    handleGPXFailed(fileHandle, error) {
-
-        if (this.#presentationState.selectedFileHandle !== fileHandle) {
-            return;
-        }
-
-        console.error(`Failed to parse GPX: ${fileHandle.name}`, error);
-
-        this.#setPresentationState("error", {
-            parsedResult: null
+        this.treeView.getFileEntries().forEach(({ path, fileHandle }) => {
+            this.displayState.registerFile(
+                path,
+                fileHandle,
+                this.getColor(path)
+            );
         });
 
-        this.treeView.setError(fileHandle);
-
-        this.mapView.clear();
-
-        this.mapView.showError();
-
-        this.statusBar.showGPXFailed(fileHandle.name);
+        this.statusBar.showLibraryLoaded(library);
     }
 
-    /**
-     * Clears the active GPX presentation.
-     *
-     * @returns {void}
-     */
+    handleGPXSelected({ path, fileHandle }) {
+
+        this.#presentationState.selectedFileHandle = fileHandle;
+        this.#presentationState.selectedFileName = fileHandle.name;
+        this.#presentationState.selectedFilePath = path;
+        this.#presentationState.status = "selected";
+
+        if (this.displayState.getDisplay(path)?.checked) {
+            this.mapView.refocusGPX(path);
+        }
+    }
+
+    handleDisplayToggled({ path, fileHandle, checked }) {
+
+        const display = this.displayState.getDisplay(path);
+
+        if (!display) {
+            this.displayState.registerFile(path, fileHandle, this.getColor(path));
+        }
+
+        this.displayState.setChecked(path, checked);
+
+        if (!checked) {
+            this.stopDisplay(path);
+            return;
+        }
+
+        this.startDisplay(path, fileHandle);
+    }
+
+    startDisplay(path, fileHandle) {
+
+        const display = this.displayState.getDisplay(path);
+        const cachedResult = this.displayState.getCachedResult(path);
+        const color = display.color;
+
+        if (cachedResult) {
+            this.displayState.setLoaded(path, cachedResult);
+            this.treeView.setDisplayLoaded(path, color);
+            this.mapView.displayGPX(path, cachedResult, this.createTrackStyle(color));
+            this.scheduleRefocus();
+            this.updateDisplayStatus();
+            return;
+        }
+
+        const requestId = this.displayState.nextRequestId(path);
+        const generation = this.displayState.getLibraryGeneration();
+
+        this.displayState.setChecked(path, true);
+        this.displayState.setLoading(path, requestId);
+        this.treeView.setDisplayLoading(path);
+        this.updateDisplayStatus();
+
+        this.displayQueue.enqueue({
+            path,
+            fileHandle,
+            generation,
+            requestId,
+            run: async () => {
+                const loaded = await this.gpxLoader.load(fileHandle);
+                return this.gpxParser.parse(
+                    loaded.text,
+                    loaded.sourceFileName
+                );
+            },
+            onSuccess: result => this.handleDisplayParsed(
+                path,
+                result,
+                generation,
+                requestId
+            ),
+            onFailure: error => this.handleDisplayFailed(
+                path,
+                error,
+                generation,
+                requestId
+            )
+        });
+    }
+
+    handleDisplayParsed(path, result, generation, requestId) {
+
+        const display = this.displayState.getDisplay(path);
+
+        if (
+            generation !== this.displayState.getLibraryGeneration() ||
+            !display ||
+            display.requestId !== requestId
+        ) {
+            return;
+        }
+
+        this.displayState.setCachedResult(path, result);
+
+        if (!display.checked) {
+            this.displayState.setIdle(path);
+            this.treeView.setDisplayIdle(path);
+            return;
+        }
+
+        this.displayState.setLoaded(path, result);
+        this.treeView.setDisplayLoaded(path, display.color);
+        this.mapView.displayGPX(
+            path,
+            result,
+            this.createTrackStyle(display.color)
+        );
+        this.scheduleRefocus();
+        this.updateDisplayStatus();
+    }
+
+    handleDisplayFailed(path, error, generation, requestId) {
+
+        const display = this.displayState.getDisplay(path);
+
+        if (
+            generation !== this.displayState.getLibraryGeneration() ||
+            !display ||
+            display.requestId !== requestId ||
+            !display.checked
+        ) {
+            return;
+        }
+
+        console.error(`Failed to display GPX: ${path}`, error);
+        this.displayState.setError(path, error);
+        this.treeView.setDisplayError(path);
+        this.updateDisplayStatus();
+        this.statusBar.showDisplayError(display.fileHandle.name);
+    }
+
+    stopDisplay(path) {
+
+        const display = this.displayState.getDisplay(path);
+
+        if (!display) {
+            return;
+        }
+
+        this.displayQueue.invalidate(path, display.requestId);
+        this.displayState.invalidateRequest(path);
+        this.mapView.removeGPX(path);
+        this.treeView.setDisplayChecked(path, false);
+
+        if (display.state !== "error") {
+            this.treeView.setDisplayIdle(path);
+        }
+
+        this.scheduleRefocus();
+        this.updateDisplayStatus();
+    }
+
     clearPresentation() {
 
-        this.#requestId += 1;
+        this.displayQueue.clear();
+        this.displayState.clearDisplays();
+        this.mapView.clear();
+        this.mapView.resetView();
+        this.treeView.clearDisplayStates();
+        this.scheduleRefocus();
+        this.updateDisplayStatus();
+    }
 
-        this.#setPresentationState("idle", {
-            selectedFileHandle: null,
-            selectedFileName: null,
-            parsedResult: null
+    updateDisplayStatus() {
+
+        let displayedCount = 0;
+        let loadingCount = 0;
+
+        this.displayState.getDisplays().forEach(display => {
+            if (display.checked && display.state === "loaded") {
+                displayedCount += 1;
+            }
+
+            if (display.checked && display.state === "loading") {
+                loadingCount += 1;
+            }
         });
 
-        this.mapView.clear();
-
-        this.mapView.resetView();
-
-        this.treeView.clearSelection();
-
-        this.statusBar.showReady();
+        this.statusBar.showDisplaySummary(displayedCount, loadingCount);
     }
 
-    #setPresentationState(status, values = {}) {
+    scheduleRefocus() {
 
-        this.#presentationState = {
-            ...this.#presentationState,
-            ...values,
-            status
+        clearTimeout(this.#refocusTimer);
+
+        this.#refocusTimer = setTimeout(() => {
+            if (this.displayState.getDisplays().size === 0) {
+                this.mapView.resetView();
+                return;
+            }
+
+            this.mapView.refocus();
+        }, 250);
+    }
+
+    getColor(path) {
+
+        const palette = this.config.map.displayPalette;
+        let hash = 0;
+
+        for (let index = 0; index < path.length; index += 1) {
+            hash = ((hash << 5) - hash + path.charCodeAt(index)) | 0;
+        }
+
+        return palette[Math.abs(hash) % palette.length];
+    }
+
+    createTrackStyle(color) {
+
+        return {
+            color,
+            lineColor: color,
+            weight: this.config.map.trackStyle.lineWeight,
+            opacity: this.config.map.trackStyle.lineOpacity
         };
     }
-
-    #isCurrentRequest(fileHandle, requestId) {
-
-        return requestId === this.#requestId &&
-            this.#presentationState.selectedFileHandle === fileHandle;
-    }
-
 }

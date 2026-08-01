@@ -82,6 +82,33 @@ body{
     user-select:none;
 }
 
+.gpx-display-toggle{
+
+    flex:0 0 auto;
+
+    margin:0 6px 0 0;
+}
+
+.tree-color-indicator{
+
+    flex:0 0 8px;
+
+    width:8px;
+
+    height:8px;
+
+    margin:0 6px 0 2px;
+
+    border-radius:50%;
+
+    background:transparent;
+}
+
+.gpx-file.is-displayed .tree-color-indicator{
+
+    box-shadow:0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+
 .tree-row:focus-visible{
 
     outline:2px solid var(--accent);
@@ -172,6 +199,11 @@ body{
     background:var(--accent);
 
     color:white;
+}
+
+.gpx-file.is-selected.is-displayed{
+
+    box-shadow:inset 3px 0 0 white;
 }
 
 .gpx-file.is-loading{

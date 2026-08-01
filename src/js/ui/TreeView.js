@@ -39,6 +39,7 @@ export default class TreeView {
         const rootList = aside.querySelector(".tree-root");
 
         rootList.addEventListener("click", event => this.handleClick(event));
+        rootList.addEventListener("change", event => this.handleChange(event));
         rootList.addEventListener("keydown", event => this.handleKeyDown(event));
         rootList.addEventListener("focusin", event => this.handleFocusIn(event));
 
@@ -143,7 +144,10 @@ export default class TreeView {
                     parentPath: path,
                     name: fileHandle.name,
                     model: fileHandle,
-                    state: "idle"
+                    state: "idle",
+                    checked: false,
+                    color: null,
+                    error: null
                 });
 
                 fileHandlesByPath.set(filePath, fileHandle);
@@ -319,10 +323,19 @@ export default class TreeView {
         row.tabIndex = -1;
         row.title = fileHandle.name;
         row.innerHTML = `
+            <input
+                class="gpx-display-toggle"
+                type="checkbox"
+            >
             <span class="tree-icon" aria-hidden="true">●</span>
+            <span class="tree-color-indicator" aria-hidden="true"></span>
             <span class="tree-label"></span>
         `;
         row.querySelector(".tree-label").textContent = fileHandle.name;
+        row.querySelector(".gpx-display-toggle").setAttribute(
+            "aria-label",
+            `地図に表示: ${fileHandle.name}`
+        );
         item.append(row);
         this.fileNodes.set(path, row);
         this.refreshFileRow(path);
@@ -346,6 +359,11 @@ export default class TreeView {
 
     handleClick(event) {
 
+        if (event.target.closest(".gpx-display-toggle")) {
+            event.stopPropagation();
+            return;
+        }
+
         const row = event.target.closest(NODE_SELECTOR);
 
         if (!row || !this.element.querySelector(".tree-root").contains(row)) {
@@ -363,7 +381,35 @@ export default class TreeView {
             return;
         }
 
-        this.activateFile(this.fileHandlesByPath.get(path));
+        this.selectFile(this.fileHandlesByPath.get(path));
+    }
+
+    handleChange(event) {
+
+        const checkbox = event.target.closest(".gpx-display-toggle");
+
+        if (!checkbox) {
+            return;
+        }
+
+        const row = checkbox.closest(NODE_SELECTOR);
+
+        if (!row) {
+            return;
+        }
+
+        event.stopPropagation();
+
+        const path = row.dataset.treePath;
+        const checked = checkbox.checked;
+
+        this.setDisplayChecked(path, checked);
+
+        this.eventBus.emit("gpx:display-toggled", {
+            path,
+            fileHandle: this.fileHandlesByPath.get(path),
+            checked
+        });
     }
 
     handleKeyDown(event) {
@@ -371,6 +417,10 @@ export default class TreeView {
         const row = event.target.closest(NODE_SELECTOR);
 
         if (!row) {
+            return;
+        }
+
+        if (event.target.matches(".gpx-display-toggle")) {
             return;
         }
 
@@ -421,7 +471,21 @@ export default class TreeView {
                 return;
             }
 
-            this.activateFile(this.fileHandlesByPath.get(path));
+            if (event.key === " ") {
+                const checked = !this.isDisplayChecked(path);
+
+                this.setDisplayChecked(path, checked);
+
+                this.eventBus.emit("gpx:display-toggled", {
+                    path,
+                    fileHandle: this.fileHandlesByPath.get(path),
+                    checked
+                });
+
+                return;
+            }
+
+            this.selectFile(this.fileHandlesByPath.get(path));
         }
     }
 
@@ -588,73 +652,110 @@ export default class TreeView {
         row.classList.toggle("is-collapsed", !expanded);
     }
 
-    activateFile(fileHandle) {
+    selectFile(fileHandle) {
 
         const path = this.pathsByFileHandle.get(fileHandle);
 
         if (!path) {
             return;
         }
+
+        this.selectedFilePath = path;
+        this.refreshAllFileRows();
+        this.eventBus.emit("gpx:selected", { path, fileHandle });
+    }
+
+    setDisplayLoading(path) {
 
         const metadata = this.nodeMetadata.get(path);
 
-        if (metadata?.state === "loading") {
+        if (!metadata || metadata.kind !== "file") {
             return;
         }
 
-        this.selectedFilePath = path;
-        this.refreshAllFileRows();
-        this.eventBus.emit("gpx:parse-requested", { fileHandle });
-    }
-
-    setLoading(fileHandle) {
-
-        const path = this.pathsByFileHandle.get(fileHandle);
-
-        if (!path) {
-            return;
-        }
-
-        this.clearTransientStates();
-        this.selectedFilePath = path;
-        this.nodeMetadata.get(path).state = "loading";
+        metadata.state = "loading";
         this.refreshAllFileRows();
     }
 
-    setLoaded(fileHandle) {
+    setDisplayLoaded(path, color) {
 
-        const path = this.pathsByFileHandle.get(fileHandle);
+        const metadata = this.nodeMetadata.get(path);
 
-        if (!path) {
+        if (!metadata || metadata.kind !== "file") {
             return;
         }
 
-        this.clearTransientStates();
-        this.nodeMetadata.get(path).state = "loaded";
+        metadata.state = "loaded";
+        metadata.error = null;
+        metadata.color = color;
         this.refreshAllFileRows();
     }
 
-    setError(fileHandle) {
+    setDisplayError(path) {
 
-        const path = this.pathsByFileHandle.get(fileHandle);
+        const metadata = this.nodeMetadata.get(path);
 
-        if (!path) {
+        if (!metadata || metadata.kind !== "file") {
             return;
         }
 
-        this.clearTransientStates();
-        this.selectedFilePath = path;
-        this.nodeMetadata.get(path).state = "error";
+        metadata.state = "error";
+        metadata.checked = false;
         this.refreshAllFileRows();
+    }
+
+    setDisplayChecked(path, checked) {
+
+        const metadata = this.nodeMetadata.get(path);
+
+        if (!metadata || metadata.kind !== "file") {
+            return;
+        }
+
+        metadata.checked = checked;
+        this.refreshFileRow(path);
+    }
+
+    setDisplayIdle(path) {
+
+        const metadata = this.nodeMetadata.get(path);
+
+        if (metadata?.kind === "file") {
+            metadata.state = "idle";
+            this.refreshFileRow(path);
+        }
+    }
+
+    isDisplayChecked(path) {
+
+        return Boolean(this.nodeMetadata.get(path)?.checked);
+    }
+
+    getFileEntries() {
+
+        return [...this.nodeMetadata.values()]
+            .filter(metadata => metadata.kind === "file")
+            .map(metadata => ({
+                path: metadata.path,
+                fileHandle: metadata.model
+            }));
     }
 
     clearSelection() {
 
         this.selectedFilePath = null;
 
+        this.refreshAllFileRows();
+    }
+
+    clearDisplayStates() {
+
         this.nodeMetadata.forEach(metadata => {
             if (metadata.kind === "file") {
                 metadata.state = "idle";
+                metadata.checked = false;
+                metadata.color = null;
+                metadata.error = null;
             }
         });
 
@@ -689,9 +790,22 @@ export default class TreeView {
         const isSelected = this.selectedFilePath === path;
 
         row.classList.toggle("is-selected", isSelected);
+        row.classList.toggle("is-displayed", metadata.checked);
         row.classList.toggle("is-loading", metadata.state === "loading");
+        row.classList.toggle("is-loaded", metadata.state === "loaded");
         row.classList.toggle("is-error", metadata.state === "error");
         row.setAttribute("aria-selected", String(isSelected));
+
+        const checkbox = row.querySelector(".gpx-display-toggle");
+        const colorIndicator = row.querySelector(".tree-color-indicator");
+
+        if (checkbox) {
+            checkbox.checked = Boolean(metadata.checked);
+        }
+
+        if (colorIndicator) {
+            colorIndicator.style.backgroundColor = metadata.color || "";
+        }
     }
 
     findRenderedRow(path) {

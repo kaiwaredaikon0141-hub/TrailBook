@@ -1,124 +1,120 @@
 const FIT_PADDING = [20, 20];
 
 /**
- * Manages Leaflet layers created from a parsed GPX result.
+ * Manages independent Leaflet layers for displayed GPX files.
  */
 export default class LayerManager {
 
-    /**
-     * Creates a Leaflet layer manager.
-        *
-        * @param {object} map
-        * @param {object} mapConfig
-     */
     constructor(map, mapConfig) {
 
         this.map = map;
-
         this.mapConfig = mapConfig;
-
-        this.layerGroup = null;
-
-        this.bounds = [];
+        this.layers = new Map();
     }
 
-    /**
-     * Displays all tracks and waypoints in a parsed result.
-     *
-     * @param {object} result
-     * @returns {void}
-     */
-    display(result) {
+    displayGPX(path, result, style) {
 
-        this.clear();
+        this.removeGPX(path);
 
-        this.layerGroup = L.layerGroup().addTo(this.map);
+        const layerGroup = L.layerGroup().addTo(this.map);
+        const bounds = [];
+        const trackStyle = style || this.mapConfig.trackStyle;
 
         result.tracks.forEach(track => {
-
             track.segments.forEach(segment => {
-
                 const latLngs = segment.points.map(point => {
-
                     const latLng = [point.latitude, point.longitude];
-
-                    this.bounds.push(latLng);
-
+                    bounds.push(latLng);
                     return latLng;
                 });
 
                 if (latLngs.length > 0) {
-
-                    L.polyline(latLngs, this.mapConfig.trackStyle)
-                        .addTo(this.layerGroup);
+                    L.polyline(latLngs, trackStyle).addTo(layerGroup);
                 }
             });
         });
 
         result.waypoints.forEach(waypoint => {
-
             L.marker([waypoint.latitude, waypoint.longitude])
-                .addTo(this.layerGroup);
+                .addTo(layerGroup);
         });
 
-        this.#fitBounds();
+        this.layers.set(path, {
+            layerGroup,
+            bounds,
+            color: trackStyle.color || trackStyle.lineColor || null
+        });
     }
 
-    /**
-     * Removes the currently displayed layers and bounds.
-     *
-     * @returns {void}
-     */
+    removeGPX(path) {
+
+        const entry = this.layers.get(path);
+
+        if (entry) {
+            entry.layerGroup.remove();
+            this.layers.delete(path);
+        }
+    }
+
     clear() {
 
-        if (this.layerGroup) {
-
-            this.layerGroup.remove();
-        }
-
-        this.layerGroup = null;
-
-        this.bounds = [];
+        this.layers.forEach(entry => entry.layerGroup.remove());
+        this.layers.clear();
     }
 
-    /**
-     * Refocuses the map on the current Track bounds.
-     *
-     * @returns {void}
-     */
     refocus() {
 
-        this.#fitBounds();
+        this.#fitBounds(this.#allBounds());
     }
 
-    /**
-     * Reports whether a GPX layer is currently displayed.
-     *
-     * @returns {boolean}
-     */
-    hasDisplay() {
+    refocusGPX(path) {
 
-        return Boolean(this.layerGroup);
-    }
+        const bounds = this.layers.get(path)?.bounds || [];
 
-    #fitBounds() {
-
-        if (this.bounds.length >= 2) {
-
-            this.map.fitBounds(this.bounds, {
-                padding: FIT_PADDING
-            });
-
+        if (bounds.length === 0) {
             return;
         }
 
-        if (this.bounds.length === 1) {
-
-            this.map.setView(
-                this.bounds[0],
-                this.mapConfig.singlePointZoom
-            );
-        }
+        this.#fitBounds(bounds);
     }
 
+    hasDisplay(path) {
+
+        if (path !== undefined) {
+            return this.layers.has(path);
+        }
+
+        return this.layers.size > 0;
+    }
+
+    getDisplayedPaths() {
+
+        return [...this.layers.keys()];
+    }
+
+    #allBounds() {
+
+        return [...this.layers.values()].flatMap(entry => entry.bounds);
+    }
+
+    #fitBounds(bounds) {
+
+        if (bounds.length >= 2) {
+            this.map.fitBounds(bounds, { padding: FIT_PADDING });
+            return;
+        }
+
+        if (bounds.length === 1) {
+            this.map.setView(bounds[0], this.mapConfig.singlePointZoom);
+            return;
+        }
+
+        this.map.setView(
+            [
+                this.mapConfig.center.latitude,
+                this.mapConfig.center.longitude
+            ],
+            this.mapConfig.initialZoom
+        );
+    }
 }

@@ -29,7 +29,18 @@ const Config = {
             lineColor: "#e53935",
             lineWeight: 4,
             lineOpacity: 0.85
-        }
+        },
+
+        displayPalette: [
+            "#e53935",
+            "#1e88e5",
+            "#43a047",
+            "#fb8c00",
+            "#8e24aa",
+            "#00897b",
+            "#6d4c41",
+            "#546e7a"
+        ]
     },
 
     debug: true

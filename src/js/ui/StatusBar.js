@@ -112,4 +112,16 @@ export default class StatusBar {
         this.element.textContent = "地図を表示できません";
     }
 
+
+    showDisplaySummary(displayedCount, loadingCount) {
+
+        this.element.textContent = loadingCount > 0
+            ? `表示中: ${displayedCount} GPX / 読み込み中: ${loadingCount}`
+            : `表示中: ${displayedCount} GPX`;
+    }
+
+    showDisplayError(fileName) {
+
+        this.element.textContent = `GPXを表示できません: ${fileName}`;
+    }
 }

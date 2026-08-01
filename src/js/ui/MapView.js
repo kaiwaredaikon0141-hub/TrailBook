@@ -102,14 +102,14 @@ export default class MapView {
      * @param {object} result
      * @returns {void}
      */
-    displayGPX(result) {
+    displayGPX(path, result, style) {
 
         if (!this.layerManager) {
 
             throw new Error("MapView is not initialized.");
         }
 
-        this.layerManager.display(result);
+        this.layerManager.displayGPX(path, result, style);
 
         this.setState("loaded", "");
     }
@@ -124,6 +124,36 @@ export default class MapView {
         if (this.layerManager) {
 
             this.layerManager.refocus();
+        }
+    }
+
+    /**
+     * Refocuses the map on one displayed GPX.
+     *
+     * @param {string} path
+     * @returns {void}
+     */
+    refocusGPX(path) {
+
+        if (this.layerManager) {
+            this.layerManager.refocusGPX(path);
+        }
+    }
+
+    /**
+     * Removes one displayed GPX.
+     *
+     * @param {string} path
+     * @returns {void}
+     */
+    removeGPX(path) {
+
+        if (this.layerManager) {
+            this.layerManager.removeGPX(path);
+
+            if (!this.layerManager.hasDisplay()) {
+                this.showEmpty();
+            }
         }
     }
 

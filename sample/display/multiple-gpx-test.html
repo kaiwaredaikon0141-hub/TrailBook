@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TrailBook Multiple GPX Test</title>
+    <link rel="stylesheet" href="../../src/css/base.css">
+    <link rel="stylesheet" href="../../src/css/layout.css">
+    <link rel="stylesheet" href="../../src/css/theme.css">
+    <style>
+        body { height: 100vh; }
+        #test-app { height: 100%; display: grid; grid-template-columns: 320px 1fr; }
+        .test-panel { padding: 16px; overflow: auto; }
+        .test-panel h1 { margin-top: 0; }
+        .test-result { white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <main id="test-app">
+        <section id="tree-host"></section>
+        <section class="test-panel">
+            <h1>Multiple GPX Release 0.6 Test</h1>
+            <p>Use GPX checkboxes for independent map display and click rows for primary selection.</p>
+            <p class="test-result" id="test-result">10, 50, and 100 GPX-equivalent datasets are available through the test controls.</p>
+        </section>
+    </main>
+    <script type="module">
+        import EventBus from "../../src/js/core/EventBus.js";
+        import Folder from "../../src/js/models/Folder.js";
+        import Library from "../../src/js/models/Library.js";
+        import TreeView from "../../src/js/ui/TreeView.js";
+
+        const root = new Folder("test-root", { name: "test-root" });
+        const bus = new EventBus();
+        const treeView = new TreeView(bus);
+        const result = document.getElementById("test-result");
+
+        for (let index = 0; index < 100; index += 1) {
+            root.gpxFiles.push({ name: `display-${index}.gpx` });
+        }
+
+        bus.on("gpx:selected", ({ path }) => {
+            result.textContent = `Selected: ${path}`;
+        });
+
+        bus.on("gpx:display-toggled", ({ path, checked }) => {
+            result.textContent = `${checked ? "ON" : "OFF"}: ${path}`;
+        });
+
+        document.getElementById("tree-host").append(treeView.element);
+        await treeView.render(new Library("test-root", root, 1, 100));
+    </script>
+</body>
+</html>
