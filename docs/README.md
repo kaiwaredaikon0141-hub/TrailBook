@@ -6,9 +6,9 @@
 
 - Current Release: `1.0.0` Stable Viewer
 - Completed: Release 0.1からRelease 1.0
-- Next Release: 未定
+- Next Release: Release 1.1 Track Selection & Styling（Planning）
 
-Release 1.0は個人利用向け正式安定版として完了しています。一般公開版ではなく、次Releaseは`ROADMAP.md`のFuture Candidatesから設計承認後に決定します。
+Release 1.0は個人利用向け正式安定版として完了しています。Release 1.1はTrack selection、Folder color、zoom-based width、UI設定persistenceの設計段階であり、production実装はまだ開始していません。
 
 ## Read Order
 
@@ -43,7 +43,7 @@ Release 1.0のUnit 1〜8（scope確定、baseline、TreeView限定分割、起�
 
 ## Future Features
 
-Statistics、Replay、HeatMap、GPX Metadata Index、日付表示、車両metadata、GPX編集、Cloud Sync、Mobile Viewer UX、Waypoint性能最適化、数値性能再測定、Plugin、AI Searchなどは将来候補です。Release 1.0の実装済み機能ではありません。
+Statistics、Replay、HeatMap、GPX Metadata Index、日付表示、vehicle metadata、GPX編集、Cloud Sync、Mobile Viewer UX、Waypoint性能最適化、数値性能再測定、Plugin、AI SearchなどはRelease 1.1対象外の将来候補です。Release 1.0の実装済み機能またはRelease 1.1 Scopeとして扱いません。
 
 ## Source of Truth
 

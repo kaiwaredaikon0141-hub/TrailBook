@@ -3,7 +3,7 @@
 Version: 1.1
 Status: Official
 Current Release: 1.0.0 Stable Viewer
-Next Release: Not assigned
+Next Release: 1.1 Track Selection & Styling
 
 ## Version Policy
 
@@ -252,6 +252,55 @@ Completed内容:
 - README、LICENSE、third-party notices
 - Windows Chrome / Edge統合受け入れ
 
+## Next Release
+
+### Release 1.1 — Track Selection & Styling
+
+Status: Planning
+
+Goal: MapとTreeViewで同期する単一Track選択、Folder単位の継承色、zoomに応じた線幅、再生成可能なUI設定の永続化を追加する。GPXとFolder構造はread-onlyの正本として維持する。
+
+Scope:
+
+- 表示中TrackのMap clickとTreeView / Searchの主選択を、path単位の単一Selectionへ統合する。
+- 選択TrackはFolder色を維持し、太いmain line、対比するoutline、前面表示で強調する。他Trackは薄くしない。
+- Folderごとに明示色を設定できる。対象Folder自身の明示色を最優先し、自身が未設定の場合だけroot方向へ探索して最初に見つかる最も近い祖先色を継承する。Library内に明示色がなければv1.0.0と同じGPX relative path hash色を維持する。
+- Folder行のkeyboard操作可能なcolor swatch buttonから、単一のFolder color dialogを開く。Apply、Defaultへ戻す、Cancelを提供する。
+- Mapの`zoomend`後、zoom bucketが変化した場合だけ表示中Trackの線幅を更新する。
+- Folder colorとschema versionを、GPXから再生成可能なUI設定として`localStorage`へ保存する。
+- FileHandle、FolderHandle、GPX XML、解析geometry、cacheは永続化しない。
+- storage失敗時もsession内のViewerと色設定操作を継続する。
+- 806 GPXでselection、zoom、Folder color変更の回帰とlayer更新範囲を確認する。
+
+Out of Scope:
+
+- 前回表示Track、前回Map位置の復元
+- Date Tree、vehicle metadata / color
+- GPX / TrackPoint / Waypoint編集、容量削減、Undo / Redo、保存、上書き
+- Mobile Viewer UX、Waypoint clustering、hover preview
+- GPX単位色、共有palette、Cloud Sync
+- Folder構造変更
+
+Unit Plan:
+
+1. Scope、Architecture、Decisions、event contract、test plan
+2. `TrackStyleService`、zoom-based width、static test、browser acceptance
+3. `SelectionState`、Map Track click、Tree / Search同期、highlight、browser acceptance
+4. UI settings persistence、Library識別、schema、migration / failure handling
+5. Folder color UI、継承、選択的restyle、browser acceptance
+6. 統合受け入れ、性能確認、文書、Release 1.1確定
+
+Unit 2でstyle計算とzoom更新を先に独立させ、Unit 3で選択とhighlightを接続する。永続化は選択から独立するためUnit 4、Folder UIはstorage契約確定後のUnit 5とする。
+
+Done Definition:
+
+- Map、TreeView、Searchの選択が単一の`SelectionState`へ同期し、非表示化、Clear、Library切り替え、parse failureで不正な選択が残らない。
+- 選択Trackは元色を維持したoutline付き強調となり、解除時に元styleへ戻る。
+- Folder色が対象Folder自身、rootを含む最も近い祖先、GPX relative path hash、最終fallbackの規定順で解決される。
+- zoom 8 / 9 / 12 / 15の境界がtestされ、同じbucket内で全Trackを再styleしない。
+- reload後に同じLibrary名のFolder色が復元され、storage unavailable、破損JSON、未知schemaでもViewerが動作する。
+- 806 GPXで既存表示、bulk checkbox、Search、Waypointに明確な回帰がない。
+
 ## Future Design Boundaries
 
 以下はRelease番号未定であり、Release 1.0には含めない。
@@ -323,6 +372,7 @@ Release番号は設計承認時に決定する。
 - Mobile Viewer UX
 - Waypoint Performance Optimization
 - Unit 2-equivalent Performance Remeasurement
+- Previous Display / Map Position Restoration
 - Replay
 - HeatMap
 - Bookmark

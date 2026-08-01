@@ -2,7 +2,8 @@
 
 Version: 1.1
 Status: Official
-Baseline: Release 0.9.0
+Baseline: Release 1.0.0
+Next: Release 1.1 Planning
 Depends: PROJECT.md, ROADMAP.md, DECISIONS.md
 
 ## Architecture Overview
@@ -440,6 +441,165 @@ Release 1.0はRelease 0.9までのViewer機能を個人利用環境で安定さ�
 - 一般公開、配布artifact、hosted版、公開support、TrailBook本体のOSS license決定は扱わない。
 - Mobile検証のためにFolder LibraryのFile System Access API設計を変更せず、`showDirectoryPicker`が利用できない端末向けfallbackはRelease 1.0へ追加しない。
 - LeafletとOpenStreetMapは第三者のlicenseおよび利用条件としてTrailBook本体と分離する。
+
+## Release 1.1 Planned Architecture
+
+Release 1.1 Track Selection & Stylingは、既存のpath identity、App mediation、read-only GPX、bounded Queue / cacheを維持したまま、Selection、Track style、Folder color、UI設定storageを追加する。以下はPlanning contractであり、Release 1.0 productionの実装事実ではない。
+
+### SelectionState — Selection Source of Truth
+
+新規`SelectionState`を`src/js/state/SelectionState.js`へ置き、current Library内の単一`selectedPath`だけを選択状態の正本として管理する。FileHandle、DOM、Leaflet layer、解析結果、表示checkboxは保持しない。
+
+| Candidate | Evaluation |
+| --- | --- |
+| App private state | 現在に近く変更は小さいが、Map selectionと将来EditorでApp責務が増える |
+| DisplayState | path identityは共有できるが、表示ON / OFFと主選択を再結合するため不採用 |
+| SelectionState | UI非依存、単一責務、将来editingへ拡張可能。採用 |
+| LayerManager / TreeView | UIまたはLeafletを正本にするため不採用 |
+| EventBus only | 現在値を問い合わせられず、event missed時に同期不能となるため不採用 |
+
+- AppはTreeView、Search、MapViewからのrequestを検証し、`SelectionState`を更新してprojectionへ通知する。
+- TreeViewとMapView / LayerManagerは選択の正本にならず、`selection:changed`を受けた表示projectionだけを持つ。
+- Tree / Searchからは非表示GPXも主選択できるが、Map highlightとMap-origin selectionは表示中Trackだけを対象とする。
+- 選択中Trackを非表示にした場合、Clear、Library切り替え、対象GPXのparse failureでは選択を解除する。
+- Map背景clickは選択解除requestとする。dragでは解除しない。layer由来clickは`sourceTarget`で区別し、背景解除と二重処理しない。
+- Tree / Search originの表示中GPX選択は既存どおり個別refocusする。Map originのTrack選択では現在のviewportを維持し、refocusしない。
+
+`selection:changed.reason`は`tree`、`search`、`map`、`background`、`hidden`、`clear`、`library-switch`、`parse-failure`のいずれかとする。
+
+既存App private Presentation StateはUnit 3で`SelectionState`のprojectionへ移行する。主選択と`DisplayState`の表示状態を分離するDecision 0018は維持する。
+
+### TrackStyleService — Pure Style Rules
+
+新規`TrackStyleService`を`src/js/services/TrackStyleService.js`へ置く。Folderから解決済みの色、zoom levelまたはbucket、selected flagを入力し、Leafletへ渡せるstyle descriptorを副作用なしで返す。
+
+出力はmain color / weight / opacity、outline color / weight、Canvas hit tolerance、選択時のz-order方針を含む。数値はConfigの単一sectionへ集約し、App、MapView、LayerManagerへ散在させない。hover、vehicle color、error styleは将来fieldを追加できるがRelease 1.1では実装しない。
+
+Zoom bucket初期値:
+
+| Zoom | Bucket | Normal weight |
+| ---: | --- | ---: |
+| 15以上 | near | 4 px |
+| 12〜14 | middle | 3 px |
+| 9〜11 | far | 2 px |
+| 8以下 | overview | 1 px |
+
+selected mainはnormal + 3 px、outlineはselected main + 2 pxとする。main colorはFolder colorのまま変更せず、opacityは通常0.85、selected 1.0とする。outline colorはmain colorとの明度差を確保するneutral colorをpure calculationで選ぶ。
+
+`zoomend`で現在bucketを比較し、bucketが変わった場合だけ表示中Trackをrestyleする。同じbucket内のzoomでは何もしない。
+
+### LayerManager — Clickable and Highlighted Track Layers
+
+GPX pathごとのentryを次へ拡張する。
+
+```text
+GPX path
+├─ Main Track LayerGroup
+│  └─ TrackSegmentごとのinteractive Canvas Polyline
+├─ Selected Outline LayerGroup（選択中だけ生成）
+├─ Waypoint LayerGroup（表示時だけ生成）
+├─ Track Bounds
+├─ Resolved Color
+└─ Current Zoom Bucket
+```
+
+Release 1.1の初期方式はLeaflet Canvas rendererの`tolerance`で細線のhit areaを広げ、全Trackへ透明hit Polylineを重複生成しない。visible main Polylineがclick targetとなり、outlineは`interactive: false`とする。Canvas方式がbrowser acceptanceを満たさない場合だけ、透明hit Polylineをfallback候補として再評価し、layer数と806 GPX性能を再測定する。
+
+outlineは選択GPXだけに生成し、mainより背面の専用paneへ置く。選択mainは同一pane内で前面へ移動する。選択解除時はoutlineを削除し、mainを通常styleへ戻す。他Trackのopacityは変更しない。
+
+overlap時はrenderer上で最前面のhit対象1件を選ぶ。cycle selectionは行わず、隠れたGPXはTree / Searchから選択できる。Track clickはMap背景clickと区別し、double-click zoomを`preventDefault`しない。
+
+### Folder Color Settings
+
+Folder色はLibrary dataではなく、再生成可能なUI表示設定である。root Folder pathは空文字`""`とし、rootにも明示色を設定できる。
+
+新規`FolderColorState`を`src/js/state/FolderColorState.js`へ置き、current Libraryの明示色Mapと継承解決を担当する。DOM、Leaflet、localStorageへ直接依存しない。`DisplaySettingsStore`は永続化だけを担当し、AppがLibrary load時の復元と明示変更後の保存を調停する。
+
+GPX color解決順:
+
+1. 対象Folder自身の明示色
+2. 対象Folderからroot方向へ探索して最初に見つかる、最も近い祖先Folderの明示色
+3. GPX relative pathによる既存path hash color
+4. Configの最終fallback色
+
+対象Folder自身に明示色があれば必ずそれを使用し、自身が未設定の場合だけ親からroot方向へ探索する。直接親に限定せず、最初に見つかった最も近い祖先色を継承し、rootの明示色も祖先色として利用する。明示色をDefaultへ戻すと、そのFolderは最も近い祖先色またはfallbackへ戻る。GPX単位色は扱わない。
+
+`FolderColorState.resolveFolderColor(folderPath)`は対象Folder自身、続いてroot方向の祖先を順に調べ、最初の明示色を返す。どこにも存在しなければ`null`を返す。AppはGPXごとに`resolvedFolderColor ?? getPathHashColor(gpxPath) ?? finalFallback`を適用する。これにより明示色が一切ないLibraryでは、v1.0.0と同じGPX relative pathごとのhash色が変わらない。
+
+API候補は`setFolderColor(folderPath, color)`、`removeFolderColor(folderPath)`、`getExplicitFolderColor(folderPath)`、`resolveFolderColor(folderPath)`、`clearLibraryColors(libraryId)`とする。色は`#RRGGBB`だけを受理し、大文字形式へ正規化する。
+
+Folder color変更時は対象Folder配下の登録GPXだけを再解決し、表示中pathだけをLayerManagerでrestyleする。Queue投入、GPX再解析、cache更新、refocusは行わない。TreeとSearchの表示色projectionは同じresolved colorへ更新する。
+
+### UI Settings Persistence
+
+新規`DisplaySettingsStore`を`src/js/services/DisplaySettingsStore.js`へ設け、storage objectをconstructor injectionして固定key`trailbook.uiSettings`のJSONを安全に読み書きする。localStorageはGPXの正本や独自DBではなく、削除してもpath hash色から再生成できるUI設定storageとする。
+
+```json
+{
+  "schemaVersion": 1,
+  "libraries": [
+    {
+      "libraryId": "root-name:TrailBook",
+      "rootFolderName": "TrailBook",
+      "folderColors": {
+        "": "#E53935",
+        "Vehicles": "#D32F2F",
+        "Vehicles/Roadster": "#1976D2"
+      }
+    }
+  ]
+}
+```
+
+保存対象はschema version、Library識別情報、Folder relative pathと明示色だけとする。GPX内容、TrackPoint、Waypoint、解析geometry、FileHandle、FolderHandle、GPX XML、解析cacheを保存しない。外部通信もしない。
+
+JSON parse failure、invalid color、未知schema version、quota / security errorでは保存値を無視し、path hash fallbackまたはsession内設定でViewerを継続する。破損値を暗黙に上書きせず、次の明示設定操作まで保持しない。localStorage削除時はDefault色へ戻るだけである。
+
+`DisplaySettingsStore.migrate(payload)`はpure functionとして分離する。初期schema 1にはlegacy migrationを持たず、version 1を検証して読み込み、未知または新しいversionはfail closedで無視する。将来version追加時は旧versionから新versionへの明示migration testを追加する。
+
+schema version 1から将来fieldを追加できるが、前回表示TrackやMap位置はRelease 1.1で保存しない。
+
+Folder色UIは`src/js/ui/FolderColorDialog.js`の単一dialogへ分離する。TreeViewはrender済みFolder行のswatchとedit requestだけを担当し、dialog state、validation、storageを持たない。TreeViewの1,000行規則を維持する。
+
+### Library Identity
+
+Release 1.1では案A「root Folder name + Folder relative path」を採用する。storage scopeはorigin、Library IDはroot Folder nameの完全一致から`root-name:<name>`として作り、各Folder色はrelative pathをkeyとする。
+
+| Candidate | Evaluation |
+| --- | --- |
+| A. root name + relative path | 追加走査、Handle永続化、ユーザー入力が不要。個人利用向けの最小案として採用 |
+| B. root name + structure signature | 既存metadataから計算可能だが、Folder追加・削除でIDが変わり設定を失う |
+| C. explicit Library ID | 衝突を避けられるが、初回設定と管理UIが必要 |
+| D. random ID | Handleを保存しない条件では再選択時に同じLibraryへ自動対応できない |
+| E. origin + root name | localStorage自体がorigin scopedのため案Aより識別力が増えない |
+
+root Folder名を変更すると新Libraryとして扱いDefault色へ戻る。異なる場所の同名root Folderは同じ設定を共有する可能性がある。これは色だけの衝突でGPXを変更せず、個人利用の既知制限として受け入れる。将来必要ならexplicit Library IDへmigrationする。
+
+### Release 1.1 Event Contract
+
+| Event | Producer | Consumer | Payload / Rule |
+| --- | --- | --- | --- |
+| `gpx:selection-requested` | TreeView | App | `{ path, source }`; sourceは`tree`または`search`。stateを直接変更しない |
+| `map:track-clicked` | MapView / LayerManager | App | `{ path }`; 表示中pathだけ |
+| `map:background-clicked` | MapView | App | `{}`; selection clear request |
+| `selection:changed` | App | TreeView / MapView | `{ path, previousPath, reason }`; SelectionState commit後だけ |
+| `map:zoom-ended` | MapView | App | `{ zoom }`; bucket変更時だけrestyle |
+| `folder:color-edit-requested` | TreeView | App | `{ folderPath }`; dialogを開く |
+| `folder:color-change-requested` | Folder color dialog | App | `{ folderPath, color }`; valid explicit color |
+| `folder:color-default-requested` | Folder color dialog | App | `{ folderPath }`; explicit valueを削除 |
+
+既存`gpx:selected`はUnit 3でrequest / changedを分離する際に置き換える。Search result activateはTreeViewの同じselection requestへ接続し、checkboxは選択を変更しない。既存`gpx:display-toggled`、`folder:display-toggled`、Waypoint、Queue、cache契約は変更しない。
+
+### Release 1.1 Performance Boundary
+
+- zoom eventは`zoomend`だけを使用し、bucket不変なら0件更新とする。
+- bucket変更時も`LayerManager.getDisplayedPaths()`に存在するTrackだけを更新する。
+- selection変更はprevious / nextの最大2 GPXだけを更新する。
+- outlineは選択中GPXだけに生成する。
+- Canvas toleranceを使い、初期実装では透明hit layerによる全Polyline倍増を避ける。
+- Folder color変更は対象Folder配下だけを再解決し、表示中の該当pathだけをrestyleする。
+- style変更ではGPX Parser、GPXDisplayQueue、100件cache、Track Bounds、Waypoint LayerGroup、refocusを変更しない。
+- SVG維持案と透明hit layer案はfallbackとし、採用時は806 GPXでlayer数、click、pan / zoomを再評価する。
 
 ## Architecture Principles
 

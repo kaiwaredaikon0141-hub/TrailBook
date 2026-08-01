@@ -7,7 +7,7 @@ TrailBookの開発を始める人とAIのための入口です。
 - Current Version: `1.0.0`
 - Current Release: Stable Viewer
 - Completed: Release 0.1からRelease 1.0
-- Next Release: 未定。`ROADMAP.md`のFuture Candidatesから設計承認後に決定する。
+- Next Release: Release 1.1 Track Selection & Styling（Planning）
 - Branch: `main`
 
 Gitの状態は作業開始時に必ず再確認する。
@@ -26,8 +26,8 @@ GPXを独自形式へ取り込むのではなく、ユーザーのGPX資産を�
 2. `VISION.md` — 長期的な製品像
 3. `ARCHITECTURE.md` — 現在の責務分割とデータフロー
 4. `CODING_RULES.md` — 実装規約
-5. `ROADMAP.md` — 完了Releaseと次Release
-6. `UI_SPEC.md` — Release 0.4から0.9までの確定UI仕様
+5. `ROADMAP.md` — 完了ReleaseとRelease 1.1 Scope
+6. `UI_SPEC.md` — Release 1.0までの確定UI仕様とRelease 1.1計画
 7. `DECISIONS.md` — 採用済み設計判断と理由
 8. `AI_GUIDE.md` — AIとの開発手順
 9. `CONTRIBUTING.md` — 作業規約
@@ -58,7 +58,9 @@ GPXファイル名、Folder名、相対パスをmetadataから検索する。検
 
 現在の制限としてMobile UIは非対応であり、Android ChromeとiPad Chromeは未確認である。大量GPX表示中のWaypoint ONは操作が重くなるため、大量LibraryではWaypoint OFFを推奨する。OSM背景tileはオンライン接続を必要とする。
 
-次Release番号は未定である。Mobile Viewer UX、Waypoint性能最適化、数値性能再測定、日付表示、車両metadata、GPX Editing Foundation、TrackPoint Editingなどは`ROADMAP.md`のFuture Candidatesであり、Release 1.0には含まれない。
+Release 1.1 Track Selection & StylingはPlanning中である。Map / TreeViewの選択同期、Folder色と継承、zoom-based width、UI設定限定の`localStorage`を設計対象とする。production実装はまだ開始していない。
+
+Mobile Viewer UX、Waypoint性能最適化、数値性能再測定、日付表示、vehicle metadata、GPX Editing Foundation、TrackPoint EditingなどはRelease 1.1の対象外であり、`ROADMAP.md`のFuture Candidatesとして扱う。
 
 ## Non-Negotiable Rules
 
@@ -67,6 +69,7 @@ GPXファイル名、Folder名、相対パスをmetadataから検索する。検
 - Folder構造とGPXファイルをデータの正本とする。
 - SQLite、IndexedDBなどの独自DBを持たない。一時的なセッションcacheは独自DBに含めない。
 - 独自DBを持たない方針を変更する場合は、新しいDecisionを必要とする。
+- Release 1.1では再生成可能なUI表示設定だけを`localStorage`へ保存できる。GPX内容、解析結果、FileHandle、FolderHandle、cacheの永続化は禁止する。
 - Framework、TypeScript、Node.jsを追加しない。
 - UI同士を直接接続せず、EventBusとAppの調停を使用する。
 - ModelへUI状態を保存しない。

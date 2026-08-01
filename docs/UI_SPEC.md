@@ -1,7 +1,7 @@
 # TrailBook UI Specification
 
-Version : 1.1
-Status  : Implemented through Release 0.9
+Version : 1.2
+Status  : Implemented through Release 1.0 / Release 1.1 Planning
 Depends : PROJECT.md, ARCHITECTURE.md, ROADMAP.md
 
 Release 0.5からRelease 0.9までの追加仕様は本書末尾に追記する。
@@ -644,3 +644,105 @@ Mobileでもsecure context、対応origin、`showDirectoryPicker`を満たす場
 - TrailBook本体のOSS license、作者名義、copyright名義を決定しない
 - 日付表示、車両情報、GPX編集、Statistics、Replay、HeatMap、Cloud Sync、Mobile専用UI、Plugin、AI Searchを追加しない
 - Mobile向けFolder選択fallback、複数GPX選択、ZIP Library読込、クラウドFolder importを追加しない
+
+# 21. Release 1.1 Track Selection & Styling
+
+Release 1.1はPlanning状態であり、次のUI contractを実装前仕様として確定する。
+
+## Track selection
+
+- Map上の表示中Trackはclick可能とする
+- Map Track click、Tree GPX行、Search GPX result activateは同じ単一Selectionへ同期する
+- Mapから選択した場合はviewportを動かさない
+- Tree / Searchから表示中GPXを選択した場合は既存どおり対象GPXへrefocusする
+- Tree / Searchから非表示GPXを主選択してもMapは変更しない
+- 選択Trackを非表示にした場合、Clear、Library切り替え、対象GPXのparse failureで選択を解除する
+- Map背景clickで選択を解除する。Track layer由来clickとdragでは解除しない
+- overlapping Trackは最前面の1件を選択する。cycle selectionはRelease 1.1へ追加しない
+
+TreeViewの`aria-selected`とMap highlightは`SelectionState`の同じpathを表示する。表示checkboxとSelectionは引き続き別の状態とし、selectionだけで表示ON / OFF、Queue投入、cache追加を行わない。
+
+## Selected highlight
+
+- 選択Trackのmain lineは解決済みFolder色を維持する
+- main lineを通常より3 px太くする
+- main lineより2 px太い対比色outlineを背面へ表示する
+- selected opacityは1.0とする
+- 選択Trackを同一pane内の前面へ移動する
+- 他Trackのopacityは変更しない
+- 選択解除時はoutlineを削除し、main lineを現在zoomの通常styleへ戻す
+- outlineはclick targetにしない
+
+細線のclick領域はLeaflet Canvas rendererのtoleranceで広げる。初期実装では全Trackへ透明hit Polylineを追加しない。
+
+## Folder color control
+
+各render済みFolder行にcolor swatch buttonを設ける。明示色または継承色がある場合はresolved colorを示し、どちらもない場合は子GPXごとのpath hash色を単一色に置き換えず「Auto」を示す。root Folderにも表示し、root色をLibrary全体の継承元として設定できる。
+
+| Candidate | Evaluation |
+| --- | --- |
+| Folder context menu | right click依存と独自menu keyboard実装が必要なため不採用 |
+| Folder menu button | 到達可能だが、色設定だけのRelease 1.1にはmenu階層が過剰 |
+| Folder color swatch button | 現在状態と入口を一つにできるため採用 |
+| Toolbarの選択Folder色 | 現在Folder selectionの新設が必要となるため不採用 |
+
+- swatchはnative buttonとし、右clickだけに依存しない
+- buttonのaccessible nameへFolder名と「色を設定」を含める
+- 色だけでexplicit / inherited / Autoを伝えず、tooltipまたはdialog textでも状態を示す
+- checkbox、Folder展開、row selectionと別のclick targetにし、event propagationで競合させない
+- Tabで到達し、Enter / Spaceで単一のFolder color dialogを開く
+
+dialogは現在Folder名、現在のresolved color、`input type="color"`、Apply、Defaultへ戻す、Cancelを持つ。
+
+- Applyだけがvalidな`#RRGGBB`をcommitする
+- Defaultへ戻す操作は対象Folderの明示色だけを削除する
+- Cancel、Escape、dialog外終了では変更しない
+- 閉じた後は起点swatchへfocusを戻す
+- storageへ保存できない場合もsession中の色は反映し、StatusBarで非ブロッキングに通知する
+
+## Folder color inheritance
+
+表示色は次の順で解決する。
+
+1. 対象Folder自身の明示色
+2. 対象Folderからroot方向へ探索して最初に見つかる、最も近い祖先Folderの明示色
+3. GPX relative pathの既存path hash色
+4. 最終fallback色
+
+対象Folder自身に明示色があれば必ず使用し、自身が未設定の場合だけ祖先を探索する。直接親だけに限定せず、rootを含めて最初に見つかった最も近い祖先色を継承する。Defaultへ戻すと祖先色へ戻り、Library内に明示色が一切なければv1.0.0と同じ各GPX relative pathのhash色へ戻る。色未設定Folderの子GPXをFolder path由来の単一色へ変更しない。GPX単位色は設定しない。
+
+## Zoom-based width
+
+線幅は`zoomend`後に次のbucketで更新する。
+
+| Zoom | Normal | Selected main | Selected outline |
+| ---: | ---: | ---: | ---: |
+| 15以上 | 4 px | 7 px | 9 px |
+| 12〜14 | 3 px | 6 px | 8 px |
+| 9〜11 | 2 px | 5 px | 7 px |
+| 8以下 | 1 px | 4 px | 6 px |
+
+同じbucket内ではTrack styleを更新しない。bucket変更時は表示中Trackだけを更新し、refocus、GPX再解析、Queue、cache、Waypointを変更しない。
+
+## Persistence feedback
+
+Folder colorはLibrary再選択またはpage reload後に復元する。root Folder名変更、同名Library衝突、localStorage削除、破損値、未知schemaではDefault色へ戻る場合があるが、GPX表示は継続する。
+
+GPX、Folder、FileHandle、解析geometryを保存しない。storage failureはblocking dialogにせず、色設定が現在sessionだけ有効であることをStatusBarで通知する。
+
+## Release 1.1 accessibility
+
+- Track clickの同等操作としてTreeViewとSearchのkeyboard selectionを維持する
+- Map背景解除だけを唯一の解除手段にしない。Clearと選択中Trackの非表示でも解除できる
+- Folder colorはkeyboardだけで設定、Default、Cancelできる
+- swatchとdialogはfocus order、label、dialog name、focus returnを持つ
+- highlightとFolder color状態を色だけで伝えない
+- 既存roving tabindex、bulk checkbox、Search keyboard、Waypoint optionを回帰させない
+
+## Release 1.1 scope boundary
+
+- 前回表示Track、前回Map位置を復元しない
+- Date Tree、vehicle metadata、GPX / TrackPoint / Waypoint編集を追加しない
+- GPX単位色、palette共有、Cloud Sync、hover previewを追加しない
+- Mobile Viewer UXとWaypoint clusteringを追加しない
+- GPXまたはFolder構造へ色を保存しない

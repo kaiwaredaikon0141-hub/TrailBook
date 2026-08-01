@@ -380,6 +380,70 @@ Implementation Note: Release 1.0 Unit 6でroot `LICENSE`を、OSS licenseを付�
 
 Mobile Validation Note: iPhone ChromeはHTTPS起動、Google Drive Folder選択、Folder走査、Tree表示までは成功したが、GPX checkbox、Track表示、touch UIが動作しなかったためRelease 1.0では非対応とする。Android ChromeとiPad Chromeは未確認である。
 
+## Decision 0027 — SelectionState Owns the Single GPX Selection
+
+Date: 2026-08
+Status: Accepted
+Scope: Release 1.1
+
+Decision: 新規`SelectionState`がcurrent Library内の単一GPX pathを選択状態の正本として保持する。TreeView、SearchView、MapView、LayerManager、EventBusだけを正本にしない。Appがselection requestを検証してstateを更新し、commit後の`selection:changed`でTreeとMapの表示を同期する。
+
+Reason: 現在はTreeViewの`selectedFilePath`とApp private Presentation Stateに選択情報が分散している。Map Track clickを追加すると更新経路がさらに増えるため、将来のTrackPoint editingでも参照できるUI非依存の正本が必要である。
+
+Alternatives: App private stateを継続する、DisplayStateへ統合する、LayerManagerまたはTreeViewへ保持する、EventBus eventだけで状態を表す。
+
+Consequences: 主選択と表示状態の分離を維持する。Tree / Searchは非表示GPXも主選択できるがMap highlightは表示中Trackだけとし、Mapから非表示Trackを選択できない。選択中Trackの非表示、Clear、Library切り替え、parse failureで選択を解除する。Tree / Search originの既存refocusは維持し、Map originではviewportを変更しない。
+
+## Decision 0028 — Track Style Is Pure and Track Hit Testing Uses Canvas Tolerance
+
+Date: 2026-08
+Status: Accepted
+Scope: Release 1.1
+
+Decision: 新規`TrackStyleService`へFolder color、zoom bucket、selected stateからstyle descriptorを求めるpure calculationを集約する。Track PolylineはLeaflet Canvas rendererのtoleranceをclick hit areaとして使用し、全Trackへ透明hit Polylineを追加しない。選択中GPXだけにnon-interactive outlineを生成する。
+
+Reason: 806 GPXで細いTrackを操作可能にしながら、Polylineを常時二重または三重にしてlayer数を大きく増やすことを避けるため。style ruleをAppとLayerManagerへ散在させず、zoom境界とselected styleを単体test可能にするため。
+
+Alternatives: SVG visible lineだけをclick targetにする、全Segmentへ透明hit Polylineを追加する、全Trackへ常設outlineを追加する、他Trackを薄くする、Map背景clickでは選択を解除しない。
+
+Consequences: `zoomend`後にbucketが変わった場合だけ表示中Trackを更新する。初期bucketは15以上4 px、12〜14は3 px、9〜11は2 px、8以下は1 pxとし、selected mainは+3 px、outlineはさらに+2 pxとする。main colorを選択色へ置換せず、他Trackのopacityも変えない。Canvas acceptanceに問題がある場合だけ透明hit layerを再評価し、806 GPX性能を再確認する。
+
+Map背景clickはselection clear requestとする。layer eventはLeaflet eventのsourceを見て背景clickと区別し、double-click zoomをpreventしない。overlap時は最前面の1件を選び、cycle selectionは実装しない。
+
+## Decision 0029 — Folder Colors Inherit from the Nearest Explicit Ancestor
+
+Date: 2026-08
+Status: Accepted
+Scope: Release 1.1
+
+Decision: 新規`FolderColorState`が、rootを含むFolder relative pathに対するcurrent Libraryの明示色と継承解決を担当する。GPXの色は、対象Folder自身の明示色、対象Folderからroot方向へ探索して最初に見つかる最も近い祖先Folderの明示色、既存GPX relative path hash色、最終fallback色の順で解決する。対象Folder自身に明示色があれば必ず使用し、自身が未設定の場合だけ祖先を探索する。rootの明示色も祖先色として利用できる。
+
+Folder行のkeyboard操作可能なcolor swatch buttonから単一`FolderColorDialog`を開き、native color input、Apply、Defaultへ戻す、Cancelを提供する。right clickだけには依存しない。GPX単位色はRelease 1.1で扱わない。
+
+Reason: Folder構造をLibrary分類として利用し、車・用途などのまとまりへ少ない設定数で一貫した色を適用するため。明示色がない既存Libraryでは現在のpath hash色をそのまま維持するため。
+
+Alternatives: GPX単位色だけを設定する、自動色だけを使う、親色を継承しない、Toolbarで選択Folderを別途管理する、context menuだけを使う。
+
+Consequences: 色変更は対象Folder配下だけを再解決し、表示中の該当Trackだけをrestyleする。GPX再解析、Queue、cache、refocusを発生させず、GPXやFolder構造へ書き込まない。Folder色はvehicle metadataではなく、将来vehicle colorを接続する場合は新しい優先規則をDecisionとして追加する。
+
+`FolderColorState`は対象Folder自身、続いてroot方向の祖先に明示色がなければ`null`を返し、Appが各GPX relative pathの既存hash色へfallbackする。明示色が一切ないLibraryはv1.0.0と同じ色を維持し、未設定Folder配下をFolder path由来の単一色へ変更しない。
+
+## Decision 0030 — localStorage Stores Only Regenerable UI Settings
+
+Date: 2026-08
+Status: Accepted
+Scope: Release 1.1
+
+Decision: 固定key`trailbook.uiSettings`のlocalStorageを、schema version付きの再生成可能なUI設定storageとして許可する。Release 1.1ではFolder明示色だけを保存する。Library IDは案Aのroot Folder name完全一致から`root-name:<name>`を作り、Folder relative pathと組み合わせる。
+
+Reason: FileHandleを永続化せず、GPX内容hashや追加走査を行わず、個人利用で説明可能な最小構造にするため。localStorage削除時にDefault色へ戻るだけであり、GPXとFolder構造が正本である方針を変更しない。
+
+Alternatives: root nameとFolder構造signatureを使う、ユーザーがLibrary IDを入力する、初回にrandom IDを作る、IndexedDBへHandleまたはIndexを保存する、設定を永続化しない。
+
+Consequences: root Folder名変更時は新LibraryとしてDefault色になる。異なる場所の同名root Folderは色設定を共有する可能性があるが、GPXを変更しないUI上の既知制限として受け入れる。保存失敗時はsession内設定でViewerを継続し、破損JSON、invalid color、未知schemaは無視する。
+
+GPX内容、TrackPoint、Waypoint、解析geometry、FileHandle、FolderHandle、GPX XML、解析cacheを保存しない。前回表示TrackとMap位置はRelease 1.1では保存しない。将来これらのUI状態を追加する場合もschema migrationと新しいDecisionを必要とする。
+
 ## Decision Status
 
 - Accepted: 正式採用

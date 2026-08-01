@@ -1,7 +1,7 @@
 # TrailBook Release Checklist
 
-Version: 1.0.0
-Status: Ready for final commit and tag
+Version: 1.0.0 release record / 1.1 planning
+Status: Release 1.0 Completed / Release 1.1 Planning
 Baseline: v0.9.0
 
 ## Purpose
@@ -532,7 +532,7 @@ Chrome / Edge統合受け入れと定性的性能確認に明確な回帰はな�
 Unit 8 Implementation Status: Completed
 Unit 8 Documentation Status: Completed
 Unit 8 Version Status: Completed
-Release 1.0 Status: Ready for final commit and tag
+Release 1.0 Status: Completed
 
 ### Release 1.0 Final State
 
@@ -554,10 +554,10 @@ Release 1.0 Status: Ready for final commit and tag
 - License: Documented
 - Third-party notices: Documented
 - OpenStreetMap attribution: Confirmed
-- `git diff --check`: Pending final
-- Final commit: Pending
-- Tag: Pending
-- Push: Pending
+- `git diff --check`: Completed
+- Final commit: Completed
+- Tag: Completed — `v1.0.0`
+- Push: Completed
 
 Unit 2 baselineは履歴として維持する。Unit 7では数値を推測せず、同一条件の再測定と20%比較を実施していない。将来必要になった場合はUnit 2と同じ手順で再測定できる。
 
@@ -585,13 +585,151 @@ Post-TreeView-split measurement status: Deferred — Windows Chrome / EdgeでUni
 
 ## Release Procedure
 
-- [ ] Scope、Out of Scope、既知の制限を最終確認した。
+- [x] Scope、Out of Scope、既知の制限を最終確認した。
 - [x] Config、README、CHANGELOG、ROADMAP、START_HEREをRelease 1.0完了状態へ更新した。
-- [ ] version更新前後のtest結果を記録した。
-- [ ] working treeとrelease対象fileを確認した。
-- [ ] release commitを作成した。
-- [ ] annotated tagを作成した。
-- [ ] commitとtagをpushした。
-- [ ] `main`と`origin/main`およびtagの一致を確認した。
+- [x] version更新前後のtest結果を記録した。
+- [x] working treeとrelease対象fileを確認した。
+- [x] release commitを作成した。
+- [x] annotated tagを作成した。
+- [x] commitとtagをpushした。
+- [x] `main`と`origin/main`およびtagの一致を確認した。
 
 Unit 1 / Unit 2ではRelease Procedureを実行しない。
+
+## Release 1.1 Track Selection & Styling
+
+Release 1.1 Status: Planning
+Unit 1 Status: Completed
+Architecture Status: Completed
+Decision Status: Completed
+Event Contract Status: Completed
+Test Plan Status: Completed
+Production Implementation Status: Not started
+Current production version: `1.0.0`
+Planning baseline commit: `29d7db7`
+
+### Unit Plan
+
+| Unit | Scope | Status | Dependency |
+| --- | --- | --- | --- |
+| 1 | Scope、Architecture、Decisions、event contract、test plan | Completed | Release 1.0 |
+| 2 | TrackStyleService、zoom-based width、static / browser acceptance | Pending | Unit 1 |
+| 3 | SelectionState、Map Track click、Tree / Search同期、highlight | Pending | Unit 2 |
+| 4 | UI settings persistence、Library identity、schema / failure handling | Pending | Unit 1 |
+| 5 | Folder color UI、inheritance、selective restyle | Pending | Unit 3、Unit 4 |
+| 6 | Integrated acceptance、performance、documentation、finalization | Pending | Unit 2〜5 |
+
+Unit 4はUnit 2 / 3とproduction fileの競合を避けて実施できるが、Unit 5はselection projectionとstorage contractの両方へ依存する。
+
+Planned production files:
+
+- `src/js/services/TrackStyleService.js`
+- `src/js/state/SelectionState.js`
+- `src/js/state/FolderColorState.js`
+- `src/js/services/DisplaySettingsStore.js`
+- `src/js/ui/FolderColorDialog.js`
+
+既存のApp、TreeView、MapView、LayerManager、Configは各Unitで必要最小限だけ接続する。DisplayState、Queue、Parser、Search、Waypointの契約を変更しない。
+
+### Frozen Scope
+
+- [x] Map / TreeView / Searchの単一GPX selectionを`SelectionState`へ集約する
+- [x] 選択Trackの元色を維持し、太線、outline、前面表示でhighlightする
+- [x] 対象Folder自身の明示色を最優先する
+- [x] 自身が未設定の場合だけroot方向へ探索し、最初に見つかる最も近い祖先色を継承する
+- [x] rootの明示色を祖先色として利用できる
+- [x] Library内に明示色がなければv1.0.0と同じGPX relative path hash colorと最終fallbackを使用する
+- [x] zoom bucket変更時だけ表示中Trackをrestyleする
+- [x] localStorageを再生成可能なUI設定だけに限定する
+- [x] GPX、Folder構造、FileHandle、解析結果、cacheを永続化しない
+
+### Out of Scope
+
+- [x] 前回表示Track、前回Map位置の復元
+- [x] Date Tree、vehicle metadata、GPX単位色
+- [x] GPX / TrackPoint / Waypoint編集、容量削減、Undo / Redo、保存、上書き
+- [x] Mobile Viewer UX、Waypoint clustering、hover preview
+- [x] palette共有、Cloud Sync、Folder構造変更
+
+### Static Test Plan
+
+- [ ] TrackStyleService pure calculation
+- [ ] zoom 8 / 9 / 12 / 15 bucket境界
+- [ ] normal、selected main、outline style
+- [ ] outline contrast color
+- [ ] Folder明示色、親継承、子override、Default
+- [ ] FolderColorStateとDisplaySettingsStoreの責務分離
+- [ ] root Folder color
+- [ ] path hash fallbackと最終fallback
+- [ ] 色未設定Folder配下で既存GPX path hash色が維持される
+- [ ] valid `#RRGGBB`とinvalid color
+- [ ] schema version 1 read / write
+- [ ] corrupted localStorage JSON
+- [ ] unknown / future schema version
+- [ ] localStorage read / write / quota / security failure
+- [ ] root名変更と同名Library collision behavior
+- [ ] module import
+- [ ] circular dependency
+- [ ] EventBus request / changed contract
+- [ ] SelectionState単一path、clear reason、Library切り替え
+
+### Browser Acceptance Plan
+
+- [ ] Map Track click selection
+- [ ] thin line Canvas tolerance hit area
+- [ ] Tree selection synchronization
+- [ ] Search result selection synchronization
+- [ ] selected highlightが元Folder色を維持する
+- [ ] Map背景click deselect
+- [ ] hidden selected Trackのselection解除
+- [ ] ClearとLibrary switch
+- [ ] parse failure後にselectionが残らない
+- [ ] Tree / Search originだけが既存refocusを行う
+- [ ] Map origin selectionでviewportが動かない
+- [ ] overlapping Trackのtopmost selection
+- [ ] Track上のdouble-click zoom
+- [ ] Folder color Apply
+- [ ] parent inheritance、child override、root inheritance
+- [ ] Defaultへ戻す、Cancel、Escape、focus return
+- [ ] reload後のFolder色復元
+- [ ] root Folder名変更時はDefault
+- [ ] 同名Libraryが設定を共有する既知制限
+- [ ] localStorage unavailableでもsession操作継続
+- [ ] zoom bucket内でrestyleなし
+- [ ] zoom bucket境界で表示中Trackだけrestyle
+- [ ] Folder色変更で対象配下だけrestyle
+- [ ] keyboard accessibility、ARIA、色以外の状態説明
+- [ ] GPX個別、Folder / root bulk checkbox regression
+- [ ] Search checkbox regression
+- [ ] Waypoint OFF / ON regression
+- [ ] Console errorなし
+
+### Performance Plan
+
+- [ ] v1.0.0の同一806 GPX Library、同一PC、同一browser / version、Waypoint OFFを比較条件として記録する
+- [ ] 806 GPX表示時のTrack / Segment / Canvas layer数を記録する
+- [ ] selection変更がprevious / nextの最大2 GPXだけを更新することを計測またはinstrumentationで確認する
+- [ ] 同一zoom bucket内の`setStyle`回数が0であることを確認する
+- [ ] bucket変更時の更新対象が表示中Trackだけであることを確認する
+- [ ] Folder色変更時の更新対象が対象Folder配下だけであることを確認する
+- [ ] outlineが選択中GPXだけに存在することを確認する
+- [ ] Canvas rendererで全806 GPX表示時のpan / zoomをGood / Acceptable / Poorで記録する
+- [ ] SVG + transparent hit layer fallbackを採用する場合はlayer数と操作感を再測定する
+- [ ] Queue並列数2、cache上限100、Search上限100に変更がないことを確認する
+
+### Persistence Schema
+
+Storage key: `trailbook.uiSettings`
+Schema version: `1`
+Library identity: exact root Folder nameから`root-name:<name>`
+Folder identity: current Library内のrelative path。rootは空文字。
+
+保存失敗、削除、破損、未知versionではDefault色へ戻るかsession内設定だけで継続する。GPXの内容、更新日時、Folder構造へ影響させない。
+
+### Release 1.1 Open Risks
+
+- 同名root Folderは色設定が衝突する。Release 1.1では個人利用の既知制限として受け入れる。
+- root Folder名変更後は旧設定を自動移行できない。
+- Canvas rendererの見た目、hit tolerance、overlap順序はChrome / Edge実ブラウザ確認が必要である。
+- 806 GPXでCanvasへ変更した場合のperformanceは実測前である。
+- TreeViewは967行のため、Folder color UIを直接追加して1,000行規則を超えないよう、dialog責務を別Viewへ置く。
