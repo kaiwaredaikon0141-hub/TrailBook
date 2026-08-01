@@ -596,3 +596,33 @@ Release 0.9では、TreeViewが保持するmetadataからGPXファイル名、Fo
 - `FileSystemFileHandle`を`SearchEntry`または検索結果DOMへ保持しない
 - 日付、Track名、車両metadata、GPX内容検索を実装しない
 - MapView、LayerManager、GPXParser、GPXDisplayQueueの責務を変更しない
+
+# 20. Release 1.0 Stable Viewer
+
+Release 1.0は個人利用向け正式安定版であり、Release 0.9までのUI機能を変更せず品質を確定する。
+
+## Environment guidance
+
+- Windows 10 / 11の最新安定版Chrome / Edge desktopを正式対応とする
+- File System Access API非対応または非secure contextでは、Folder選択が利用できない理由を画面内で案内する
+- HTTPS、`http://localhost`、`http://127.0.0.1`を対応originとする
+- Android、iPhone、iPadの最新Chromeは実機検証に合格した端末だけをbest effortとする
+- 未確認または`showDirectoryPicker`など必要APIが不足するMobile browserは対応外とし、既知の制限へ記載する
+- `file://`、通常のLAN内HTTP IP、Firefox、Safariは対応外とする
+
+## Stable Viewer quality scope
+
+- 初回起動時にLibraryを開く操作を明確にする
+- 空Libraryを正常状態として扱う
+- 壊れたGPXまたは一部解析失敗を対象GPXのerrorとして扱い、他GPXの操作を継続する
+- Library切り替えで旧LibraryのQueue、cache、Layer、Search結果を反映しない
+- Keyboard、ARIA、body scroll、sidebar scroll、MapView固定を維持する
+- faviconを明示し、正常起動時の404を発生させない
+- 開発用logを正式安定版へ残さない
+
+## Scope boundary
+
+- 一般公開、配布artifact、hosted版、公開supportは扱わない
+- TrailBook本体のOSS license、作者名義、copyright名義を決定しない
+- 日付表示、車両情報、GPX編集、Statistics、Replay、HeatMap、Cloud Sync、Mobile専用UI、Plugin、AI Searchを追加しない
+- Mobile向けFolder選択fallback、複数GPX選択、ZIP Library読込、クラウドFolder importを追加しない

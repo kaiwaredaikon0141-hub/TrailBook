@@ -356,6 +356,26 @@ Consequences:
 - 編集対象は単一GPXに限定し、明示的な保存、元GPX保護、外部変更競合確認、Undo / Redo、保存失敗処理を先に設計する。
 - GPXを暗黙に上書きせず、編集中は他GPXを編集不可にする。
 
+## Decision 0026 — Release 1.0 Is a Personal Stable Viewer
+
+Date: 2026-08
+Status: Accepted
+Scope: Release 1.0
+
+Decision: Release 1.0は一般公開版ではなく、個人利用環境で安全・安定・再現可能に使うためのStable Viewerとする。正式対応はWindows 10 / Windows 11上の最新安定版Google Chrome desktopおよびMicrosoft Edge desktopとし、対応originはHTTPS、`http://localhost`、`http://127.0.0.1`とする。その他Chromium系desktopはbest effort、Firefox、Safari、`file://`、通常のLAN内HTTP IPは非対応とする。
+
+Android、iPhone、iPadの最新Google ChromeはRelease 1.0完了前の実機検証対象とし、検証に合格した端末だけをbest effortへ追加する。未確認または`showDirectoryPicker`など必要APIが不足する端末は非対応として既知の制限へ記載する。Mobile検証のために既存Folder Library設計を変更せず、代替Folder選択、複数GPX選択、ZIP Library、クラウドFolder import、Mobile専用Library入口はRelease 1.0へ追加しない。
+
+TrailBook本体には現時点でオープンソースライセンスを付与せず、作者名義およびcopyright名義も確定しない。rootの`LICENSE`は将来の作業単位で、ライセンス未指定かつAll rights reservedであることを簡潔に示す文面へ置き換える。空の`LICENSE`は方針を誤認させるため正式版まで残さないが、Release 1.0 Unit 1 / Unit 2では変更しない。Leafletなど第三者ソフトウェアのライセンスとOpenStreetMap attributionはTrailBook本体のライセンスとは分離して保持する。
+
+一般公開、end-user向けZIP、配布artifact、SHA-256公開、hosted HTTPS版、公開サポート窓口、一般公開用`SECURITY.md`はRelease 1.0の対象外とする。
+
+Reason: 現時点の利用範囲は個人利用・開発用途であり、公開配布の制度設計よりもRelease 0.9までのViewer機能の品質確定を優先する。ライセンスを未決定のまま空ファイルで示すより、権利付与がないことを明確にする方が意図を誤解されにくい。
+
+Alternatives: 一般公開版として配布物と公開窓口を整備する。TrailBook本体へMIT Licenseを付与する。空の`LICENSE`を維持する。
+
+Consequences: Release 1.0は公開配布の準備完了を意味しない。将来公開する場合は、TrailBook本体のライセンス、作者・copyright表記、配布物、セキュリティ窓口を新しいDecisionで確定する必要がある。第三者ライセンス遵守とattributionは個人利用版でも維持する。Mobile端末の対応可否は端末ごとの実機結果に基づき、未確認端末を対応済みと表記しない。
+
 ## Decision Status
 
 - Accepted: 正式採用

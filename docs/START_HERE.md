@@ -6,7 +6,7 @@ TrailBookの開発を始める人とAIのための入口です。
 
 - Current Release: `v0.9.0` Search
 - Completed: Release 0.1からRelease 0.9
-- Next Release: Release 1.0 Official
+- Next Release: Release 1.0 Stable Viewer
 - Branch: `main`
 
 Gitの状態は作業開始時に必ず再確認する。
@@ -32,6 +32,7 @@ GPXを独自形式へ取り込むのではなく、ユーザーのGPX資産を�
 9. `CONTRIBUTING.md` — 作業規約
 10. `GLOSSARY.md` — 用語
 11. リポジトリルートの`README.md`、`CHANGELOG.md` — 公開概要とリリース履歴
+12. Release 1.0作業時は`RELEASE_CHECKLIST.md` — baseline、受け入れtest、完了条件
 
 ## Current Architecture
 
@@ -54,7 +55,7 @@ Release 0.9 Searchは完了している。
 
 GPXファイル名、Folder名、相対パスをmetadataから検索する。検索のためにGPX内容を解析せず、query入力だけでは表示Queue、解析cache、主選択、表示状態、Mapへ影響させない。
 
-次のReleaseはRelease 1.0 Officialである。Release範囲と将来拡張境界は`ROADMAP.md`を正本とする。
+次のReleaseは個人利用向け正式安定版のRelease 1.0 Stable Viewerである。一般公開、配布artifact、OSS license決定、新機能追加は対象外とする。Release範囲と将来拡張境界は`ROADMAP.md`を正本とする。
 
 ## Non-Negotiable Rules
 

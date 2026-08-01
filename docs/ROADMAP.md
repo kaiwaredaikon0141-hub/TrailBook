@@ -185,26 +185,66 @@ Done Definition:
 
 ## Next Release
 
-### Release 1.0 — Official
+### Release 1.0 — Stable Viewer
 
 Status: Next
 
-Goal: 正式版。
+Goal: Release 0.9までの機能を変更せず、個人利用環境で安全・安定・再現可能に使える正式安定版にする。
 
-Tasks:
+Scope:
 
-- UI Review
-- Performance
-- Bug Fix
-- Documentation
-- Test
-- Release Build
+- 初回起動とFolder選択の導線
+- File System Access API非対応Browserと非secure contextの案内
+- 空Library、壊れたGPX、一部解析失敗、Library切り替えの品質確認
+- 大量GPX、Search、Folder一括表示、Waypoint設定の回帰確認
+- Keyboard、ARIA、body scroll、sidebar scroll、MapView固定の確認
+- favicon 404、開発用log、未使用codeの整理
+- TreeViewの挙動を変えない限定的な責務抽出と1,000行規則への適合
+- 個人利用者向けREADME、localhost起動手順、offline範囲、外部通信、データ保護、既知制限
+- 統合受け入れtest、性能測定、Release checklist
+- Android、iPhone、iPadの最新Google Chrome実機検証と対応可否の記録
+- Leaflet licenseとOpenStreetMap attributionの維持、第三者表記の整理
 
-Done Definition: 一般公開可能。
+Supported Environment:
+
+- OS: Windows 10 / Windows 11
+- Browser: 最新安定版Google Chrome desktop / Microsoft Edge desktop
+- Best effort: その他Chromium系desktop
+- Mobile candidate: 実機検証に合格したAndroid / iPhone / iPadの最新Google Chromeだけをbest effortへ追加可能
+- Unsupported Browser: Firefox / Safari / 未確認または必要API不足のMobile browser
+- Supported Origin: HTTPS / `http://localhost` / `http://127.0.0.1`
+- Unsupported Origin: `file://` / 通常のLAN内HTTP IP
+
+Performance Baseline:
+
+- 同一PC、同一Browser、同一806 GPX Library、同一操作条件で比較する。
+- 各測定は複数回行い、中央値を記録する。
+- cold解析とwarm cache再表示を分離する。
+- Release 0.9.0比で20%を超える明確かつ再現可能な性能悪化を許容しない。
+
+Out of Scope:
+
+- 一般公開、公開support窓口、hosted HTTPS版
+- end-user向けZIP、配布artifact、公開checksum
+- TrailBook本体のOSS license決定、作者名義またはcopyright名義の公開
+- `SECURITY.md`
+- GPX Metadata Index、日付表示、車両情報、Track色編集
+- GPX書き込み、GPX Editing Foundation、TrackPoint Editing、Undo / Redo、保存、別名保存
+- Statistics、Replay、HeatMap、Cloud Sync、Mobile専用UIまたはFolder選択fallback、Plugin、AI Search
+
+Done Definition:
+
+- 対応環境で統合受け入れtestに合格する。
+- 806 GPX baselineと比較し、20%を超える再現可能な性能悪化がない。
+- TreeViewが1,000行規則へ適合し、既存挙動を維持する。
+- localhost起動、offline範囲、外部通信、データ保護、既知制限が文書化される。
+- Android、iPhone、iPadの最新Chromeを実機確認し、合格端末だけをbest effortとして記録する。未確認または必要API不足の端末は既知の制限へ記録する。
+- TrailBook本体のlicense未指定方針と第三者licenseが明確に分離される。
+- Release checklistの必須項目が完了し、個人利用向けStable Viewerとして再現可能に起動できる。
 
 ## Future Design Boundaries
 
-以下はRelease番号未定であり、Release 0.9には含めない。
+以下はRelease番号未定であり、Release 1.0には含めない。
 
 ### GPX Internal Date and Date-based Display
 
@@ -286,7 +326,11 @@ Version 2以降の候補として、元RoadmapのFuture Ideasを維持する。
 - Timeline
 - 3D
 - AI Search
-- Mobile
+- Mobile専用Library入口
+- `input type="file" webkitdirectory`を使うFolder選択fallback
+- 複数GPXファイル選択
+- ZIP Library読込
+- クラウドFolder import
 
 ## Quality Gate
 

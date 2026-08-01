@@ -2,7 +2,7 @@
 
 Version: 1.1
 Status: Official
-Baseline: Release 0.8.0
+Baseline: Release 0.9.0
 Depends: PROJECT.md, ROADMAP.md, DECISIONS.md
 
 ## Architecture Overview
@@ -70,8 +70,9 @@ Browser API / Leaflet API
 - 責務が曖昧または複数になった場合はClassを分割する。
 - 巨大Classと巨大Fileは禁止する。
 - 500行を超えるFileは分割検討対象とする。
-- `TreeView.js`は現在500行を超えており、分割検討対象である。
-- Release 0.9の範囲とSearch実装の安全性を優先し、Release 0.9で無理にTreeViewを分割しない。
+- `TreeView.js`は現在1,000行を超えており、Release 1.0で規則へ適合させる。
+- Release 1.0では挙動を変えず、metadata構築とpath計算を第一候補とする限定的な責務抽出だけを行う。
+- `App.js`は500行を超えているが、Release 1.0では無理に分割しない。
 
 詳細なFile Size、Function Size、Single Responsibilityの基準は`CODING_RULES.md`を正本とする。
 
@@ -405,6 +406,20 @@ SearchはLibrary metadataに対するread-onlyなNavigation機能として開始
 - 結果選択時だけ必要な祖先Folderを展開する。
 
 日付Index、Track名、車両属性、GPX編集は将来機能であり、Release 0.9のArchitectureへ混在させない。
+
+## Release 1.0 Stable Viewer Boundary
+
+Release 1.0はRelease 0.9までのViewer機能を個人利用環境で安定させる品質Releaseであり、新しいLibrary機能を追加しない。
+
+- 対応環境はWindows 10 / 11と、最新安定版Chrome / Edge desktopとする。
+- Android、iPhone、iPadの最新Chromeは実機検証候補とし、合格した端末だけをbest effortへ追加する。未確認または必要API不足の端末は非対応とする。
+- HTTPS、`http://localhost`、`http://127.0.0.1`を対応originとし、`file://`と通常のLAN内HTTP IPは対応外とする。
+- 初回起動、File System Access API非対応、空Library、解析失敗、Library切り替えを明示的に扱う。
+- TreeViewはmetadata構築とpath計算を第一候補として限定分割し、DOM、Event、keyboard、表示状態の挙動を変えない。
+- GPX読込はread-onlyを維持し、書き込み、DB、永続cacheを追加しない。
+- 一般公開、配布artifact、hosted版、公開support、TrailBook本体のOSS license決定は扱わない。
+- Mobile検証のためにFolder LibraryのFile System Access API設計を変更せず、`showDirectoryPicker`が利用できない端末向けfallbackはRelease 1.0へ追加しない。
+- LeafletとOpenStreetMapは第三者のlicenseおよび利用条件としてTrailBook本体と分離する。
 
 ## Architecture Principles
 
