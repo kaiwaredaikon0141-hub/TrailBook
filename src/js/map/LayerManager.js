@@ -1,7 +1,7 @@
 const FIT_PADDING = [20, 20];
 
 /**
- * Manages independent Leaflet layers for displayed GPX files.
+ * Manages independent Track and Waypoint layers for displayed GPX files.
  */
 export default class LayerManager {
 
@@ -12,53 +12,91 @@ export default class LayerManager {
         this.layers = new Map();
     }
 
-    displayGPX(path, result, style) {
+    displayGPX(path, result, style, options = {}) {
 
         this.removeGPX(path);
 
-        const layerGroup = L.layerGroup().addTo(this.map);
-        const bounds = [];
+        const trackLayerGroup = L.layerGroup().addTo(this.map);
+        const trackBounds = [];
         const trackStyle = style || this.mapConfig.trackStyle;
 
         result.tracks.forEach(track => {
             track.segments.forEach(segment => {
                 const latLngs = segment.points.map(point => {
                     const latLng = [point.latitude, point.longitude];
-                    bounds.push(latLng);
+                    trackBounds.push(latLng);
                     return latLng;
                 });
 
                 if (latLngs.length > 0) {
-                    L.polyline(latLngs, trackStyle).addTo(layerGroup);
+                    L.polyline(latLngs, trackStyle).addTo(trackLayerGroup);
                 }
             });
         });
 
-        result.waypoints.forEach(waypoint => {
-            L.marker([waypoint.latitude, waypoint.longitude])
-                .addTo(layerGroup);
+        this.layers.set(path, {
+            trackLayerGroup,
+            waypointLayerGroup: null,
+            trackBounds,
+            color: trackStyle.color || trackStyle.lineColor || null,
+            waypointCount: result.waypoints.length
         });
 
-        this.layers.set(path, {
-            layerGroup,
-            bounds,
-            color: trackStyle.color || trackStyle.lineColor || null
+        if (options.showWaypoints) {
+            this.addWaypoints(path, result);
+        }
+    }
+
+    addWaypoints(path, result) {
+
+        const entry = this.layers.get(path);
+
+        if (!entry || entry.waypointLayerGroup || result.waypoints.length === 0) {
+            return;
+        }
+
+        const waypointLayerGroup = L.layerGroup().addTo(this.map);
+
+        result.waypoints.forEach(waypoint => {
+            L.marker([waypoint.latitude, waypoint.longitude])
+                .addTo(waypointLayerGroup);
         });
+
+        entry.waypointLayerGroup = waypointLayerGroup;
+    }
+
+    removeWaypoints(path) {
+
+        const entry = this.layers.get(path);
+
+        if (!entry?.waypointLayerGroup) {
+            return;
+        }
+
+        entry.waypointLayerGroup.remove();
+        entry.waypointLayerGroup = null;
     }
 
     removeGPX(path) {
 
         const entry = this.layers.get(path);
 
-        if (entry) {
-            entry.layerGroup.remove();
-            this.layers.delete(path);
+        if (!entry) {
+            return;
         }
+
+        entry.trackLayerGroup.remove();
+        entry.waypointLayerGroup?.remove();
+        this.layers.delete(path);
     }
 
     clear() {
 
-        this.layers.forEach(entry => entry.layerGroup.remove());
+        this.layers.forEach(entry => {
+            entry.trackLayerGroup.remove();
+            entry.waypointLayerGroup?.remove();
+        });
+
         this.layers.clear();
     }
 
@@ -69,7 +107,7 @@ export default class LayerManager {
 
     refocusGPX(path) {
 
-        const bounds = this.layers.get(path)?.bounds || [];
+        const bounds = this.layers.get(path)?.trackBounds || [];
 
         if (bounds.length === 0) {
             return;
@@ -94,7 +132,7 @@ export default class LayerManager {
 
     #allBounds() {
 
-        return [...this.layers.values()].flatMap(entry => entry.bounds);
+        return [...this.layers.values()].flatMap(entry => entry.trackBounds);
     }
 
     #fitBounds(bounds) {

@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.8.0
+
+Released: 2026-08-01
+
+### Added
+
+- Session-scoped Waypoint visibility option in the Map toolbar
+- Independent Track and Waypoint layer groups per GPX
+- Cached Waypoint toggling without GPX re-parsing or map refocus
+
 ## v0.7.0
 
 Released: 2026-08-01

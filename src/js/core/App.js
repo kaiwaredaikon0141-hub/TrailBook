@@ -24,6 +24,10 @@ export default class App {
 
     #refocusTimer = null;
 
+    #displayOptions = {
+        showWaypoints: false
+    };
+
     constructor() {
 
         this.config = Config;
@@ -108,6 +112,10 @@ export default class App {
         });
 
         this.eventBus.on("map:clear-requested", () => this.clearPresentation());
+
+        this.eventBus.on("map:waypoint-visibility-toggled", ({ visible }) => {
+            this.setWaypointVisibility(visible);
+        });
 
         this.eventBus.on("map:display-failed", ({ error }) => {
             console.error("Map display failed.", error);
@@ -233,7 +241,12 @@ export default class App {
         if (cachedResult) {
             this.displayState.setLoaded(path, cachedResult);
             this.treeView.setDisplayLoaded(path, color);
-            this.mapView.displayGPX(path, cachedResult, this.createTrackStyle(color));
+            this.mapView.displayGPX(
+                path,
+                cachedResult,
+                this.createTrackStyle(color),
+                { showWaypoints: this.#displayOptions.showWaypoints }
+            );
             this.scheduleRefocus();
             this.updateDisplayStatus();
             return;
@@ -299,7 +312,8 @@ export default class App {
         this.mapView.displayGPX(
             path,
             result,
-            this.createTrackStyle(display.color)
+            this.createTrackStyle(display.color),
+            { showWaypoints: this.#displayOptions.showWaypoints }
         );
         this.scheduleRefocus();
         this.updateDisplayStatus();
@@ -355,6 +369,36 @@ export default class App {
         this.treeView.clearDisplayStates();
         this.scheduleRefocus();
         this.updateDisplayStatus();
+    }
+
+    setWaypointVisibility(visible) {
+
+        this.#displayOptions.showWaypoints = visible;
+
+        this.displayState.getDisplays().forEach(display => {
+            if (!display.checked || display.state !== "loaded") {
+                return;
+            }
+
+            const result = this.displayState.getCachedResult(display.path);
+
+            if (!result) {
+                return;
+            }
+
+            try {
+                if (visible) {
+                    this.mapView.addWaypoints(display.path, result);
+                } else {
+                    this.mapView.removeWaypoints(display.path);
+                }
+            } catch (error) {
+                console.error(
+                    `Failed to update Waypoints: ${display.path}`,
+                    error
+                );
+            }
+        });
     }
 
     updateDisplayStatus() {

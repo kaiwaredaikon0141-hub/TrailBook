@@ -472,7 +472,11 @@ Done Definition
 
 
 
-Statistics
+Waypoint Display Option
+
+Status
+
+Completed
 
 
 
@@ -480,7 +484,7 @@ Goal
 
 
 
-統計
+Waypoint表示をユーザーがON/OFFできるようにする
 
 
 
@@ -488,23 +492,23 @@ Tasks
 
 
 
-□ Distance
+■ Waypoint Visibility Checkbox
 
 
 
-□ Monthly
+■ Track/Waypoint Layer Separation
 
 
 
-□ Yearly
+■ Cached Waypoint Toggle
 
 
 
-□ Graph
+■ Session Display Option
 
 
 
-□ Summary
+■ Track-only Bounds
 
 
 
@@ -512,7 +516,7 @@ Done Definition
 
 
 
-統計完成
+Waypointsを再解析せず、表示中GPXのWaypointだけをON/OFFできる
 
 
 

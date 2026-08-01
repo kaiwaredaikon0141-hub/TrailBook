@@ -102,14 +102,14 @@ export default class MapView {
      * @param {object} result
      * @returns {void}
      */
-    displayGPX(path, result, style) {
+    displayGPX(path, result, style, options = {}) {
 
         if (!this.layerManager) {
 
             throw new Error("MapView is not initialized.");
         }
 
-        this.layerManager.displayGPX(path, result, style);
+        this.layerManager.displayGPX(path, result, style, options);
 
         this.setState("loaded", "");
     }
@@ -154,6 +154,20 @@ export default class MapView {
             if (!this.layerManager.hasDisplay()) {
                 this.showEmpty();
             }
+        }
+    }
+
+    addWaypoints(path, result) {
+
+        if (this.layerManager) {
+            this.layerManager.addWaypoints(path, result);
+        }
+    }
+
+    removeWaypoints(path) {
+
+        if (this.layerManager) {
+            this.layerManager.removeWaypoints(path);
         }
     }
 
@@ -204,6 +218,10 @@ export default class MapView {
 
         section.innerHTML = `
             <div class="map-toolbar">
+                <label class="waypoint-toggle">
+                    <input type="checkbox" aria-label="Waypointを表示">
+                    <span>Waypointを表示</span>
+                </label>
                 <button class="map-clear" type="button">表示をクリア</button>
             </div>
             <div class="map-canvas" role="application" aria-label="GPX地図"></div>
@@ -213,6 +231,14 @@ export default class MapView {
         section.querySelector(".map-clear").addEventListener(
             "click",
             () => this.eventBus.emit("map:clear-requested")
+        );
+
+        section.querySelector(".waypoint-toggle input").addEventListener(
+            "change",
+            event => this.eventBus.emit(
+                "map:waypoint-visibility-toggled",
+                { visible: event.target.checked }
+            )
         );
 
         return section;

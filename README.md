@@ -11,13 +11,14 @@ architecture documents before making changes.
 
 ## Current Release
 
-Release 0.7.0: Folder Bulk Display
+Release 0.8.0: Waypoint Display Option
 
 The current implementation can open a directory, recursively find subfolders
 and `.gpx` files, parse an explicitly requested GPX file into Track,
 TrackSegment, TrackPoint, Waypoint, and Metadata models, navigate large
 libraries through a lazy TreeView, display multiple GPX files independently,
-and toggle all descendant GPX files from a folder checkbox.
+toggle descendant GPX files from a folder checkbox, and control Waypoint
+visibility without re-parsing GPX files.
 
 ## Technical Constraints
 

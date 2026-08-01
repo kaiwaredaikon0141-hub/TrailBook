@@ -531,3 +531,19 @@ Release 0.7では、Folder行のnative checkboxで配下GPXを一括表示する
 - 折りたたみ中の子孫GPXも表示対象にできる
 - 表示クリア時は全GPXと全Folder checkboxをuncheckedにする
 - Folder一括専用の進捗UI、キャンセル、検索、編集、統計、Replay、HeatMapは追加しない
+
+# 18. Release 0.8 Waypoint Display Option
+
+Release 0.8では、Map toolbarのnative checkboxでWaypoint表示を切り替える。
+
+- 初期値はOFFとする
+- ON/OFFはTrack表示へ影響させない
+- 表示中GPXのcache済み解析結果からWaypointだけを追加・削除する
+- Waypoint ON/OFFでGPXを再解析しない
+- Waypoint ON/OFFで自動ズームやBounds計算を行わない
+- GPXごとにTrack LayerGroupとWaypoint LayerGroupを分離する
+- 非表示GPXへWaypointを追加しない
+- GPX OFFではTrackとWaypointの両方を削除する
+- Library切り替えではLayerとcacheを破棄するが、設定値はセッション中維持する
+- Waypoint件数や設定状態はStatusBarへ表示しない
+- Waypoint個別設定、編集、Marker色変更、clustering、永続保存は対象外とする
