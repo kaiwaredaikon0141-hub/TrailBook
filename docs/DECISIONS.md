@@ -428,6 +428,8 @@ Consequences: 色変更は対象Folder配下だけを再解決し、表示中の
 
 `FolderColorState`は対象Folder自身、続いてroot方向の祖先に明示色がなければ`null`を返し、Appが各GPX relative pathの既存hash色へfallbackする。明示色が一切ないLibraryはv1.0.0と同じ色を維持し、未設定Folder配下をFolder path由来の単一色へ変更しない。
 
+Implementation Note: Unit 5では`FolderColorControl`がTreeViewのlazy DOMを外部から装飾し、TreeViewを997行のまま維持する。Folder色変更は対象枝のうち別の明示色で遮られないFolderだけを再解決し、表示中Trackへ`setStyle`する。選択main / outline、zoom weight、opacity、Layer、Bounds、Waypoint、Queue、cache、refocusを維持する。
+
 ## Decision 0030 — localStorage Stores Only Regenerable UI Settings
 
 Date: 2026-08

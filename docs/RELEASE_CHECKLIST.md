@@ -604,7 +604,7 @@ Architecture Status: Completed
 Decision Status: Completed
 Event Contract Status: Completed
 Test Plan Status: Completed
-Production Implementation Status: In progress — Unit 4 completed、Unit 5 not started
+Production Implementation Status: In progress — Unit 5 completed、Unit 6 not started
 Current production version: `1.0.0`
 Planning baseline commit: `29d7db7`
 
@@ -616,7 +616,7 @@ Planning baseline commit: `29d7db7`
 | 2 | TrackStyleService and zoom-based width | Completed | Unit 1 |
 | 3 | SelectionState、Map click、highlight | Completed | Unit 2 |
 | 4 | UI settings persistence foundation | Completed | Unit 1 |
-| 5 | Folder color UI and inheritance | Pending | Unit 3、Unit 4 |
+| 5 | Folder color UI and inheritance | Completed | Unit 3、Unit 4 |
 | 6 | Monochrome Map Mode | Pending | Unit 4 |
 | 7 | Integrated acceptance、performance、documentation、Release finalization | Pending | Unit 2〜6 |
 
@@ -658,18 +658,18 @@ Planned production files:
 - [x] zoom 8 / 9 / 12 / 15 bucket境界 — 小数、負数、`undefined`、`NaN`を含む
 - [x] normal、selected main、outline style — Unit 3 static test Pass
 - [x] outline contrast color — main color luminanceによる白 / 濃いグレーを確認
-- [ ] Folder明示色、親継承、子override、Default
-- [ ] FolderColorStateとDisplaySettingsStoreの責務分離
-- [ ] root Folder color
-- [ ] path hash fallbackと最終fallback
-- [ ] 色未設定Folder配下で既存GPX path hash色が維持される
+- [x] Folder明示色、親継承、子override、Default — Unit 5 static test Pass
+- [x] FolderColorStateとDisplaySettingsStoreの責務分離 — Unit 5 module contract Pass
+- [x] root Folder color — Unit 5 static test Pass
+- [x] path hash fallbackと最終fallback — Unit 5 static test Pass
+- [x] 色未設定Folder配下で既存GPX path hash色が維持される — Unit 5 static test Pass
 - [x] valid `#RGB` / `#RRGGBB` normalizationとinvalid color拒否 — Unit 4 static test Pass
 - [x] schema version 1 read / write — Unit 4 static test Pass
 - [x] corrupted localStorage JSON — Unit 4 session fallback Pass
 - [x] unknown / future schema version — fail closed Pass
 - [x] localStorage read / write / quota / security failure — session fallback Pass
 - [x] root名変更と同名Library collision behavior — Library ID pure test Pass
-- [x] module import — production module 30 / 30（`DisplaySettingsStore.js`を含む）
+- [x] module import — production module 34 / 34（Unit 5の4 moduleを含む）
 - [x] circular dependency — 0件
 - [x] EventBus request / changed contract — Unit 3 static test Pass
 - [x] SelectionState単一path、clear reason、Library切り替え — Unit 3 static test Pass
@@ -680,7 +680,7 @@ Planned production files:
 - [x] thin line Canvas tolerance hit area — tolerance 6で実用上問題なし
 - [x] Tree selection synchronization — Chrome Pass
 - [x] Search result selection synchronization — Chrome Pass
-- [ ] selected highlightが元Folder色を維持する
+- [x] selected highlightが元Folder色を維持する — Chrome / Edge Pass
 - [x] Map背景click deselect — Chrome / Edge Pass
 - [ ] hidden selected Trackのselection解除
 - [x] ClearとLibrary switch — Unit 3 Chrome Pass
@@ -689,17 +689,17 @@ Planned production files:
 - [ ] Map origin selectionでviewportが動かない
 - [x] overlapping Trackのtopmost selection — 最前面の1件を選択
 - [x] Track上のdouble-click zoom — Chrome Pass
-- [ ] Folder color Apply
-- [ ] parent inheritance、child override、root inheritance
-- [ ] Defaultへ戻す、Cancel、Escape、focus return
-- [ ] reload後のFolder色復元
+- [x] Folder color Apply — Chrome / Edge Pass
+- [x] parent inheritance、child override、root inheritance — Chrome / Edge Pass
+- [x] Defaultへ戻す、Cancel、Escape、focus return — Chrome Pass、EdgeはDefaultを確認
+- [x] reload後のFolder色復元 — Chrome / Edge Pass
 - [x] root Folder名変更時は別Library ID — Unit 4 Chrome Pass
 - [x] 同名Libraryが設定を共有する既知制限 — Unit 4 Chrome Pass
 - [x] localStorage unavailableでもsession操作継続 — Unit 4 Chrome Pass
 - [x] zoom bucket内でrestyleなし — Chrome browser acceptance Pass
 - [x] zoom bucket境界で表示中Trackだけrestyle — Chrome / Edge browser acceptance Pass
-- [ ] Folder色変更で対象配下だけrestyle
-- [ ] keyboard accessibility、ARIA、色以外の状態説明
+- [x] Folder色変更で対象配下だけrestyle — Chrome Pass
+- [x] keyboard accessibility、ARIA、色以外の状態説明 — Chrome Pass
 - [x] GPX個別、Folder / root bulk checkbox regression — Unit 2 Pass
 - [x] Search checkbox regression — Unit 2 Pass
 - [x] Waypoint OFF / ON regression — Unit 2 Pass
@@ -712,8 +712,8 @@ Planned production files:
 - [x] selection変更がprevious / nextの最大2 GPXだけを更新することをstatic testで確認する
 - [x] 同一zoom bucket内の`setStyle`回数が0であることをstatic testで確認する
 - [x] bucket変更時の更新対象が表示中Trackだけであることをstatic testで確認する
-- [ ] Folder色変更時の更新対象が対象Folder配下だけであることを確認する
-- [ ] outlineが選択中GPXだけに存在することを確認する
+- [x] Folder色変更時の更新対象が対象Folder配下だけであることを確認する — Chrome Pass
+- [x] outlineが選択中GPXだけに存在し、新色へ追従することを確認する — Chrome Pass
 - [ ] Canvas rendererで全806 GPX表示時のpan / zoomをGood / Acceptable / Poorで記録する
 - [ ] SVG + transparent hit layer fallbackを採用する場合はlayer数と操作感を再測定する
 - [ ] Queue並列数2、cache上限100、Search上限100に変更がないことを確認する
@@ -885,7 +885,7 @@ Unit 4 Implementation Status: Completed
 Unit 4 Static Test Status: Completed
 Unit 4 Browser Acceptance Status: Completed
 Unit 4 Status: Completed
-Unit 5 Status: Not started
+Unit 5 Status at Unit 4 completion: Not started
 
 実装内容:
 
@@ -959,7 +959,88 @@ Known limitations:
 - localStorage削除時は保存済みUI設定がDefaultへ戻る。
 - Unit 4時点ではFolder color UIとTrack色適用を実装していない。
 
-Chrome / Edge browser acceptanceと既存Viewer regressionを完了し、Unit 4をCompletedとする。Unit 5は開始していない。
+Chrome / Edge browser acceptanceと既存Viewer regressionを完了し、Unit 4をCompletedとする。Unit 4完了時点ではUnit 5は未開始だった。
+
+### Unit 5 Folder Color UI, Inheritance, and Selective Restyle
+
+Unit 5 Implementation Status: Completed
+Unit 5 Static Test Status: Completed
+Unit 5 Browser Acceptance Status: Completed
+Unit 5 Status: Completed
+Unit 6 Status: Not started
+
+実装内容:
+
+- `FolderColorState`はactive Libraryの明示色、rootを含むnearest ancestor継承、GPX path hash、Config fallbackの順でTrack色を解決する。
+- `PathUtils`へparent / join / descendant / GPX parent Folder pathを集約し、TreeMetadataBuilderとFolderColorStateで共有する。
+- `FolderColorControl`はMutationObserverでTreeViewのlazy DOMを装飾し、TreeView.jsを変更せずrootとrender済みFolder行へnative buttonを追加する。
+- Folder行は`Explicit`、`Inherited`、`Auto`を文字とswatchで区別する。Autoはchecker表示とし、単一色を示さない。session fallback時は`Session only`を併記する。
+- `FolderColorDialog`はnative `dialog`、`input type="color"`、Apply、Default、Cancelを持つ。EscapeはCancelと同じで、close後は起点buttonへfocusを戻す。
+- Folder color buttonのclick / keydown propagationを止め、checkbox、Folder展開、row keyboard操作と競合させない。
+- AppはLibrary load後にFolderColorStateを復元し、初期Track色を解決する。Library切り替えでは新しいLibrary IDとFolder path集合からstateを再構築する。
+- 色変更時は変更Folder配下のうち別の明示色で遮られない枝だけを更新する。登録displayのresolved colorとTree / Search projectionを更新し、Mapは表示中の影響Trackだけをrestyleする。
+- `LayerManager.updateTrackColor`は既存Polylineを`setStyle`し、selected main / outlineを新色から再計算する。weight、opacity、selection path、Layer数、Bounds、Waypointを維持する。
+- GPX再parse、Queue投入、cache更新、Map refocus、Tree / Search再構築を行わない。
+- localStorage schema version 1を維持し、Apply、Default、Library別設定、reload、write failure時のsession反映を既存DisplaySettingsStoreへ接続する。
+
+Static test result:
+
+| Test | Result | Notes |
+| --- | --- | --- |
+| FolderColorState / PathUtils | Pass | 41 assertions。root、own、nearest / deep ancestor、override、Default、hash、Library switch、invalid、session fallback、path |
+| LayerManager color update | Pass | 13 assertions。selected main / outline、weight、opacity、Layer、Bounds、Waypoint、hidden path |
+| App selective restyle | Pass | 16 assertions。parent変更、explicit child除外、visible限定、Tree / Search projection、Default、no refocus |
+| Folder color UI | Pass | 17 assertions。swatch、mode、event isolation、dialog、Apply、Default、Cancel、Escape、focus、ARIA、session表示 |
+| Persistence | Pass | 8 assertions。set / reload、Default / reload、Library switch、write failure session fallback |
+| production module import | Pass | 34 / 34 |
+| circular dependency | Pass | 0件 |
+| TreeView line count | Pass | 997行、差分なし |
+| Config version | Pass | `1.0.0` |
+
+#### Unit 5 Browser Acceptance Result
+
+Windows Chrome:
+
+| Area | Result | Verified behavior |
+| --- | --- | --- |
+| Folder color UI | Pass | root / nested Folder swatch、Explicit / Inherited / Auto、Autoの複数色表現、row選択・checkbox・expandとの非競合、keyboard到達、dialog open、Apply、Default、Cancel、Escape、focus復帰、ARIA |
+| Color resolution | Pass | root / own explicit color、nearest / deep ancestor inheritance、child override、親変更時のexplicit child維持、Defaultによる親継承またはAuto復帰、既存GPX path hash色、未設定Libraryのv1.0.0色互換 |
+| Map restyle | Pass | 表示中Trackだけ即時更新、GPX再parse・Layer再生成・Map refocusなし、Bounds・Waypoint・zoom width・Track click・Map背景解除を維持 |
+| Selection / Highlight | Pass | selected mainとoutlineが新色へ追従し、weight、selection path、zoom bucket追従を維持 |
+| Persistence | Pass | Apply後保存、reload復元、Library単位の分離、root / child override保存、Default削除、localStorage削除時のAuto復帰、malformed JSON継続、write failure時のsession反映 |
+| Console | Pass | error、不要なlog / warningなし |
+
+Windows Edge:
+
+| Check | Result |
+| --- | --- |
+| root color設定 | Pass |
+| child override | Pass |
+| Defaultへ戻す | Pass |
+| reload復元 | Pass |
+| selected Track色更新 | Pass |
+| Console error | None |
+| 不要なconsole log / warning | None |
+
+806 GPX Library:
+
+| Check | Result |
+| --- | --- |
+| root色変更 | 実用上問題なし |
+| deep Folder色変更 | 実用上問題なし |
+| child override | Pass |
+| selected Track色変更 | 実用上問題なし |
+| UI操作感 | 実用上問題なし |
+| 明確な性能回帰 | なし（Pass） |
+
+Known limitations:
+
+- 同名root Folderは同じLibrary IDとなり、色設定が衝突し得る。
+- root Folder名を変更すると別Libraryとして扱われる。
+- localStorageを削除すると保存済みFolder colorはAutoへ戻る。
+- Mobile UIはRelease 1.1 Unit 5の対象外である。
+
+Chrome / Edgeの実ブラウザ受け入れ確認と806 GPX Library確認が完了したため、Unit 5をCompletedとする。Unit 6 Monochrome Map Modeは未開始である。
 
 ### Unit 6 Candidate — Monochrome Map Mode
 

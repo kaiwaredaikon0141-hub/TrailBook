@@ -69,6 +69,26 @@ export default class SearchView {
         });
     }
 
+    setResultColor(path, color) {
+
+        const entry = this.results.find(result => result.path === path);
+
+        if (entry) {
+            entry.color = color;
+        }
+
+        const item = [...this.resultList.children].find(
+            candidate => candidate.dataset.searchPath === path
+        );
+        const indicator = item?.querySelector(".search-result-color");
+
+        if (indicator) {
+            indicator.style.backgroundColor = color || "";
+        }
+
+        return Boolean(entry || indicator);
+    }
+
     /**
      * Clears the query, pending timer, and results.
      *

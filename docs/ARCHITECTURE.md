@@ -536,11 +536,15 @@ GPX color解決順:
 
 対象Folder自身に明示色があれば必ずそれを使用し、自身が未設定の場合だけ親からroot方向へ探索する。直接親に限定せず、最初に見つかった最も近い祖先色を継承し、rootの明示色も祖先色として利用する。明示色をDefaultへ戻すと、そのFolderは最も近い祖先色またはfallbackへ戻る。GPX単位色は扱わない。
 
-`FolderColorState.resolveFolderColor(folderPath)`は対象Folder自身、続いてroot方向の祖先を順に調べ、最初の明示色を返す。どこにも存在しなければ`null`を返す。AppはGPXごとに`resolvedFolderColor ?? getPathHashColor(gpxPath) ?? finalFallback`を適用する。これにより明示色が一切ないLibraryでは、v1.0.0と同じGPX relative pathごとのhash色が変わらない。
+`FolderColorState.getResolvedFolderColor(folderPath)`は対象Folder自身、続いてroot方向の祖先を順に調べ、最初の明示色を返す。どこにも存在しなければ`null`を返す。AppはGPXごとに`resolvedFolderColor ?? getPathHashColor(gpxPath) ?? finalFallback`を適用する。これにより明示色が一切ないLibraryでは、v1.0.0と同じGPX relative pathごとのhash色が変わらない。
 
-API候補は`setFolderColor(folderPath, color)`、`removeFolderColor(folderPath)`、`getExplicitFolderColor(folderPath)`、`resolveFolderColor(folderPath)`、`clearLibraryColors(libraryId)`とする。色は`#RRGGBB`だけを受理し、大文字形式へ正規化する。
+Unit 5のAPIは`setActiveLibrary`、`loadFolderColors`、`setExplicitColor`、`removeExplicitColor`、`getExplicitColor`、`getResolvedFolderColor`、`resolveTrackColor`、`getAffectedFolderPaths`とする。Storeのvalidationを再利用し、`#RGB`または`#RRGGBB`を大文字`#RRGGBB`へ正規化する。
 
 Folder color変更時は対象Folder配下の登録GPXだけを再解決し、表示中pathだけをLayerManagerでrestyleする。Queue投入、GPX再解析、cache更新、refocusは行わない。TreeとSearchの表示色projectionは同じresolved colorへ更新する。
+
+Unit 5ではFolder pathとGPXの親Folder計算をstateやUIへ重複させず、stateを持たない`PathUtils`へ集約する。`FolderColorState.getAffectedFolderPaths`は変更Folder配下を走査し、途中に別の明示色がある子枝を除外する。Appは全登録displayのresolved colorを更新するが、LayerManagerへ通知するのは現在表示中の影響pathだけである。
+
+`LayerManager.updateTrackColor`は既存Polylineへ`setStyle`し、Layer、geometry、Bounds、Waypointを再生成しない。選択中pathではselected mainとoutlineを新色から再計算し、selection path、現在zoomのweight、opacityを維持する。Map refocus、Parser、Queue、cacheを呼ばない。
 
 ### UI Settings Persistence
 
@@ -573,7 +577,7 @@ Unit 4では`DisplaySettingsStore`をproductionへ実装し、constructor inject
 
 色は`#RGB`または`#RRGGBB`だけを受理し、`#RRGGBB`大文字へ正規化する。root Folder pathの`""`は有効とし、nested pathはTree metadataと同じ`/`区切りを使用する。alpha、CSS color name、`rgb()`、control character、backslash、不正separator、`__proto__`、`constructor`、`prototype` segmentを拒否する。
 
-storage未定義、read / JSON parse / write failure、quota / security errorではlocalStorageを切り離し、同じStore instanceのsession memoryで操作を継続する。Storeはstorage内容や例外文字列をConsoleへ出さず、`getStatus()`で`available`または`session-only`を診断可能にする。Unit 4ではFolder colorをTrackへ適用せず、UI feedbackも追加しない。
+storage未定義、read / JSON parse / write failure、quota / security errorではlocalStorageを切り離し、同じStore instanceのsession memoryで操作を継続する。Storeはstorage内容や例外文字列をConsoleへ出さず、`getStatus()`で`available`または`session-only`を診断可能にする。Unit 5ではFolder行のmode labelへ`Session only`を併記し、保存失敗時もblocking errorなしで現在sessionの色を利用できる。
 
 ### Monochrome Map Mode — Unit 6 Candidate
 
@@ -581,7 +585,7 @@ storage未定義、read / JSON parse / write failure、quota / security errorで
 
 設定のlocalStorage保存はUnit 4のUI settings persistence基盤を共用できるが、Unit 2では実装しない。CSS filter方式を第一候補とし、Mobile対応は対象外とする。
 
-Folder色UIは`src/js/ui/FolderColorDialog.js`の単一dialogへ分離する。TreeViewはrender済みFolder行のswatchとedit requestだけを担当し、dialog state、validation、storageを持たない。TreeViewの1,000行規則を維持する。
+Folder色UIは`FolderColorControl`と単一`FolderColorDialog`へ分離する。ControlはMutationObserverでlazy DOMのrender済みFolder行だけを装飾し、TreeView本体を変更しない。Dialog state、validation、storageはTreeViewへ置かず、TreeViewの997行と1,000行規則を維持する。
 
 ### Library Identity
 
@@ -606,7 +610,7 @@ root Folder名を変更すると新Libraryとして扱いDefault色へ戻る。�
 | `map:background-clicked` | MapView | App | `{}`; selection clear request |
 | `selection:changed` | App | TreeView / MapView | `{ path, previousPath, reason }`; SelectionState commit後だけ |
 | `map:zoom-ended` | MapView | App | `{ zoom }`; bucket変更時だけrestyle |
-| `folder:color-edit-requested` | TreeView | App | `{ folderPath }`; dialogを開く |
+| `folder:color-edit-requested` | FolderColorControl | App | `{ folderPath, folderName, origin }`; dialogを開く |
 | `folder:color-change-requested` | Folder color dialog | App | `{ folderPath, color }`; valid explicit color |
 | `folder:color-default-requested` | Folder color dialog | App | `{ folderPath }`; explicit valueを削除 |
 

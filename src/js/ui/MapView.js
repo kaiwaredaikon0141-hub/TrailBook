@@ -222,6 +222,11 @@ export default class MapView {
         return this.layerManager?.updateTrackStyles(styles) ?? 0;
     }
 
+    updateTrackColor(path, styles) {
+
+        return this.layerManager?.updateTrackColor(path, styles) ?? 0;
+    }
+
     hasDisplay(path) {
 
         return this.layerManager?.hasDisplay(path) ?? false;

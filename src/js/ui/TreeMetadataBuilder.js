@@ -1,4 +1,9 @@
-const ROOT_PATH = "";
+import {
+    ROOT_PATH,
+    parentPath,
+    joinPath,
+    isDescendant
+} from "../utils/PathUtils.js";
 
 /**
  * Builds path-based Tree metadata without owning UI or navigation state.
@@ -119,22 +124,16 @@ export default class TreeMetadataBuilder {
 
     parentPath(path) {
 
-        if (!path) {
-            return ROOT_PATH;
-        }
-
-        const separator = path.lastIndexOf("/");
-
-        return separator < 0 ? ROOT_PATH : path.slice(0, separator);
+        return parentPath(path);
     }
 
     joinPath(parentPath, name) {
 
-        return parentPath ? `${parentPath}/${name}` : name;
+        return joinPath(parentPath, name);
     }
 
     isDescendant(path, parentPath) {
 
-        return path.startsWith(`${parentPath}/`);
+        return isDescendant(path, parentPath);
     }
 }

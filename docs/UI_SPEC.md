@@ -702,7 +702,7 @@ dialogは現在Folder名、現在のresolved color、`input type="color"`、Appl
 - Defaultへ戻す操作は対象Folderの明示色だけを削除する
 - Cancel、Escape、dialog外終了では変更しない
 - 閉じた後は起点swatchへfocusを戻す
-- storageへ保存できない場合もsession中の色は反映し、StatusBarで非ブロッキングに通知する
+- storageへ保存できない場合もsession中の色は反映し、Folder color controlへ`Session only`を併記する
 
 ## Folder color inheritance
 
@@ -746,7 +746,9 @@ Folder colorはLibrary再選択またはpage reload後に復元する。root Fol
 
 GPX、Folder、FileHandle、解析geometryを保存しない。storage failureはViewerを止めずsession memoryで継続する。Unit 4はStoreの診断statusだけを提供し、StatusBar等のUI feedbackはFolder color UIを接続する後続Unitで扱う。
 
-Unit 4のstorage contractは固定key`trailbook.uiSettings`、schema version 1とする。`libraries`は`root-name:<URL encoded root Folder name>`をkeyとするplain object、`folderColors`はFolder relative pathから正規化済み`#RRGGBB`へのplain objectである。root pathは空文字を許可する。Folder color UI、swatch、Trackへの色適用はUnit 5まで追加しない。
+Unit 4のstorage contractは固定key`trailbook.uiSettings`、schema version 1とする。`libraries`は`root-name:<URL encoded root Folder name>`をkeyとするplain object、`folderColors`はFolder relative pathから正規化済み`#RRGGBB`へのplain objectである。root pathは空文字を許可する。
+
+Unit 5ではTreeView本体を増やさず、独立したFolder color controlがlazy DOMへswatch buttonを追加する。buttonはclickとkeydownをTree rowへ伝播せず、checkbox、展開、roving tabindexと競合しない。表示labelは`Explicit`、`Inherited`、`Auto`で、Autoは単一色ではなくchecker表示とする。native dialogのApply、Default、Cancel、Escape後は起点buttonへfocusを戻す。
 
 ## Release 1.1 accessibility
 

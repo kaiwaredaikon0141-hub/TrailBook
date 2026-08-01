@@ -230,6 +230,52 @@ export default class LayerManager {
         return updatedCount;
     }
 
+    updateTrackColor(path, {
+        normalStyle,
+        selectedMainStyle,
+        selectedOutlineStyle
+    } = {}) {
+
+        const entry = this.layers.get(path);
+
+        if (
+            !entry ||
+            typeof normalStyle?.color !== "string" ||
+            normalStyle.color.length === 0 ||
+            (path === this.selectedPath &&
+                (!selectedMainStyle || !selectedOutlineStyle))
+        ) {
+            return 0;
+        }
+
+        const isSelected = path === this.selectedPath;
+
+        entry.normalStyle = { ...normalStyle };
+        entry.color = normalStyle.color;
+
+        if (isSelected && selectedMainStyle && selectedOutlineStyle) {
+            entry.selectedMainStyle = { ...selectedMainStyle };
+            entry.selectedOutlineStyle = {
+                ...selectedOutlineStyle,
+                interactive: false
+            };
+        }
+
+        entry.segments.forEach(({ mainLayer }) => {
+            mainLayer.setStyle(
+                isSelected ? entry.selectedMainStyle : entry.normalStyle
+            );
+        });
+
+        if (isSelected) {
+            entry.outlineLayerGroup?.eachLayer(layer => {
+                layer.setStyle(entry.selectedOutlineStyle);
+            });
+        }
+
+        return entry.segments.length;
+    }
+
     setSelectedPath(path, selectedMainStyle, selectedOutlineStyle) {
 
         if (path === this.selectedPath) {

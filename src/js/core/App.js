@@ -12,8 +12,12 @@ import TrackStyleService from "../services/TrackStyleService.js";
 import DisplaySettingsStore from "../services/DisplaySettingsStore.js";
 import DisplayState from "../state/DisplayState.js";
 import SelectionState from "../state/SelectionState.js";
+import FolderColorState from "../state/FolderColorState.js";
+import { folderPathFromFilePath } from "../utils/PathUtils.js";
 import Toolbar from "../ui/Toolbar.js";
 import TreeView from "../ui/TreeView.js";
+import FolderColorControl from "../ui/FolderColorControl.js";
+import FolderColorDialog from "../ui/FolderColorDialog.js";
 import SearchView from "../ui/SearchView.js";
 import StatusBar from "../ui/StatusBar.js";
 import LibraryAccessPanel from "../ui/LibraryAccessPanel.js";
@@ -42,6 +46,8 @@ export default class App {
         this.statusBar = null;
         this.libraryAccessPanel = null;
         this.mapView = null;
+        this.folderColorControl = null;
+        this.folderColorDialog = null;
         this.folderScanner = new FolderScanner();
         this.gpxLoader = new GPXLoader();
         this.gpxParser = new GPXParser();
@@ -52,6 +58,11 @@ export default class App {
         this.displaySettingsStore = new DisplaySettingsStore(
             this.config.uiSettings
         );
+        this.folderColorState = new FolderColorState({
+            store: this.displaySettingsStore,
+            pathColorResolver: path => this.getPathHashColor(path),
+            fallbackColor: this.config.map.trackStyle.lineColor
+        });
         this.displayState = new DisplayState();
         this.selectionState = new SelectionState();
         this.displayQueue = new GPXDisplayQueue(2);
@@ -79,6 +90,14 @@ export default class App {
         this.statusBar = new StatusBar();
         this.libraryAccessPanel = new LibraryAccessPanel();
         this.mapView = new MapView(this.config, this.eventBus);
+        this.folderColorControl = new FolderColorControl(
+            this.treeView,
+            this.eventBus
+        );
+        this.folderColorDialog = new FolderColorDialog(
+            this.eventBus,
+            this.config.map.trackStyle.lineColor
+        );
     }
 
     createLayout() {
@@ -98,7 +117,8 @@ export default class App {
         app.replaceChildren(
             this.toolbar.element,
             this.workspace,
-            this.statusBar.element
+            this.statusBar.element,
+            this.folderColorDialog.element
         );
     }
 
@@ -165,6 +185,18 @@ export default class App {
 
         this.eventBus.on("folder:display-toggled", data => {
             this.handleFolderDisplayToggled(data);
+        });
+
+        this.eventBus.on("folder:color-edit-requested", data => {
+            this.handleFolderColorEditRequested(data);
+        });
+
+        this.eventBus.on("folder:color-change-requested", data => {
+            this.handleFolderColorChangeRequested(data);
+        });
+
+        this.eventBus.on("folder:color-default-requested", data => {
+            this.handleFolderColorDefaultRequested(data);
         });
 
         this.eventBus.on("search:query-changed", ({ query }) => {
@@ -285,6 +317,20 @@ export default class App {
         );
         this.searchView.setAvailable(true);
 
+        this.currentLibrary = library;
+        this.currentLibraryId = this.displaySettingsStore.setActiveLibrary(
+            library.name
+        );
+        const folderPaths = this.treeView.getSearchSourceEntries()
+            .filter(entry => entry.kind === "folder")
+            .map(entry => entry.path);
+
+        this.folderColorState.setActiveLibrary(
+            this.currentLibraryId,
+            folderPaths
+        );
+        this.updateFolderColorPresentation();
+
         this.treeView.getFileEntries().forEach(({ path, fileHandle }) => {
             this.displayState.registerFile(
                 path,
@@ -293,10 +339,6 @@ export default class App {
             );
         });
 
-        this.currentLibrary = library;
-        this.currentLibraryId = this.displaySettingsStore.setActiveLibrary(
-            library.name
-        );
         this.statusBar.showLibraryLoaded(library);
 
         if (library.gpxFileCount === 0) {
@@ -683,7 +725,109 @@ export default class App {
         }, 250);
     }
 
+    handleFolderColorEditRequested({
+        folderPath,
+        folderName,
+        origin
+    } = {}) {
+
+        if (!this.folderColorState.hasFolderPath(folderPath)) {
+            return false;
+        }
+
+        this.folderColorDialog.open({
+            folderPath,
+            folderName,
+            ...this.folderColorState.getFolderPresentation(folderPath),
+            origin
+        });
+
+        return true;
+    }
+
+    handleFolderColorChangeRequested({ folderPath, color } = {}) {
+
+        if (!this.folderColorState.setExplicitColor(folderPath, color)) {
+            return false;
+        }
+
+        this.applyFolderColorChange(folderPath);
+
+        return true;
+    }
+
+    handleFolderColorDefaultRequested({ folderPath } = {}) {
+
+        if (!this.folderColorState.removeExplicitColor(folderPath)) {
+            return false;
+        }
+
+        this.applyFolderColorChange(folderPath);
+
+        return true;
+    }
+
+    applyFolderColorChange(folderPath) {
+
+        const affectedFolders = new Set(
+            this.folderColorState.getAffectedFolderPaths(folderPath)
+        );
+        let updatedLayers = 0;
+
+        this.displayState.getDisplays().forEach(display => {
+            const displayFolderPath = folderPathFromFilePath(display.path);
+
+            if (!affectedFolders.has(displayFolderPath)) {
+                return;
+            }
+
+            const color = this.folderColorState.resolveTrackColor(
+                display.path,
+                displayFolderPath
+            );
+
+            if (display.color === color) {
+                return;
+            }
+
+            display.color = color;
+            this.folderColorControl.setFileColor(display.path, color);
+            this.searchView.setResultColor(display.path, color);
+
+            if (!this.mapView.hasDisplay(display.path)) {
+                return;
+            }
+
+            updatedLayers += this.mapView.updateTrackColor(
+                display.path,
+                {
+                    normalStyle: this.createTrackStyle(color),
+                    ...this.createSelectionStyles(color)
+                }
+            );
+        });
+
+        this.updateFolderColorPresentation();
+
+        return updatedLayers;
+    }
+
+    updateFolderColorPresentation() {
+
+        this.folderColorControl.setPersistenceStatus(
+            this.displaySettingsStore.getStatus().persistence
+        );
+        this.folderColorControl.setPresentations(
+            this.folderColorState.getFolderPresentations()
+        );
+    }
+
     getColor(path) {
+
+        return this.folderColorState.resolveTrackColor(path);
+    }
+
+    getPathHashColor(path) {
 
         const palette = this.config.map.displayPalette;
         let hash = 0;
