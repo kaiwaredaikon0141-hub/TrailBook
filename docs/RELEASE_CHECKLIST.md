@@ -237,7 +237,44 @@ Release 1.0のSearch性能は次の両方で判定する。
 - Memory API: Not available
 - Baseline result status: Completed — fixed as the pre-TreeView-split v0.9.0 production baseline
 
+## Unit 3 TreeView Limited Split
+
+Unit 3 Status: Completed
+
+`TreeView.js`からmetadata / path構築を`TreeMetadataBuilder.js`へ限定抽出し、TreeViewを1,000行未満へ適合させた。実ブラウザ回帰確認に合格し、分割による見た目または操作の回帰は確認されなかった。
+
+### Browser Regression Result
+
+- [x] Library読込
+- [x] Folder展開 / 折りたたみ
+- [x] lazy DOM
+- [x] GPX個別ON / OFF
+- [x] Folder一括ON / OFF
+- [x] root一括ON / OFF
+- [x] Search
+- [x] Folder result activate
+- [x] GPX result activate
+- [x] Search checkbox
+- [x] Tree keyboard
+- [x] Search keyboard
+- [x] Library切り替え
+- [x] body scroll / sidebar scroll
+- [x] Waypoint OFFでの表示と操作
+- [x] Consoleにアプリ由来errorなし
+- [x] TreeView分割による見た目・操作回帰なし
+
+### Known Limitation — Waypoint Rendering at Large Scale
+
+大量のGPXを表示した状態でWaypoint表示をONにすると、多数のMarker描画によりpan / zoomやUI操作が重くなる。大量LibraryではWaypoint OFFを推奨する。
+
+- Waypointの初期値はOFFを維持する。
+- 本制限は今回のTreeView分割で新たに発生した回帰とは判断しない。
+- Release 1.0ではWaypoint大量表示の性能最適化を実装しない。
+- 将来候補はMarker clustering、Canvas renderer、Waypoint表示件数上限、現在の表示範囲内Waypointだけの描画、zoom levelによる表示制御とする。
+
 ## Performance Acceptance
+
+Post-TreeView-split measurement status: Pending — Windows Chrome / EdgeでUnit 2と同じ手順による実ブラウザ再測定が必要。
 
 - [x] v0.9.0 baselineを同一条件で最低3回測定し、中央値を記録した。
 - [x] coldとwarm cacheを分離して記録した。

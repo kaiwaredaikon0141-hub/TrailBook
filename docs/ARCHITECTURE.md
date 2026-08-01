@@ -70,8 +70,8 @@ Browser API / Leaflet API
 - 責務が曖昧または複数になった場合はClassを分割する。
 - 巨大Classと巨大Fileは禁止する。
 - 500行を超えるFileは分割検討対象とする。
-- `TreeView.js`は現在1,000行を超えており、Release 1.0で規則へ適合させる。
-- Release 1.0では挙動を変えず、metadata構築とpath計算を第一候補とする限定的な責務抽出だけを行う。
+- `TreeView.js`はRelease 1.0でmetadata構築とpath計算を`TreeMetadataBuilder`へ限定抽出し、1,000行未満へ適合させた。
+- 抽出後もTreeViewのDOM、Event、keyboard、ARIA、表示状態の挙動を変更しない。
 - `App.js`は500行を超えているが、Release 1.0では無理に分割しない。
 
 詳細なFile Size、Function Size、Single Responsibilityの基準は`CODING_RULES.md`を正本とする。
@@ -101,6 +101,7 @@ src/js/
 ├─ ui/
 │  ├─ Toolbar.js
 │  ├─ TreeView.js
+│  ├─ TreeMetadataBuilder.js
 │  ├─ SearchView.js
 │  ├─ MapView.js
 │  └─ StatusBar.js
@@ -166,6 +167,12 @@ Responsibilities:
 主選択は`aria-selected`、表示状態はnative checkboxで表す。GPX行の選択だけで表示をON/OFFしない。
 
 TreeViewの検索対象は生成済みDOMではなくpathベースmetadataとする。Release 0.9では結果選択時だけ必要な祖先Folderを展開する。
+
+## TreeMetadataBuilder — Path Metadata Construction
+
+`TreeMetadataBuilder`はLibraryを入力として、pathベースmetadata、`fileHandlesByPath`、`pathsByFileHandle`を構築する。path join、parent path、子孫判定、展開path filter、focus復元候補、子孫GPX列挙、Search用metadata投影もDOMへ依存しない処理として担当する。
+
+依存方向は`TreeView`から`TreeMetadataBuilder`への一方向とする。`TreeMetadataBuilder`はUI状態を持たず、TreeView、DOM、EventBus、Leafletを参照しない。TreeViewは構築結果を保持し、DOM、interaction、Navigation State、表示状態、EventBus契約を引き続き担当する。
 
 ## DisplayState — Session Display State
 
@@ -415,7 +422,7 @@ Release 1.0はRelease 0.9までのViewer機能を個人利用環境で安定さ�
 - Android、iPhone、iPadの最新Chromeは実機検証候補とし、合格した端末だけをbest effortへ追加する。未確認または必要API不足の端末は非対応とする。
 - HTTPS、`http://localhost`、`http://127.0.0.1`を対応originとし、`file://`と通常のLAN内HTTP IPは対応外とする。
 - 初回起動、File System Access API非対応、空Library、解析失敗、Library切り替えを明示的に扱う。
-- TreeViewはmetadata構築とpath計算を第一候補として限定分割し、DOM、Event、keyboard、表示状態の挙動を変えない。
+- TreeViewはmetadata構築とpath計算を`TreeMetadataBuilder`へ限定分割し、DOM、Event、keyboard、表示状態の挙動を維持する。
 - GPX読込はread-onlyを維持し、書き込み、DB、永続cacheを追加しない。
 - 一般公開、配布artifact、hosted版、公開support、TrailBook本体のOSS license決定は扱わない。
 - Mobile検証のためにFolder LibraryのFile System Access API設計を変更せず、`showDirectoryPicker`が利用できない端末向けfallbackはRelease 1.0へ追加しない。

@@ -1,3 +1,5 @@
+import TreeMetadataBuilder from "./TreeMetadataBuilder.js";
+
 const ROOT_PATH = "";
 
 const NODE_SELECTOR = "[data-tree-path]";
@@ -10,6 +12,7 @@ export default class TreeView {
     constructor(eventBus) {
 
         this.eventBus = eventBus;
+        this.metadataBuilder = new TreeMetadataBuilder();
         this.expandedPaths = new Set([ROOT_PATH]);
         this.focusedPath = ROOT_PATH;
         this.selectedFilePath = null;
@@ -58,7 +61,7 @@ export default class TreeView {
 
         try {
 
-            const prepared = this.prepareLibrary(library);
+            const prepared = this.metadataBuilder.build(library);
             const sameLibrary = await this.isSameLibrary(prepared.rootHandle);
 
             if (requestId !== this.renderRequestId) {
@@ -66,7 +69,7 @@ export default class TreeView {
             }
 
             const expandedPaths = sameLibrary
-                ? this.filterExpandedPaths(
+                ? this.metadataBuilder.filterExpandedPaths(
                     previousState.expandedPaths,
                     prepared.nodeMetadata
                 )
@@ -75,7 +78,7 @@ export default class TreeView {
             expandedPaths.add(ROOT_PATH);
 
             const focusedPath = sameLibrary
-                ? this.findRestorableFocus(
+                ? this.metadataBuilder.findRestorableFocus(
                     previousState.focusedPath,
                     expandedPaths,
                     prepared.nodeMetadata
@@ -112,58 +115,6 @@ export default class TreeView {
 
             console.error("TreeView render failed.", error);
         }
-    }
-
-    prepareLibrary(library) {
-
-        const nodeMetadata = new Map();
-        const fileHandlesByPath = new Map();
-        const pathsByFileHandle = new Map();
-
-        const visitFolder = (folder, path) => {
-
-            nodeMetadata.set(path, {
-                kind: "folder",
-                path,
-                parentPath: this.parentPath(path),
-                name: folder.name,
-                model: folder
-            });
-
-            folder.folders.forEach(childFolder => {
-                visitFolder(childFolder, this.joinPath(path, childFolder.name));
-            });
-
-            folder.gpxFiles.forEach(fileHandle => {
-
-                const filePath = this.joinPath(path, fileHandle.name);
-
-                nodeMetadata.set(filePath, {
-                    kind: "file",
-                    path: filePath,
-                    parentPath: path,
-                    name: fileHandle.name,
-                    model: fileHandle,
-                    state: "idle",
-                    checked: false,
-                    color: null,
-                    error: null
-                });
-
-                fileHandlesByPath.set(filePath, fileHandle);
-                pathsByFileHandle.set(fileHandle, filePath);
-            });
-        };
-
-        visitFolder(library.rootFolder, ROOT_PATH);
-
-        return {
-            library,
-            rootHandle: library.rootFolder.handle,
-            nodeMetadata,
-            fileHandlesByPath,
-            pathsByFileHandle
-        };
     }
 
     commitPreparedLibrary(prepared, expandedPaths, focusedPath) {
@@ -229,28 +180,6 @@ export default class TreeView {
         } catch (error) {
             return false;
         }
-    }
-
-    filterExpandedPaths(paths, nodeMetadata) {
-
-        return new Set(
-            [...paths].filter(path => nodeMetadata.get(path)?.kind === "folder")
-        );
-    }
-
-    findRestorableFocus(path, expandedPaths, nodeMetadata) {
-
-        let candidate = path;
-
-        while (candidate && !nodeMetadata.has(candidate)) {
-            candidate = this.parentPath(candidate);
-        }
-
-        while (candidate && !expandedPaths.has(candidate)) {
-            candidate = this.parentPath(candidate);
-        }
-
-        return candidate || ROOT_PATH;
     }
 
     createFolderNode(folder, path, isRoot = false) {
@@ -366,25 +295,6 @@ export default class TreeView {
         });
     }
 
-    collectDescendantFiles(folder, parentPath) {
-
-        const entries = folder.gpxFiles.map(fileHandle => ({
-            path: this.joinPath(parentPath, fileHandle.name),
-            fileHandle
-        }));
-
-        folder.folders.forEach(childFolder => {
-            entries.push(
-                ...this.collectDescendantFiles(
-                    childFolder,
-                    this.joinPath(parentPath, childFolder.name)
-                )
-            );
-        });
-
-        return entries;
-    }
-
     setFolderDisplay(path, checked) {
 
         const folder = this.nodeMetadata.get(path)?.model;
@@ -393,7 +303,10 @@ export default class TreeView {
             return;
         }
 
-        const fileEntries = this.collectDescendantFiles(folder, path);
+        const fileEntries = this.metadataBuilder.collectDescendantFiles(
+            folder,
+            path
+        );
 
         fileEntries.forEach(entry => {
             this.setDisplayChecked(entry.path, checked);
@@ -812,12 +725,7 @@ export default class TreeView {
 
     getFileEntries() {
 
-        return [...this.nodeMetadata.values()]
-            .filter(metadata => metadata.kind === "file")
-            .map(metadata => ({
-                path: metadata.path,
-                fileHandle: metadata.model
-            }));
+        return this.metadataBuilder.getFileEntries(this.nodeMetadata);
     }
 
     /**
@@ -827,11 +735,7 @@ export default class TreeView {
      */
     getSearchSourceEntries() {
 
-        return [...this.nodeMetadata.values()].map(metadata => ({
-            kind: metadata.kind,
-            path: metadata.path,
-            name: metadata.name
-        }));
+        return this.metadataBuilder.getSearchSourceEntries(this.nodeMetadata);
     }
 
     /**
@@ -1048,22 +952,16 @@ export default class TreeView {
 
     parentPath(path) {
 
-        if (!path) {
-            return ROOT_PATH;
-        }
-
-        const separator = path.lastIndexOf("/");
-
-        return separator < 0 ? ROOT_PATH : path.slice(0, separator);
+        return this.metadataBuilder.parentPath(path);
     }
 
     joinPath(parentPath, name) {
 
-        return parentPath ? `${parentPath}/${name}` : name;
+        return this.metadataBuilder.joinPath(parentPath, name);
     }
 
     isDescendant(path, parentPath) {
 
-        return path.startsWith(`${parentPath}/`);
+        return this.metadataBuilder.isDescendant(path, parentPath);
     }
 }
