@@ -141,15 +141,15 @@ Release 1.0ではMobile responsive layout、sidebar drawer、touch専用checkbox
 
 ## Quality and Documentation
 
-- [ ] favicon取得で404を発生させない。
-- [ ] 開発用`console.log`を整理し、通常操作でアプリ由来errorがない。
-- [ ] 未使用codeを整理した。
-- [ ] TreeViewが1,000行規則に適合し、挙動を維持する。
-- [ ] READMEに個人利用向け導入、localhost起動、対応環境、offline範囲、既知の制限を記載した。
-- [ ] Leaflet license fileを保持した。
-- [ ] OpenStreetMap attributionを維持した。
-- [ ] 第三者noticeをTrailBook本体のlicense方針と分離して記録した。
-- [ ] root `LICENSE`が空ではなく、Decision 0026の方針と一致する。
+- [x] favicon取得で404を発生させない。
+- [x] 開発用`console.log`を整理し、通常操作でアプリ由来errorがない。
+- [x] 未使用codeを整理した。
+- [x] TreeViewが1,000行規則に適合し、挙動を維持する。
+- [x] READMEに個人利用向け導入、localhost起動、対応環境、offline範囲、既知の制限を記載した。
+- [x] Leaflet license fileを保持した。
+- [x] OpenStreetMap attributionをcopyright pageへのlink付きで維持した。
+- [x] 第三者noticeをTrailBook本体のlicense方針と分離して記録した。
+- [x] root `LICENSE`が空ではなく、Decision 0026の方針と一致する。
 
 ## v0.9.0 Performance Baseline Protocol
 
@@ -399,6 +399,53 @@ Browser Acceptance Status: Completed
 - Mobile UIはRelease 1.0対象外である。
 - 大量GPX表示中のWaypoint ONは操作が重くなる。
 - 参照ゼロ候補のうち変更禁止対象内のAPIはUnit 5で削除していない。
+
+## Unit 6 README, License, and Limitations
+
+Unit 6 Status: Completed
+Unit 6 Implementation Status: Completed
+Unit 6 Documentation Review Status: Completed
+Unit 6 Browser Attribution Status: Completed
+
+- [x] root READMEを個人利用向けStable Viewerの導入文書へ更新する
+- [x] Live Server、Python、その他の静的HTTP serverによる起動方法を記録する
+- [x] 対応browser、対応origin、Mobile実機結果を記録する
+- [x] offline範囲、OSM tileのonline依存、外部通信を記録する
+- [x] read-only、session限定cache、独自DBなしのデータ保護方針を記録する
+- [x] Mobile、Waypoint、OSM tile、編集・同期の既知制限を記録する
+- [x] root `LICENSE`をDecision 0026に沿った非OSS noticeへ置き換える
+- [x] `THIRD_PARTY_NOTICES.md`へLeaflet 1.9.4とOpenStreetMapを分離して記録する
+- [x] `docs/README.md`を現在のdocs入口へ更新する
+- [x] `src/vendor/leaflet/LICENSE`が存在することを確認する
+- [x] 画面上のOpenStreetMap attributionをcopyright pageへのlink付きにする
+- [x] 人間による文書reviewを完了する
+
+### Unit 6 Attribution Acceptance
+
+| Test item | Result |
+| --- | --- |
+| Chrome表示 | Pass |
+| Edge表示 | Pass |
+| OpenStreetMap copyright link | Pass |
+| 新しいtabで開く | Pass |
+| keyboard focus | Pass |
+| Map layout崩れなし | Pass |
+| Console errorなし | Pass |
+
+### Unit 6 Documentation Review
+
+- [x] READMEだけで起動可能
+- [x] Current Releaseは0.9.0
+- [x] Release 1.0は作業中
+- [x] 対応環境記述は正確
+- [x] Mobile結果は正確
+- [x] offline範囲と外部通信説明は正確
+- [x] GPX read-only方針は正確
+- [x] 独自DBを持たない
+- [x] TrailBook本体のLICENSEと第三者licenseを分離する
+- [x] Leaflet vendor LICENSEを維持する
+- [x] OpenStreetMap attributionをcopyright pageへ接続する
+- [x] 未実装機能を現在機能として記載しない
 
 ## Performance Acceptance
 

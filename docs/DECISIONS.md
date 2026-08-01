@@ -376,6 +376,10 @@ Alternatives: 一般公開版として配布物と公開窓口を整備する。
 
 Consequences: Release 1.0は公開配布の準備完了を意味しない。将来公開する場合は、TrailBook本体のライセンス、作者・copyright表記、配布物、セキュリティ窓口を新しいDecisionで確定する必要がある。第三者ライセンス遵守とattributionは個人利用版でも維持する。Mobile端末の対応可否は端末ごとの実機結果に基づき、未確認端末を対応済みと表記しない。
 
+Implementation Note: Release 1.0 Unit 6でroot `LICENSE`を、OSS licenseを付与せず権利許諾がないことを示すnoticeへ置き換え、第三者条件を`THIRD_PARTY_NOTICES.md`へ分離した。作者名およびcopyright名義は追加していない。
+
+Mobile Validation Note: iPhone ChromeはHTTPS起動、Google Drive Folder選択、Folder走査、Tree表示までは成功したが、GPX checkbox、Track表示、touch UIが動作しなかったためRelease 1.0では非対応とする。Android ChromeとiPad Chromeは未確認である。
+
 ## Decision Status
 
 - Accepted: 正式採用

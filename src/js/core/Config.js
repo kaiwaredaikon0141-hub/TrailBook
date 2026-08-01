@@ -19,7 +19,11 @@ const Config = {
 
         tileUrl: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
 
-        tileAttribution: "© OpenStreetMap contributors",
+        tileAttribution:
+            '© <a href="https://www.openstreetmap.org/copyright" ' +
+            'target="_blank" rel="noopener noreferrer" ' +
+            'style="text-decoration: underline;">' +
+            "OpenStreetMap contributors</a>",
 
         tileMaxZoom: 19,
 
