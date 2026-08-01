@@ -447,6 +447,86 @@ Unit 6 Browser Attribution Status: Completed
 - [x] OpenStreetMap attributionをcopyright pageへ接続する
 - [x] 未実装機能を現在機能として記載しない
 
+## Unit 7 Integrated Acceptance and Performance Comparison
+
+Unit 7 Status: Completed
+Unit 7 Implementation Status: Completed
+Unit 7 Static Validation Status: Completed
+Unit 7 Integration Acceptance Status: Completed
+Unit 7 Chrome Integration Status: Completed
+Unit 7 Edge Integration Status: Completed
+Unit 7 Performance Remeasurement Status: Deferred
+Performance Result: Pass by qualitative acceptance only. No numerical 20% comparison performed.
+Reason: Manual Chrome / Edge testing found no observable regression. Formal Unit 2-equivalent timing comparison was not repeated.
+Release 1.0 Completion Readiness: Ready
+
+### Static Validation
+
+| Test item | Result | Notes |
+| --- | --- | --- |
+| production module import | Pass | 27 / 27 modules |
+| circular dependency | Pass | cycleなし |
+| Search totalCount / 上限 | Pass | 806 metadata fixtureでtotalCount 806、results 100 |
+| Search normalization | Pass | NFKC、大文字小文字無視、relative path |
+| Queue / cache / Search上限 | Pass | 2並列 / 100件 / 100件を維持 |
+| Waypoint初期値 | Pass | OFFを維持 |
+| Folder picker | Pass | `{ mode: "read" }`を維持 |
+| write / persistent storage API | Pass | `createWritable`、save picker、IndexedDB、localStorageなし |
+| favicon / LICENSE / third-party notice | Pass | 必須fileが存在し、LICENSEは0 byteではない |
+| production success log / warning | Pass | `console.log`、`console.warn`なし。診断用`console.error`だけ維持 |
+| `git diff --check` | Pass | whitespace errorなし |
+
+Node上でSearchServiceの処理時間も取得したが、browser、query、実Library条件がUnit 2 baselineと一致しないため正式比較値には使用しない。
+
+### Browser Integration Result
+
+| Test item | Windows Chrome | Windows Edge |
+| --- | --- | --- |
+| 初回起動 | Pass | Not recorded |
+| Library選択 | Pass | Pass |
+| root一括ON / OFF | Pass | Pass |
+| Folder一括ON / OFF | Pass | Not recorded |
+| Search | Pass | Pass |
+| Search result activate | Pass | Not recorded |
+| Search result checkbox | Pass | Not recorded |
+| Waypoint OFFでpan / zoom | Pass | Not recorded |
+| Library切り替え | Pass | Pass |
+| Console errorなし | Pass | Pass |
+
+### Post-Unit 3–6 Performance Remeasurement
+
+| Measurement | Unit 2 baseline | Unit 7 median | Change | 20% judgment |
+| --- | ---: | ---: | ---: | --- |
+| Library scan | 5207.7 ms | Not remeasured | Not calculated | Deferred |
+| All ON cold | 22371.3 ms | Not remeasured | Not calculated | Deferred |
+| All OFF | 3686.3 ms | Not remeasured | Not calculated | Deferred |
+| Re-display | 3132.5 ms | Not remeasured | Not calculated | Deferred |
+| Library switch | 3165.8 ms | Not remeasured | Not calculated | Deferred |
+| SearchService 806件 / 1,000回 | 約69 ms | Not remeasured in comparable browser conditions | Not calculated | Deferred |
+
+Unit 2と同一条件での数値再測定は実施していないため、20%比較は算出しない。Unit 2 baselineは履歴として維持し、将来必要になった場合は同じ手順で再測定できる。Searchの手動window移動時間を含む値は正式比較へ使用しない。
+
+Manual Chrome / Edge testing found no observable performance regression. Searchは実ブラウザで目立つ遅延がなく、定性的受け入れをPassとする。
+
+| Pan / zoom state | Rating | Notes |
+| --- | --- | --- |
+| Waypoint OFFでの実操作 | Pass — qualitative | 実用上問題なし。Good / Acceptable / Poorの個別ratingは未記録 |
+
+### Mobile Result Maintained
+
+- iPhone ChromeはFolder選択、Google Drive走査、Tree表示まではPassしたが、GPX checkbox、Track表示、touch UIはFailであり、Release 1.0では非対応とする。
+- Android ChromeとiPad Chromeは未確認である。
+- Unit 7ではMobile対応を追加しない。
+
+### Known Limitations and Pending Work
+
+- 大量GPX表示中のWaypoint ONは重くなる。Release 1.0では最適化しない。
+- Mobile UIはRelease 1.0対象外である。
+- VS Code Problems 0件の確認は未実施である。
+- Unit 2と同一条件の数値性能再測定および20%比較はDeferredである。
+
+Chrome / Edge統合受け入れと定性的性能確認に明確な回帰はなく、Release 1.0完了処理へ進行可能と判定する。
+
 ## Performance Acceptance
 
 Post-TreeView-split measurement status: Pending — Windows Chrome / EdgeでUnit 2と同じ手順による実ブラウザ再測定が必要。
