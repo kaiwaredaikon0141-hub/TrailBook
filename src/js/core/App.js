@@ -53,20 +53,15 @@ export default class App {
         this.displayState = new DisplayState();
         this.displayQueue = new GPXDisplayQueue(2);
         this.workspace = null;
-        this.mapArea = null;
         this.currentLibrary = null;
-
-        console.log(`${this.config.appName} v${this.config.version}`);
     }
 
     initialize() {
 
-        console.log("Initializing application...");
         this.createComponents();
         this.createLayout();
         this.configureFolderAccess();
         this.bindEvents();
-        console.log("Application Ready.");
     }
 
     createComponents() {
@@ -85,10 +80,6 @@ export default class App {
 
         this.workspace = document.createElement("main");
         this.workspace.className = "workspace";
-
-        this.mapArea = document.createElement("section");
-        this.mapArea.className = "map";
-        this.mapArea.textContent = "Map Area";
 
         this.treeView.element.querySelector("h3").after(
             this.libraryAccessPanel.element,
@@ -133,8 +124,6 @@ export default class App {
     }
 
     bindEvents() {
-
-        this.eventBus.on("app:ready", () => console.log("Event : app:ready"));
 
         this.eventBus.on("folder:open-requested", () => this.loadLibrary());
 
@@ -475,7 +464,10 @@ export default class App {
             return;
         }
 
-        console.error(`Failed to display GPX: ${path}`, error);
+        console.error(
+            `Failed to display GPX: ${display.fileHandle.name}`,
+            error
+        );
         this.displayState.setError(path, error);
         this.treeView.setDisplayError(path);
         this.updateDisplayStatus();
@@ -540,7 +532,7 @@ export default class App {
                 }
             } catch (error) {
                 console.error(
-                    `Failed to update Waypoints: ${display.path}`,
+                    `Failed to update Waypoints: ${display.fileHandle.name}`,
                     error
                 );
             }

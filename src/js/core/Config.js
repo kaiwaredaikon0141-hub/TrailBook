@@ -4,8 +4,6 @@
 
 const Config = {
 
-    appName: "TrailBook",
-
     version: "0.9.0",
 
     map: {
@@ -41,9 +39,7 @@ const Config = {
             "#6d4c41",
             "#546e7a"
         ]
-    },
-
-    debug: true
+    }
 
 };
 

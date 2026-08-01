@@ -6,6 +6,4 @@ window.addEventListener("DOMContentLoaded", () => {
 
     app.initialize();
 
-    app.eventBus.emit("app:ready");
-
 });

@@ -74,59 +74,6 @@ export default class StatusBar {
     }
 
     /**
-     * Displays a concise GPX parsing error.
-     *
-     * @returns {void}
-     */
-    showGPXError() {
-
-        this.element.textContent = "GPXを解析できませんでした";
-    }
-
-    /**
-     * Displays a GPX loading message.
-     *
-     * @param {string} fileName
-     * @returns {void}
-     */
-    showGPXLoading(fileName) {
-
-        this.element.textContent = `GPXを読み込み中: ${fileName}`;
-    }
-
-    /**
-     * Displays a loaded GPX message.
-     *
-     * @param {string} fileName
-     * @returns {void}
-     */
-    showGPXLoaded(fileName) {
-
-        this.element.textContent = `表示中: ${fileName}`;
-    }
-
-    /**
-     * Displays a file-specific GPX error.
-     *
-     * @param {string} fileName
-     * @returns {void}
-     */
-    showGPXFailed(fileName) {
-
-        this.element.textContent = `GPXを表示できません: ${fileName}`;
-    }
-
-    /**
-     * Restores the ready status.
-     *
-     * @returns {void}
-     */
-    showReady() {
-
-        this.element.textContent = "Ready";
-    }
-
-    /**
      * Displays a map initialization or layer error.
      *
      * @returns {void}

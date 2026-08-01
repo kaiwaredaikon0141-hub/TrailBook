@@ -353,6 +353,53 @@ Android ChromeとiPad Chromeは未確認のまま、対応区分未確定とす�
 - Mobile UIはRelease 1.0対象外である。
 - 大量GPXを表示した状態でWaypointをONにすると、多数のMarker描画により操作が重くなる。大量LibraryではWaypoint OFFを推奨する。
 
+## Unit 5 Release Quality Cleanup
+
+Unit 5 Status: Completed
+Implementation Status: Completed
+Browser Acceptance Status: Completed
+
+- [x] production成功経路の`console.log`を削除する
+- [x] Folder access、GPX display、Map、TreeView、Waypoint更新の診断用`console.error`を維持する
+- [x] GPX診断ログへ相対pathを出さず、file nameだけを使用する
+- [x] 参照のない`Config.debug`を削除する
+- [x] 成功ログ削除後に参照がなくなった`Config.appName`を削除する
+- [x] DOMへ追加されない`App.mapArea`を削除する
+- [x] 参照のないStatusBar旧methodを削除する
+- [x] ログ専用で参照されていた`app:ready` eventを削除する
+- [x] 外部assetへ依存しない`favicon.svg`を追加する
+- [x] Windows Chromeで通常起動・操作時に不要なlog / warningとfavicon 404がないことを確認する
+- [x] Windows Edgeで通常起動・操作時に不要なlog / warningとfavicon 404がないことを確認する
+- [x] 初回、Folder picker、Cancel、空Library、通常Library、GPX、Folder / root一括、Search、Waypoint、Library切り替え、StatusBarの回帰を確認する
+
+### Unit 5 Browser Acceptance
+
+| Test item | Windows Chrome | Windows Edge |
+| --- | --- | --- |
+| 初回起動 | Pass | Pass |
+| favicon表示 | Pass | Pass |
+| favicon 404なし | Pass | Pass |
+| 成功経路`console.log`なし | Pass | Pass |
+| アプリ由来warningなし | Pass | Pass |
+| アプリ由来errorなし | Pass | Pass |
+| Library picker | Pass | Not recorded |
+| Cancel | Pass | Not recorded |
+| 空Library | Pass | Not recorded |
+| 通常Library | Pass | Pass |
+| GPX個別ON / OFF | Pass | Not recorded |
+| Folder / root一括ON / OFF | Pass | Pass — Folder一括 |
+| Search | Pass | Pass |
+| Waypoint | Pass | Not recorded |
+| Library切り替え | Pass | Not recorded |
+| StatusBar | Pass | Pass |
+| `app:ready`削除による起動回帰なし | Pass | Pass |
+
+### Unit 5 Known Limitations
+
+- Mobile UIはRelease 1.0対象外である。
+- 大量GPX表示中のWaypoint ONは操作が重くなる。
+- 参照ゼロ候補のうち変更禁止対象内のAPIはUnit 5で削除していない。
+
 ## Performance Acceptance
 
 Post-TreeView-split measurement status: Pending — Windows Chrome / EdgeでUnit 2と同じ手順による実ブラウザ再測定が必要。
