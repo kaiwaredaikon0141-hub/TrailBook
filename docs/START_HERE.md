@@ -7,7 +7,7 @@ TrailBookの開発を始める人とAIのための入口です。
 - Current Version: `1.1.0`
 - Current Release: Track Selection & Styling
 - Completed: Release 0.1からRelease 1.1
-- Next Release: Release 1.2 Shared Library Settings（Planning / Production not started）
+- Next Release: Release 1.2 Shared Library Settings（Unit 2 Completed）
 - Branch: `main`
 
 Gitの状態は作業開始時に必ず再確認する。
@@ -65,7 +65,7 @@ GPXファイル名、Folder名、相対パスをmetadataから検索する。検
 
 Release 1.1 Track Selection & Stylingは完了している。zoom連動Track線幅、Map / TreeView / Searchの単一選択同期、selected highlight / outline、Folder色と継承、UI設定限定の`localStorage`、Color / Monochrome背景地図表示を実装した。806 GPX Libraryの人間による定性的性能評価はAcceptableで、明確な回帰やUIが固まる操作は確認されていない。数値benchmarkと20%比較は実施していない。
 
-Release 1.2 Shared Library Settingsは次ReleaseとしてPlanning中である。Library root直下の`trailbook.json`へFolder colorsだけを明示保存し、外部Folder同期により共有する設計を確定した。通常openはread-only、JSONがvalidなら共有正本、保存直前のfingerprint差はconflictとして停止する。production実装、GPX書き込み、Google Drive API連携はまだ開始していない。Mobile Viewer UX、Waypoint性能最適化、数値性能再測定、日付表示、vehicle metadata、GPX Editing Foundation、TrackPoint Editing、GPX size reductionなどは`ROADMAP.md`のFuture Candidatesとして扱う。
+Release 1.2 Shared Library Settingsは次Releaseとして進行中である。Unit 2でLibrary root直下の`trailbook.json`を読むread-only loader、strict schema、fingerprint、shared / legacy / Auto precedenceを実装し、Chrome / Edge / Google DriveのBrowser Acceptanceまで完了した。write、permission、save / migration / conflict UI、GPX書き込み、Google Drive API連携はまだ実装していない。Mobile Viewer UX、Waypoint性能最適化、数値性能再測定、日付表示、vehicle metadata、GPX Editing Foundation、TrackPoint Editing、GPX size reductionなどは`ROADMAP.md`のFuture Candidatesとして扱う。
 
 ## Non-Negotiable Rules
 

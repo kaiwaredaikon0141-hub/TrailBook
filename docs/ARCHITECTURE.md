@@ -688,7 +688,19 @@ Release 1.2はLibrary root直下の`trailbook.json`をLibrary固有設定の共�
 3. Auto / GPX relative path hash color
 4. Configの最終fallback色
 
-valid JSONが存在する場合は、その`folderColors` map全体が共有正本である。JSONが空map、または特定Folder keyがないことは明示色なしを意味し、そのFolderについて古いlocalStorage値を混ぜない。JSONとlocalStorageが異なる場合もJSONを優先する。invalid / unsupported JSONではlocalStorageをViewer継続用に利用できるが、invalid fileを自動上書きしない。
+valid JSONが存在する場合は、その`folderColors` map全体が共有正本である。JSONが空map、または特定Folder keyがないことは明示色なしを意味し、そのFolderについて古いlocalStorage値を混ぜない。JSONとlocalStorageが異なる場合もJSONを優先する。invalid / unsupported JSONではlegacy localStorageを混ぜずAutoでViewerを継続し、invalid fileを自動上書きしない。
+
+### Unit 2 Read-only Loader Implementation
+
+Unit 2は`LibrarySettingsRepository`、`LibrarySettingsState`、pureな`SharedSettingsSchema`を実装する。write、readwrite permission、save / migration / reload / conflict UIは実装しない。
+
+- Repositoryはroot `FileSystemDirectoryHandle.getFileHandle("trailbook.json", { create: false })`だけを使用し、子Folder探索やLibrary全体の追加scanを行わない。返されたhandleのnameはcase-sensitiveに再確認する。
+- file上限は1,048,576 bytesとする。exact bytesを`arrayBuffer()`で一度読み、fatal UTF-8 decode、JSON parse、schema validationを行う。raw text / bytesはStateへ渡さない。
+- supported schemaはvalid entryだけを部分採用せず、document全体をfail closedで検証する。orphan relative pathはschema上validとしてsnapshotへ保持し、FolderColorStateへのprojection時だけcurrent Treeに存在するFolderへ限定する。
+- SHA-256は読み込んだexact bytesへ`crypto.subtle.digest`を使用する。利用不能または失敗時もvalid shared JSONを採用し、fingerprintを`null`、errorCodeを`fingerprint-unavailable`として将来の競合検出不能を記録する。
+- Repository resultは`loaded`、`missing`、`invalid`、`read-failed`を区別する。missing、permission denied、取得 / readの一時失敗だけがlegacy fallbackを許可し、malformed、unsupported schema、invalid structure、oversizeは許可しない。
+- `LibrarySettingsState`はsource、status、dirty false、normalized snapshot、fingerprint、lastModified、size、errorCodeを保持する。`beginLoad()`のrequestIdと`App`のLibrary generationを両方確認し、stale resultをState、FolderColorState、Mapへ適用しない。
+- Appはshared settings結果を確定してからFolderColorStateとDisplayStateへ色を投影するため、Track表示が旧色で始まってから再parseされることはない。Library切り替えでは旧snapshotと旧explicit colorsを新しいload結果で置き換える。
 
 ### Responsibilities and Dependencies
 

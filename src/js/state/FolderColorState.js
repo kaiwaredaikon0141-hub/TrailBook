@@ -20,7 +20,11 @@ export default class FolderColorState {
         this.folderPaths = new Set([ROOT_PATH]);
     }
 
-    setActiveLibrary(libraryId, folderPaths = [ROOT_PATH]) {
+    setActiveLibrary(
+        libraryId,
+        folderPaths = [ROOT_PATH],
+        folderColors = undefined
+    ) {
 
         this.activeLibraryId = typeof libraryId === "string"
             ? libraryId
@@ -30,20 +34,22 @@ export default class FolderColorState {
         );
         this.folderPaths.add(ROOT_PATH);
 
-        return this.loadFolderColors();
+        return this.loadFolderColors(folderColors);
     }
 
-    loadFolderColors() {
+    loadFolderColors(folderColors = undefined) {
 
         this.explicitColors.clear();
 
-        if (!this.activeLibraryId || !this.store) {
+        if (!this.activeLibraryId) {
             return 0;
         }
 
-        Object.entries(
-            this.store.getFolderColors(this.activeLibraryId)
-        ).forEach(([folderPath, color]) => {
+        const colors = folderColors === undefined
+            ? this.store?.getFolderColors(this.activeLibraryId) || {}
+            : folderColors || {};
+
+        Object.entries(colors).forEach(([folderPath, color]) => {
             if (this.folderPaths.has(folderPath)) {
                 this.explicitColors.set(folderPath, color);
             }

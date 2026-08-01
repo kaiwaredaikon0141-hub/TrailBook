@@ -11,6 +11,12 @@ const Config = {
         schemaVersion: 1
     },
 
+    sharedLibrarySettings: {
+        fileName: "trailbook.json",
+        schemaVersion: 1,
+        maxFileSizeBytes: 1048576
+    },
+
     map: {
 
         center: {

@@ -10,9 +10,11 @@ import GPXDisplayQueue from "../services/GPXDisplayQueue.js";
 import SearchService from "../services/SearchService.js";
 import TrackStyleService from "../services/TrackStyleService.js";
 import DisplaySettingsStore from "../services/DisplaySettingsStore.js";
+import LibrarySettingsRepository from "../services/LibrarySettingsRepository.js";
 import DisplayState from "../state/DisplayState.js";
 import SelectionState from "../state/SelectionState.js";
 import FolderColorState from "../state/FolderColorState.js";
+import LibrarySettingsState from "../state/LibrarySettingsState.js";
 import { folderPathFromFilePath } from "../utils/PathUtils.js";
 import Toolbar from "../ui/Toolbar.js";
 import TreeView from "../ui/TreeView.js";
@@ -31,6 +33,8 @@ export default class App {
     #refocusTimer = null;
 
     #searchRefreshTimer = null;
+
+    #libraryLoadGeneration = 0;
 
     #displayOptions = {
         showWaypoints: false
@@ -58,6 +62,12 @@ export default class App {
         this.displaySettingsStore = new DisplaySettingsStore(
             this.config.uiSettings
         );
+        this.librarySettingsRepository = new LibrarySettingsRepository(
+            this.config.sharedLibrarySettings
+        );
+        this.librarySettingsState = new LibrarySettingsState({
+            schemaVersion: this.config.sharedLibrarySettings.schemaVersion
+        });
         this.folderColorState = new FolderColorState({
             store: this.displaySettingsStore,
             pathColorResolver: path => this.getPathHashColor(path),
@@ -157,8 +167,8 @@ export default class App {
 
         this.eventBus.on("folder:open-requested", () => this.loadLibrary());
 
-        this.eventBus.on("library:loaded", ({ library }) => {
-            void this.handleLibraryLoaded(library);
+        this.eventBus.on("library:loaded", ({ library, generation }) => {
+            void this.handleLibraryLoaded(library, generation);
         });
 
         this.eventBus.on("library:load-failed", ({ error }) => {
@@ -273,11 +283,13 @@ export default class App {
                 return;
             }
 
+            const generation = ++this.#libraryLoadGeneration;
+
             this.clearSelection("library-switch");
             this.libraryAccessPanel.showLoading(handle.name);
             this.statusBar.showLibraryLoading(handle.name);
             const library = await this.folderScanner.scan(handle);
-            this.eventBus.emit("library:loaded", { library });
+            this.eventBus.emit("library:loaded", { library, generation });
 
         } catch (error) {
             if (error.name === "AbortError") {
@@ -304,7 +316,26 @@ export default class App {
         this.configureFolderAccess();
     }
 
-    async handleLibraryLoaded(library) {
+    async handleLibraryLoaded(
+        library,
+        generation = this.#libraryLoadGeneration
+    ) {
+
+        if (generation !== this.#libraryLoadGeneration) {
+            return false;
+        }
+
+        const settingsRequestId = this.librarySettingsState.beginLoad();
+        const settingsResult = await this.librarySettingsRepository.load(
+            library.rootFolder.handle
+        );
+
+        if (
+            generation !== this.#libraryLoadGeneration ||
+            !this.librarySettingsState.isCurrentRequest(settingsRequestId)
+        ) {
+            return false;
+        }
 
         this.clearSelection("library-switch");
         this.displayQueue.clear();
@@ -316,6 +347,13 @@ export default class App {
         this.displayState.setLibrary(library.rootFolder.handle);
 
         await this.treeView.render(library);
+
+        if (
+            generation !== this.#libraryLoadGeneration ||
+            !this.librarySettingsState.isCurrentRequest(settingsRequestId)
+        ) {
+            return false;
+        }
 
         this.searchService.setEntries(
             library.gpxFileCount === 0
@@ -331,10 +369,20 @@ export default class App {
         const folderPaths = this.treeView.getSearchSourceEntries()
             .filter(entry => entry.kind === "folder")
             .map(entry => entry.path);
+        const legacyFolderColors = this.displaySettingsStore.getFolderColors(
+            this.currentLibraryId
+        );
+
+        this.librarySettingsState.applyLoad(
+            settingsRequestId,
+            settingsResult,
+            legacyFolderColors
+        );
 
         this.folderColorState.setActiveLibrary(
             this.currentLibraryId,
-            folderPaths
+            folderPaths,
+            this.librarySettingsState.getSnapshot().folderColors
         );
         this.updateFolderColorPresentation();
 
@@ -353,6 +401,8 @@ export default class App {
         } else {
             this.libraryAccessPanel.hide();
         }
+
+        return true;
     }
 
     handleSearchQuery(query) {

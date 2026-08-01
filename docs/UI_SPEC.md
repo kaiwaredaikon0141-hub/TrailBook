@@ -770,7 +770,9 @@ Unit 5ではTreeView本体を増やさず、独立したFolder color controlがl
 
 ## Release 1.2 Planned UI — Shared Library Settings
 
-Status: Planning / Production not started
+Status: Planning / Unit 2 Completed
+
+Unit 2 Status: Completed。Unit 2は新しいvisible UIを追加しない。shared JSON、legacy localStorage、Autoのどれを採用した場合も既存Folder color swatch、Track color、selection highlightへ同じFolderColorState projectionを使用する。invalid JSONはlegacy色を混ぜずAuto表示とし、Viewer操作を継続する。source / statusの画面表示はUnit 4で実装する。
 
 通常閲覧とFolder color操作はRelease 1.1のまま維持する。Libraryを開いただけではwrite permissionを要求せず、`trailbook.json`を作成または変更しない。
 

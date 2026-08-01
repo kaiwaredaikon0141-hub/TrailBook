@@ -3,7 +3,7 @@
 Version: 1.2 Planning
 Status: Official
 Current Release: 1.1.0 Track Selection & Styling
-Next Release: 1.2 Shared Library Settings（Planning / Production not started）
+Next Release: 1.2 Shared Library Settings（In progress / Unit 2 Completed）
 
 ## Version Policy
 
@@ -318,7 +318,7 @@ Completed内容:
 
 ## Next Release — Release 1.2 Shared Library Settings
 
-Status: Planning / Production not started
+Status: In progress / Unit 2 Completed
 
 Goal: Folder colorをLibrary root直下の`trailbook.json`へ保存し、同じFolderを開くChrome、Edge、別PC、将来の対応端末でLibrary固有設定を共有できる基盤を作る。TrailBookはGoogle Drive / OneDrive APIや独自cloud syncを実装せず、通常ファイルの同期は外部Folder同期へ委ねる。
 
@@ -356,7 +356,7 @@ Color / Monochrome、Map center / zoom、前回表示Track、selected Track、si
 4. localStorage migration、status UI、manual reload、conflict handling
 5. Chrome / Edge、Google Drive Folder、統合受け入れ、文書、Release finalization
 
-Unit 1はPlanningであり、Unit 2以降のproduction実装は開始していない。
+Unit 1 PlanningとUnit 2 read-only loaderはCompleted。Unit 3以降は開始していない。
 
 ### Out of Scope
 

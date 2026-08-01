@@ -1230,14 +1230,14 @@ Folder identity: current Library内のrelative path。rootは空文字。
 
 Release 1.2 Status: Planning
 Current Release: `1.1.0`
-Production Implementation Status: Not started
+Production Implementation Status: In progress（Unit 2 read-only loader implemented）
 
 ### Unit Status
 
 | Unit | Scope | Status | Depends on |
 | ---: | --- | --- | --- |
 | 1 | Scope、Architecture、Decisions、schema、permission / conflict policy、test plan | Completed | Release 1.1 completed baseline |
-| 2 | read-only loader、schema validation、Library open時の読込、localStorage fallback | Not started | Unit 1 |
+| 2 | read-only loader、schema validation、Library open時の読込、localStorage fallback | Completed | Unit 1 |
 | 3 | readwrite permission、safe writer、explicit save、failure handling | Not started | Unit 2 |
 | 4 | localStorage migration、status UI、manual reload、conflict handling | Not started | Unit 2、3 |
 | 5 | Google Drive Folder、Chrome / Edge、integrated acceptance、documentation、Release finalization | Not started | Unit 2〜4 |
@@ -1346,4 +1346,97 @@ Unit 1 Production Implementation Status: Not started
 - Google Drive等の同期完了、offline freshness、conflict解消をTrailBookは保証しない。
 - orphan pathは自動追従しない。automatic mergeとfield-level mergeは未実装とする。
 - Import / Export、backup、exclusive writer、File System ObserverはFuture Candidateとする。
-- Unit 2以降のproduction implementationとChrome / Edge / Google Drive実機testは未開始である。
+- Unit 2のChrome / Edge / Google Drive実機testはCompleted。Unit 3以降のproduction implementationは未開始である。
+
+### Unit 2 Read-only Loader
+
+Unit 2 Implementation Status: Completed
+Unit 2 Static Test Status: Completed
+Unit 2 Browser Acceptance Status: Completed
+Unit 2 Status: Completed
+Unit 3 Status: Not started
+
+#### Implemented Boundary
+
+- [x] `LibrarySettingsRepository.load(rootHandle)`でroot直下の`trailbook.json`だけを`create: false`で読む
+- [x] exact file name、file kind、1 MiB上限を検証する
+- [x] strict schema version 1、unknown field、dangerous key、path、colorをfail closedで検証する
+- [x] root / nested / Japanese / orphan pathをnormalized prototype-free dictionaryへ保持する
+- [x] exact bytesからSHA-256、lastModified、sizeを取得する
+- [x] fingerprint unavailableでもvalid shared JSONでViewerを継続する
+- [x] shared JSON全体 > missing / temporary read failure時だけlegacy > Autoのprecedenceを適用する
+- [x] malformed / unsupported / invalid / oversizeでlegacyを混ぜない
+- [x] `LibrarySettingsState`へsource、status、dirty false、snapshot、metadata、errorCodeを保持する
+- [x] App generation + State requestIdでstale loadを無視する
+- [x] FolderColorStateへ採用sourceのexplicit colorsだけをloadする
+- [x] write、permission request、migration、save / reload / conflict UIを追加しない
+
+#### Static Results
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| Shared settings test | Pass | 121 assertions |
+| Production module import | Pass | 37 / 37 |
+| Missing import target | Pass | 0 |
+| Circular dependency | Pass | 0 |
+| Config version | Pass | `1.1.0` |
+| DisplaySettingsStore schema | Pass | version 1 unchanged |
+| TreeView size | Pass | 997 lines |
+| App size | Pass | 975 lines |
+| GPX write API | Pass | `createWritable` / readwrite permissionなし |
+
+#### Windows Chrome Browser Acceptance
+
+| Area | Result | Confirmed behavior |
+| --- | --- | --- |
+| Library without JSON | Pass | legacy Folder colorsを反映。legacyなしはAuto。Viewer正常起動 |
+| Valid JSON lookup | Pass | Library root直下だけを読込 |
+| Valid JSON colors | Pass | root、nested、child overrideを反映 |
+| Precedence | Pass | JSONがlegacyより優先。JSONにないFolderへlegacyを混ぜずAuto |
+| Selection projection | Pass | selected Track colorとoutlineへ反映 |
+| Reload / Library switch | Pass | reload後の反映とLibrary切り替えを確認 |
+| Valid empty JSON | Pass | empty `folderColors`はAuto。legacyへfallbackしない |
+| Viewer regression | Pass | zoom width、Track click、highlight、Folder color UI、Monochrome、Search、bulk、Waypoint |
+| Console | Pass | application error、不要なlog / warningなし |
+
+#### Invalid JSON Acceptance
+
+- [x] malformed JSONでもViewerを継続し、legacy色を混ぜない
+- [x] unknown schemaでもViewerを継続し、legacy色を混ぜない
+- [x] invalid pathを含むdocument全体をfail closedとする
+- [x] partially validなFolder colorだけを採用しない
+- [x] invalid JSONを自動修正または書き換えない
+
+#### Google Drive Folder Acceptance
+
+- [x] root直下の`trailbook.json`を読込
+- [x] Folder colorsを反映
+- [x] Library再選択で外部変更を反映
+- [x] offline synced copyを読込
+- [x] Console errorなし
+
+#### Windows Edge Browser Acceptance
+
+- [x] Library without JSON
+- [x] valid JSON読込とFolder color反映
+- [x] malformed JSONでもViewer継続
+- [x] Library切り替え
+- [x] Track selection / highlight
+- [x] Monochrome Map Mode
+- [x] Console errorなし
+
+#### Data Protection Acceptance
+
+- [x] `trailbook.json`を作成または更新しない
+- [x] `trailbook.json`の更新日時を変更しない
+- [x] GPX内容と更新日時を変更しない
+- [x] `createWritable`を使用しない
+- [x] readwrite permissionを要求しない
+
+#### Unit 2 Known Notes
+
+- orphan Folder pathはsnapshotへ保持するが、current Treeに存在しないため適用しない。
+- external変更はLibrary再選択、または将来Unitで追加するReload UIまで自動反映しない。
+- Appは975行である。Unit 3のwrite調停はAppへ直接集約せず、helper責務の抽出を優先する。
+
+Chrome / Edge / Google DriveのBrowser Acceptanceが完了したため、Unit 2をCompletedとする。Unit 3は未開始である。
