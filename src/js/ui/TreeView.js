@@ -820,6 +820,111 @@ export default class TreeView {
             }));
     }
 
+    /**
+     * Returns metadata fields used by Release 0.9 Search.
+     *
+     * @returns {Array<{kind: string, path: string, name: string}>}
+     */
+    getSearchSourceEntries() {
+
+        return [...this.nodeMetadata.values()].map(metadata => ({
+            kind: metadata.kind,
+            path: metadata.path,
+            name: metadata.name
+        }));
+    }
+
+    /**
+     * Returns current display presentation for a Search result.
+     *
+     * @param {string} path
+     * @returns {{checked: boolean, state: string, color: string|null}}
+     */
+    getSearchResultState(path) {
+
+        const metadata = this.nodeMetadata.get(path);
+
+        return {
+            checked: Boolean(metadata?.checked),
+            state: metadata?.state || "idle",
+            color: metadata?.color || null
+        };
+    }
+
+    /**
+     * Reveals and activates a Search result through existing Tree behavior.
+     *
+     * @param {string} path
+     * @returns {boolean}
+     */
+    activateSearchResult(path) {
+
+        const metadata = this.nodeMetadata.get(path);
+
+        if (!metadata) {
+            return false;
+        }
+
+        this.#expandAncestors(path);
+
+        if (
+            metadata.kind === "folder" &&
+            !this.expandedPaths.has(path)
+        ) {
+            this.expandFolder(path);
+        }
+
+        this.focusPath(path, true);
+
+        if (metadata.kind === "file") {
+            this.selectFile(metadata.model);
+        }
+
+        return true;
+    }
+
+    /**
+     * Connects a Search checkbox to the existing GPX display flow.
+     *
+     * @param {string} path
+     * @param {boolean} checked
+     * @returns {boolean}
+     */
+    toggleSearchResultDisplay(path, checked) {
+
+        const metadata = this.nodeMetadata.get(path);
+
+        if (!metadata || metadata.kind !== "file") {
+            return false;
+        }
+
+        this.setDisplayChecked(path, checked);
+        this.eventBus.emit("gpx:display-toggled", {
+            path,
+            fileHandle: metadata.model,
+            checked
+        });
+
+        return true;
+    }
+
+    #expandAncestors(path) {
+
+        const ancestors = [];
+        let currentPath = this.parentPath(path);
+
+        while (currentPath) {
+            ancestors.unshift(currentPath);
+            currentPath = this.parentPath(currentPath);
+        }
+
+        ancestors.forEach(ancestorPath => {
+            if (!this.expandedPaths.has(ancestorPath)) {
+                this.expandFolder(ancestorPath);
+            }
+        });
+    }
+
     clearSelection() {
 
         this.selectedFilePath = null;

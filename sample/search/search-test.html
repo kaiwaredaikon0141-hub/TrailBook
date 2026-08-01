@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>TrailBook Search Test</title>
+    <link rel="stylesheet" href="../../src/css/base.css">
+    <link rel="stylesheet" href="../../src/css/layout.css">
+    <link rel="stylesheet" href="../../src/css/theme.css">
+    <style>
+        body { height: 100vh; }
+        #test-app { height: 100%; display: grid; grid-template-columns: 320px 1fr; }
+        .test-panel { padding: 16px; overflow: auto; }
+        .test-pass { color: #16794b; }
+        .test-fail { color: #b42318; }
+    </style>
+</head>
+<body>
+    <main id="test-app">
+        <section id="tree-host"></section>
+        <section class="test-panel">
+            <h1>Search Release 0.9 Test</h1>
+            <p>本番のSearchService、SearchView、TreeViewを使用します。</p>
+            <ol id="test-results"></ol>
+        </section>
+    </main>
+    <script type="module">
+        import EventBus from "../../src/js/core/EventBus.js";
+        import Folder from "../../src/js/models/Folder.js";
+        import Library from "../../src/js/models/Library.js";
+        import SearchService from "../../src/js/services/SearchService.js";
+        import SearchView from "../../src/js/ui/SearchView.js";
+        import TreeView from "../../src/js/ui/TreeView.js";
+
+        const GPX_COUNT = 806;
+        const wait = milliseconds => new Promise(resolve => {
+            setTimeout(resolve, milliseconds);
+        });
+        const root = new Folder("test-root", { name: "test-root" });
+        const archive = new Folder("Archive", { name: "Archive" });
+        const tokyo = new Folder("Tokyo", { name: "Tokyo" });
+        const emptyTarget = new Folder("Empty Target", { name: "Empty Target" });
+        const bus = new EventBus();
+        const treeView = new TreeView(bus);
+        const searchView = new SearchView(bus);
+        const searchService = new SearchService();
+        const testResults = document.getElementById("test-results");
+        const checks = [];
+        const events = {
+            activated: 0,
+            displayToggled: 0,
+            folderToggled: 0,
+            queryChanged: 0,
+            selected: 0
+        };
+
+        tokyo.gpxFiles.push({ name: "Morning Ride.gpx" });
+        archive.folders.push(tokyo, emptyTarget);
+        archive.gpxFiles.push({ name: "Archive Loop.gpx" });
+        root.folders.push(archive);
+        root.gpxFiles.push({ name: "Weekend.gpx" });
+
+        for (let index = 0; index < GPX_COUNT - 3; index += 1) {
+            root.gpxFiles.push({
+                name: index === 0
+                    ? "ＡＢＣ Track.gpx"
+                    : `Track-${String(index).padStart(4, "0")}.gpx`
+            });
+        }
+
+        treeView.element.querySelector("h3").after(searchView.element);
+        document.getElementById("tree-host").append(treeView.element);
+
+        const check = (label, passed) => checks.push({ label, passed });
+        const decorateResults = searchResult => ({
+            totalCount: searchResult.totalCount,
+            results: searchResult.results.map(entry => ({
+                ...entry,
+                ...treeView.getSearchResultState(entry.path)
+            }))
+        });
+        const renderQuery = query => {
+            searchView.showResults(
+                decorateResults(searchService.search(query)),
+                query
+            );
+        };
+        const renderActiveQuery = () => {
+            const query = searchView.getActiveQuery();
+
+            if (query) {
+                renderQuery(query);
+            }
+        };
+        const inputQuery = async query => {
+            searchView.input.value = query;
+            searchView.input.dispatchEvent(new Event("input", { bubbles: true }));
+            await wait(180);
+        };
+        const resultActions = () => [
+            ...searchView.resultList.querySelectorAll(".search-result-action")
+        ];
+
+        bus.on("search:query-changed", ({ query }) => {
+            events.queryChanged += 1;
+
+            if (query) {
+                renderQuery(query);
+            }
+        });
+        bus.on("search:result-activated", ({ path }) => {
+            events.activated += 1;
+            treeView.activateSearchResult(path);
+        });
+        bus.on("search:gpx-display-toggled", ({ path, checked }) => {
+            treeView.toggleSearchResultDisplay(path, checked);
+        });
+        bus.on("gpx:selected", () => {
+            events.selected += 1;
+        });
+        bus.on("gpx:display-toggled", () => {
+            events.displayToggled += 1;
+            renderActiveQuery();
+        });
+        bus.on("folder:display-toggled", () => {
+            events.folderToggled += 1;
+            renderActiveQuery();
+        });
+
+        await treeView.render(new Library("test-root", root, 4, GPX_COUNT));
+        searchService.setEntries(treeView.getSearchSourceEntries());
+        searchView.setAvailable(true);
+
+        const nfkcResult = searchService.search("abc");
+        const caseResult = searchService.search("MORNING RIDE");
+        const partialResult = searchService.search("ning ri");
+        const pathResult = searchService.search("archive/tokyo");
+        const rankedResult = searchService.search("tokyo");
+        const allResult = searchService.search(".gpx");
+        const futureFields = [
+            "displayName",
+            "recordedAt",
+            "originalFileName",
+            "trackName",
+            "vehicleId",
+            "vehicleName",
+            "vehicleType",
+            "vehicleColor"
+        ];
+
+        check("NFKC正規化", nfkcResult.results[0]?.name === "ＡＢＣ Track.gpx");
+        check("大文字小文字を区別しない", caseResult.totalCount === 1);
+        check("名前の部分一致", partialResult.totalCount === 1);
+        check("名前の前方一致をpath一致より優先", rankedResult.results[0]?.name === "Tokyo");
+        check("相対path一致", pathResult.results.some(entry => entry.name === "Morning Ride.gpx"));
+        check("0件", searchService.search("not-found-query").totalCount === 0);
+        check("totalCount 806件", allResult.totalCount === GPX_COUNT);
+        check("表示結果100件上限", allResult.results.length === 100);
+        check("将来fieldをinstance生成しない", futureFields.every(field => !(field in caseResult.results[0])));
+
+        const debounceBaseline = events.queryChanged;
+        searchView.input.value = "M";
+        searchView.input.dispatchEvent(new Event("input", { bubbles: true }));
+        await wait(40);
+        searchView.input.value = "Mo";
+        searchView.input.dispatchEvent(new Event("input", { bubbles: true }));
+        await wait(40);
+        searchView.input.value = "Morning";
+        const debounceStartedAt = performance.now();
+        searchView.input.dispatchEvent(new Event("input", { bubbles: true }));
+        await wait(100);
+        check("150ms前は検索を実行しない", events.queryChanged === debounceBaseline);
+        await wait(80);
+        check("150ms debounce後に1回だけ検索", events.queryChanged === debounceBaseline + 1 && performance.now() - debounceStartedAt >= 150);
+        const emptyQueryBaseline = events.queryChanged;
+        searchView.input.value = "Weekend";
+        searchView.input.dispatchEvent(new Event("input", { bubbles: true }));
+        searchView.input.value = "";
+        searchView.input.dispatchEvent(new Event("input", { bubbles: true }));
+        check("空queryは即時解除", events.queryChanged === emptyQueryBaseline + 1 && searchView.resultList.hidden);
+        await wait(180);
+        check("空queryで保留timerを破棄", events.queryChanged === emptyQueryBaseline + 1);
+
+        const selectionBeforeQuery = treeView.selectedFilePath;
+        const displayBeforeQuery = events.displayToggled;
+        await inputQuery("Morning Ride");
+        check("queryだけではFolderを展開しない", !treeView.expandedPaths.has("Archive"));
+        check("queryだけでは主選択・表示を変更しない", treeView.selectedFilePath === selectionBeforeQuery && events.displayToggled === displayBeforeQuery);
+        const morningAction = resultActions()[0];
+        check("結果activateはnative button", morningAction.tagName === "BUTTON" && morningAction.type === "button");
+        morningAction.click();
+        check("GPX activateで祖先を展開", treeView.expandedPaths.has("Archive") && treeView.expandedPaths.has("Archive/Tokyo"));
+        check("DOM未生成GPXをreveal", Boolean(treeView.element.querySelector('[data-tree-path="Archive/Tokyo/Morning Ride.gpx"]')));
+        check("GPX activateをselectFileへ接続", treeView.selectedFilePath === "Archive/Tokyo/Morning Ride.gpx" && events.selected === 1);
+        check("GPX自身はexpandedPathsへ入らない", !treeView.expandedPaths.has("Archive/Tokyo/Morning Ride.gpx"));
+
+        treeView.collapseFolder("Archive/Tokyo");
+        treeView.collapseFolder("Archive");
+        await inputQuery("Empty Target");
+        resultActions()[0].click();
+        check("Folder activateで祖先を展開", treeView.expandedPaths.has("Archive"));
+        check("Folder activateで対象Folderも展開", treeView.expandedPaths.has("Archive/Empty Target"));
+        check("Folder activateで対象へfocus", treeView.focusedPath === "Archive/Empty Target");
+
+        treeView.selectFile(treeView.fileHandlesByPath.get("Weekend.gpx"));
+        await inputQuery("Morning Ride");
+        const activationBeforeCheckbox = events.activated;
+        const displayBeforeCheckbox = events.displayToggled;
+        let checkbox = searchView.resultList.querySelector(".search-result-checkbox");
+        check("GPX結果はnative checkbox", checkbox.tagName === "INPUT" && checkbox.type === "checkbox");
+        checkbox.click();
+        check("GPX checkboxを既存表示eventへ接続", events.displayToggled === displayBeforeCheckbox + 1);
+        check("checkboxで主選択を変更しない", treeView.selectedFilePath === "Weekend.gpx");
+        check("checkboxとactivate eventを分離", events.activated === activationBeforeCheckbox);
+        checkbox = searchView.resultList.querySelector(".search-result-checkbox");
+        check("検索結果checkedを同期", checkbox.checked === true);
+
+        treeView.setDisplayLoading("Archive/Tokyo/Morning Ride.gpx");
+        renderActiveQuery();
+        check("loadingを同期", searchView.resultList.firstElementChild.classList.contains("is-loading"));
+        treeView.setDisplayLoaded("Archive/Tokyo/Morning Ride.gpx", "#1e88e5");
+        renderActiveQuery();
+        check("loadedとcolorを同期", searchView.resultList.firstElementChild.classList.contains("is-loaded") && searchView.resultList.querySelector(".search-result-color").style.backgroundColor !== "");
+        treeView.setDisplayError("Archive/Tokyo/Morning Ride.gpx");
+        renderActiveQuery();
+        check("errorとuncheckedを同期", searchView.resultList.firstElementChild.classList.contains("is-error") && !searchView.resultList.querySelector(".search-result-checkbox").checked);
+        treeView.clearDisplayStates();
+        renderActiveQuery();
+        check("表示クリアを同期", searchView.resultList.firstElementChild.classList.contains("is-idle"));
+
+        await inputQuery("Track-");
+        const actions = resultActions();
+        searchView.input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+        check("input ArrowDown", document.activeElement === actions[0]);
+        actions[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+        check("結果ArrowDown", document.activeElement === actions[1]);
+        actions[1].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+        check("結果ArrowUp", document.activeElement === actions[0]);
+        actions[0].dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
+        check("結果End", document.activeElement === actions[actions.length - 1]);
+        document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+        check("結果Home", document.activeElement === actions[0]);
+
+        await inputQuery("Morning Ride");
+        const rowAction = resultActions()[0];
+        const rowDisplayBefore = events.displayToggled;
+        rowAction.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+        check("GPX行Spaceで1回toggle", events.displayToggled === rowDisplayBefore + 1);
+        await inputQuery("Empty Target");
+        const folderAction = resultActions()[0];
+        const folderActivationBefore = events.activated;
+        const folderDisplayBefore = events.displayToggled;
+        folderAction.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+        check("Folder行Spaceは無効", events.activated === folderActivationBefore && events.displayToggled === folderDisplayBefore);
+
+        folderAction.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        check("結果Escapeでquery解除してinput focus", searchView.input.value === "" && document.activeElement === searchView.input && searchView.resultList.hidden);
+
+        await inputQuery("Weekend");
+        searchView.input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        check("input Escapeでquery解除", searchView.input.value === "" && searchView.resultList.hidden);
+
+        const destroyBaseline = events.queryChanged;
+        searchView.input.value = "Morning";
+        searchView.input.dispatchEvent(new Event("input", { bubbles: true }));
+        searchView.destroy();
+        await wait(180);
+        check("SearchView破棄で保留timerを破棄", events.queryChanged === destroyBaseline);
+
+        checks.forEach(({ label, passed }) => {
+            const item = document.createElement("li");
+            item.className = passed ? "test-pass" : "test-fail";
+            item.textContent = `${passed ? "PASS" : "FAIL"}: ${label}`;
+            testResults.append(item);
+        });
+
+        document.body.dataset.testStatus = checks.every(checkResult => {
+            return checkResult.passed;
+        }) ? "passed" : "failed";
+        window.searchTest = {
+            checks,
+            events,
+            searchService,
+            searchView,
+            treeView
+        };
+    </script>
+</body>
+</html>

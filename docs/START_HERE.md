@@ -4,13 +4,12 @@ TrailBookの開発を始める人とAIのための入口です。
 
 ## Current Status
 
-- Current Release: `v0.8.0` Waypoint Display Option
-- Completed: Release 0.1からRelease 0.8
-- Next Release: Release 0.9 Search
+- Current Release: `v0.9.0` Search
+- Completed: Release 0.1からRelease 0.9
+- Next Release: Release 1.0 Official
 - Branch: `main`
-- Baseline at the start of Release 0.9 planning: `main` and `origin/main` are aligned, working tree is clean
 
-Gitの状態は作業開始時に必ず再確認する。上記のGit状態はRelease 0.9設計開始時点の記録であり、将来の状態を保証するものではない。
+Gitの状態は作業開始時に必ず再確認する。
 
 ## What is TrailBook?
 
@@ -27,7 +26,7 @@ GPXを独自形式へ取り込むのではなく、ユーザーのGPX資産を�
 3. `ARCHITECTURE.md` — 現在の責務分割とデータフロー
 4. `CODING_RULES.md` — 実装規約
 5. `ROADMAP.md` — 完了Releaseと次Release
-6. `UI_SPEC.md` — Release 0.4から0.8までの確定UI仕様
+6. `UI_SPEC.md` — Release 0.4から0.9までの確定UI仕様
 7. `DECISIONS.md` — 採用済み設計判断と理由
 8. `AI_GUIDE.md` — AIとの開発手順
 9. `CONTRIBUTING.md` — 作業規約
@@ -45,14 +44,17 @@ GPXを独自形式へ取り込むのではなく、ユーザーのGPX資産を�
 - `LayerManager`はpathごとにTrack LayerGroupとWaypoint LayerGroupを保持する。
 - Folder checkboxはDOMの有無に依存せず、Model上の子孫GPXを一括表示する。
 - Waypoint表示はセッション設定で、初期値はOFF。Track Boundsには含めない。
+- `SearchService`はTreeView metadataを検索し、総一致件数と先頭100件を返す。
+- `SearchView`は検索入力、結果表示、ARIAとキーボード操作を担当する。
+- `SearchEntry`は`kind`、`path`、`name`だけを保持し、FileHandleやGPX内容を持たない。
 
-## Release 0.9 Boundary
+## Release 0.9 Completed Scope
 
-次のReleaseはSearchである。
+Release 0.9 Searchは完了している。
 
-Release 0.9では、GPXファイル名、Folder名、相対パスをmetadataから検索する。検索のためにGPX内容を解析せず、表示Queueや解析cache、MapViewへ影響させない。
+GPXファイル名、Folder名、相対パスをmetadataから検索する。検索のためにGPX内容を解析せず、query入力だけでは表示Queue、解析cache、主選択、表示状態、Mapへ影響させない。
 
-検索機能の詳細な範囲と将来拡張境界は`ROADMAP.md`を正本とする。
+次のReleaseはRelease 1.0 Officialである。Release範囲と将来拡張境界は`ROADMAP.md`を正本とする。
 
 ## Non-Negotiable Rules
 

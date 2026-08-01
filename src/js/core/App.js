@@ -4,9 +4,11 @@ import FolderScanner, { pickFolder } from "../services/FolderScanner.js";
 import GPXLoader from "../services/GPXLoader.js";
 import GPXParser from "../services/GPXParser.js";
 import GPXDisplayQueue from "../services/GPXDisplayQueue.js";
+import SearchService from "../services/SearchService.js";
 import DisplayState from "../state/DisplayState.js";
 import Toolbar from "../ui/Toolbar.js";
 import TreeView from "../ui/TreeView.js";
+import SearchView from "../ui/SearchView.js";
 import StatusBar from "../ui/StatusBar.js";
 import MapView from "../ui/MapView.js";
 
@@ -24,6 +26,8 @@ export default class App {
 
     #refocusTimer = null;
 
+    #searchRefreshTimer = null;
+
     #displayOptions = {
         showWaypoints: false
     };
@@ -34,11 +38,13 @@ export default class App {
         this.eventBus = new EventBus();
         this.toolbar = null;
         this.treeView = null;
+        this.searchView = null;
         this.statusBar = null;
         this.mapView = null;
         this.folderScanner = new FolderScanner();
         this.gpxLoader = new GPXLoader();
         this.gpxParser = new GPXParser();
+        this.searchService = new SearchService();
         this.displayState = new DisplayState();
         this.displayQueue = new GPXDisplayQueue(2);
         this.workspace = null;
@@ -60,6 +66,7 @@ export default class App {
 
         this.toolbar = new Toolbar(this.config.version);
         this.treeView = new TreeView(this.eventBus);
+        this.searchView = new SearchView(this.eventBus);
         this.statusBar = new StatusBar();
         this.mapView = new MapView(this.config, this.eventBus);
     }
@@ -74,6 +81,10 @@ export default class App {
         this.mapArea = document.createElement("section");
         this.mapArea.className = "map";
         this.mapArea.textContent = "Map Area";
+
+        this.treeView.element.querySelector("h3").after(
+            this.searchView.element
+        );
 
         this.workspace.append(this.treeView.element, this.mapView.element);
 
@@ -109,6 +120,21 @@ export default class App {
 
         this.eventBus.on("folder:display-toggled", data => {
             this.handleFolderDisplayToggled(data);
+        });
+
+        this.eventBus.on("search:query-changed", ({ query }) => {
+            this.handleSearchQuery(query);
+        });
+
+        this.eventBus.on("search:result-activated", ({ path }) => {
+            this.treeView.activateSearchResult(path);
+        });
+
+        this.eventBus.on("search:gpx-display-toggled", data => {
+            this.treeView.toggleSearchResultDisplay(
+                data.path,
+                data.checked
+            );
         });
 
         this.eventBus.on("map:clear-requested", () => this.clearPresentation());
@@ -155,11 +181,19 @@ export default class App {
     async handleLibraryLoaded(library) {
 
         this.displayQueue.clear();
+        clearTimeout(this.#searchRefreshTimer);
+        this.searchService.clear();
+        this.searchView.setAvailable(false);
         this.mapView.clear();
         this.mapView.resetView();
         this.displayState.setLibrary(library.rootFolder.handle);
 
         await this.treeView.render(library);
+
+        this.searchService.setEntries(
+            this.treeView.getSearchSourceEntries()
+        );
+        this.searchView.setAvailable(true);
 
         this.treeView.getFileEntries().forEach(({ path, fileHandle }) => {
             this.displayState.registerFile(
@@ -170,6 +204,32 @@ export default class App {
         });
 
         this.statusBar.showLibraryLoaded(library);
+    }
+
+    handleSearchQuery(query) {
+
+        const searchResult = this.searchService.search(query);
+        const results = searchResult.results.map(entry => ({
+            ...entry,
+            ...this.treeView.getSearchResultState(entry.path)
+        }));
+
+        this.searchView.showResults(
+            { totalCount: searchResult.totalCount, results },
+            query
+        );
+    }
+
+    scheduleSearchRefresh() {
+
+        clearTimeout(this.#searchRefreshTimer);
+        this.#searchRefreshTimer = setTimeout(() => {
+            const query = this.searchView.getActiveQuery();
+
+            if (query) {
+                this.handleSearchQuery(query);
+            }
+        }, 0);
     }
 
     handleGPXSelected({ path, fileHandle }) {
@@ -249,6 +309,7 @@ export default class App {
             );
             this.scheduleRefocus();
             this.updateDisplayStatus();
+            this.scheduleSearchRefresh();
             return;
         }
 
@@ -259,6 +320,7 @@ export default class App {
         this.displayState.setLoading(path, requestId);
         this.treeView.setDisplayLoading(path);
         this.updateDisplayStatus();
+        this.scheduleSearchRefresh();
 
         this.displayQueue.enqueue({
             path,
@@ -304,6 +366,7 @@ export default class App {
         if (!display.checked) {
             this.displayState.setIdle(path);
             this.treeView.setDisplayIdle(path);
+            this.scheduleSearchRefresh();
             return;
         }
 
@@ -317,6 +380,7 @@ export default class App {
         );
         this.scheduleRefocus();
         this.updateDisplayStatus();
+        this.scheduleSearchRefresh();
     }
 
     handleDisplayFailed(path, error, generation, requestId) {
@@ -337,6 +401,7 @@ export default class App {
         this.treeView.setDisplayError(path);
         this.updateDisplayStatus();
         this.statusBar.showDisplayError(display.fileHandle.name);
+        this.scheduleSearchRefresh();
     }
 
     stopDisplay(path) {
@@ -358,6 +423,7 @@ export default class App {
 
         this.scheduleRefocus();
         this.updateDisplayStatus();
+        this.scheduleSearchRefresh();
     }
 
     clearPresentation() {
@@ -369,6 +435,7 @@ export default class App {
         this.treeView.clearDisplayStates();
         this.scheduleRefocus();
         this.updateDisplayStatus();
+        this.scheduleSearchRefresh();
     }
 
     setWaypointVisibility(visible) {

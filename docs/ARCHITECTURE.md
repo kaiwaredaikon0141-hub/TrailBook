@@ -100,21 +100,24 @@ src/js/
 ├─ ui/
 │  ├─ Toolbar.js
 │  ├─ TreeView.js
+│  ├─ SearchView.js
 │  ├─ MapView.js
 │  └─ StatusBar.js
 ├─ services/
 │  ├─ FolderScanner.js
 │  ├─ GPXLoader.js
 │  ├─ GPXParser.js
-│  └─ GPXDisplayQueue.js
+│  ├─ GPXDisplayQueue.js
+│  └─ SearchService.js
 ├─ state/
 │  └─ DisplayState.js
 ├─ map/
 │  └─ LayerManager.js
 └─ models/
+   └─ SearchEntry.js
 ```
 
-将来のSearchは責務に応じて`search/`または小さなServiceとして追加できるが、Release 0.9の設計承認前に構造を固定しない。
+Release 0.9 Searchは責務別構造を維持し、入力と結果表示を`SearchView`、metadata検索を`SearchService`、結果契約を`SearchEntry`へ分離する。
 
 ## App — Application Coordinator
 
@@ -125,6 +128,7 @@ Responsibilities:
 - Component生成とLayout構築
 - EventBusの接続
 - Folder選択とLibrary読込の調停
+- Search queryと結果選択のEvent調停
 - GPXの主選択を表す非永続Presentation State
 - `DisplayState`と`GPXDisplayQueue`の調停
 - GPX個別表示とFolder一括表示の開始・停止
@@ -154,6 +158,9 @@ Responsibilities:
 - Folder checkboxのchecked、indeterminate、disabled集約
 - DOM未生成の子孫を含むFolder Model走査
 - loading、loaded、error、表示色のUI反映
+- Search用source metadataの提供
+- Search結果activate時の必要Folder展開、対象行focus、既存主選択への接続
+- Search結果checkboxから既存GPX表示toggleへの接続
 
 主選択は`aria-selected`、表示状態はnative checkboxで表す。GPX行の選択だけで表示をON/OFFしない。
 
@@ -269,6 +276,10 @@ BrowserのDirectoryHandleを再帰走査し、LibraryとFolder Modelを生成す
 
 GPX textをTrack、TrackSegment、TrackPoint、Waypoint、Metadataへ変換する。UIとLeafletを知らない。
 
+### SearchService
+
+TreeViewから受け取ったFolder名、GPXファイル名、相対pathを正規化したsession indexとして保持し、総一致件数と先頭100件を返す。FileHandle、GPX内容、解析cache、Queue、DOM、Mapを扱わない。
+
 ## Models
 
 Modelはデータ構造だけを保持し、UI状態とLeaflet Layerを保持しない。
@@ -280,8 +291,11 @@ Modelはデータ構造だけを保持し、UI状態とLeaflet Layerを保持し
 - TrackSegment
 - TrackPoint
 - Waypoint
+- SearchEntry
 
 Folder構造とGPXが正本であり、解析結果をLibrary Modelへ永続化しない。
+
+`SearchEntry`は`kind`、`path`、`name`だけをRelease 0.9の実体fieldとして保持する。`displayName`、`recordedAt`、`originalFileName`、`trackName`、`vehicleId`、`vehicleName`、`vehicleType`、`vehicleColor`は将来候補として文書とJSDocにだけ残し、Release 0.9ではinstance生成、検索、解析、表示を行わない。FileSystemFileHandleも保持しない。
 
 ## Event Flow
 
@@ -338,11 +352,44 @@ Waypoint checkbox
   -> LayerManager adds/removes Waypoint LayerGroups
 ```
 
+### Search
+
+```text
+SearchView query
+  -> search:query-changed
+  -> App / SearchService
+  -> SearchView results
+
+Folder result activate
+  -> search:result-activated
+  -> App / TreeView
+  -> expand ancestors and target Folder
+  -> focus target Folder
+
+GPX result activate
+  -> search:result-activated
+  -> App / TreeView
+  -> expand ancestors and focus target GPX
+  -> existing selectFile / gpx:selected flow
+  -> displayed GPX: refocusGPX
+  -> hidden GPX: Map unchanged
+
+GPX result checkbox
+  -> search:gpx-display-toggled
+  -> App / TreeView metadata lookup
+  -> existing gpx:display-toggled flow
+```
+
+Query入力だけではGPX解析、Queue投入、解析cache追加、display checkbox、主選択、Map表示を変更しない。
+
+Result activateとcheckboxはquery入力から分離する。GPX activateは主選択だけを既存処理へ接続し、自動的に表示ONにしない。GPX checkboxは既存表示ON/OFF処理へ接続するが主選択を変更せず、result activateを発火させない。
+
 ## Object Lifetime
 
 - App、EventBus、UI components: application lifetime
 - Library、Tree metadata、DisplayState registrations: current Library lifetime
 - Parsed result cache: current Library session、最大100件
+- Search index and SearchEntry: current Library session
 - Display queue request: request completionまたは無効化まで
 - Track LayerGroup: 対象GPXの表示中だけ
 - Waypoint LayerGroup: 対象GPXが表示中かつWaypoint optionがONの間だけ

@@ -2,8 +2,8 @@
 
 Version: 1.1
 Status: Official
-Current Release: 0.8.0
-Next Release: 0.9 Search
+Current Release: 0.9.0
+Next Release: 1.0 Official
 
 ## Version Policy
 
@@ -137,11 +137,9 @@ Goal: Waypoint表示をユーザーがセッション中にON/OFFできるよう
 
 Done: GPXを再解析せず、表示中GPXのWaypointだけをON/OFFできる。
 
-## Next Release
-
 ### Release 0.9 — Search
 
-Status: Next
+Status: Completed
 
 Goal: 大量GPXライブラリから、GPXファイル名、Folder名、相対パスで目的の項目を検索する。
 
@@ -185,7 +183,11 @@ Done Definition:
 - `vehicleType`
 - `vehicleColor`
 
-## Release 1.0 — Official
+## Next Release
+
+### Release 1.0 — Official
+
+Status: Next
 
 Goal: 正式版。
 

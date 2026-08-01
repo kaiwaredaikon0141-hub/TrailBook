@@ -1,10 +1,10 @@
-# TrailBook Release 0.4 UI Specification
+# TrailBook UI Specification
 
-Version : 1.0
-Status  : Proposed for implementation
+Version : 1.1
+Status  : Implemented through Release 0.9
 Depends : PROJECT.md, ARCHITECTURE.md, ROADMAP.md
 
-Release 0.5 TreeView仕様は本書末尾に追記する。
+Release 0.5からRelease 0.9までの追加仕様は本書末尾に追記する。
 
 ---
 
@@ -547,3 +547,52 @@ Release 0.8では、Map toolbarのnative checkboxでWaypoint表示を切り替�
 - Library切り替えではLayerとcacheを破棄するが、設定値はセッション中維持する
 - Waypoint件数や設定状態はStatusBarへ表示しない
 - Waypoint個別設定、編集、Marker色変更、clustering、永続保存は対象外とする
+
+# 19. Release 0.9 Search
+
+Release 0.9では、TreeViewが保持するmetadataからGPXファイル名、Folder名、相対パスを検索する。
+
+## Search input and results
+
+- inputは`type="search"`とし、150ms debounce後に検索する
+- 空queryでは結果を即時に解除する
+- NFKC正規化後に大文字小文字を区別せず部分一致検索する
+- 名前の完全一致、名前の前方一致、名前の部分一致、path一致の順に優先する
+- 同順位はpathの`localeCompare`順とする
+- 総一致件数を表示し、結果DOMは先頭100件まで生成する
+- 検索だけではGPX内容を解析せず、Queue、解析cache、主選択、表示状態、Mapを変更しない
+- DOM未生成項目もpathベースmetadataから検索する
+
+## Result activation
+
+- Folder結果は必要な祖先と対象Folder自身を展開し、対象行へfocusする
+- GPX結果は必要な祖先だけを展開し、対象行へfocusして既存の主選択処理へ接続する
+- 表示中GPXのactivateは対象GPXへ個別refocusする
+- 非表示GPXのactivateはMapを変更せず、自動的に表示ONにしない
+- 検索解除では検索前のTree展開状態へ戻さない
+
+## GPX result checkbox
+
+- GPX結果にはnative checkboxを表示する
+- checkboxは既存のGPX個別表示ON/OFF処理へ接続する
+- checkbox操作では主選択とresult activateを変更・発火しない
+- checked、loading、loaded、error、表示色は既存TreeViewとDisplayStateの状態へ同期する
+- Folder一括、root一括、表示クリア、Library切り替え後も検索結果を現行状態へ同期する
+
+## Keyboard and accessibility
+
+- inputではEscapeでquery解除、ArrowDownで先頭結果へfocusする
+- 結果ではArrowUp、ArrowDown、Home、Endでfocusを移動する
+- Enterで結果をactivateし、Escapeでqueryを解除してinputへfocusする
+- GPX結果行のSpaceは表示を1回だけtoggleし、Folder結果行のSpaceは何もしない
+- checkboxへ直接focusした場合はnative Space操作を使用し、結果行handlerで二重toggleしない
+- 結果行はroving tabindexで管理する
+- 結果件数は`aria-live="polite"`で通知する
+- Folder、GPX、result activate、checkboxのaccessible nameを区別する
+
+## Release boundary
+
+- `SearchEntry`の実体fieldは`kind`、`path`、`name`だけとする
+- `FileSystemFileHandle`を`SearchEntry`または検索結果DOMへ保持しない
+- 日付、Track名、車両metadata、GPX内容検索を実装しない
+- MapView、LayerManager、GPXParser、GPXDisplayQueueの責務を変更しない

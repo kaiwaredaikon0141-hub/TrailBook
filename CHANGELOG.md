@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.9.0
+
+Released: 2026-08-01
+
+### Added
+
+- Metadata-only Search for GPX file names, Folder names, and relative paths
+- Search result navigation into lazily generated TreeView branches
+- GPX display checkboxes synchronized with existing display state
+- Keyboard-accessible Search results with a 150ms debounce and 100-result limit
+
 ## v0.8.0
 
 Released: 2026-08-01
