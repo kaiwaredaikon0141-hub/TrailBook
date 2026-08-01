@@ -10,6 +10,7 @@ import GPXDisplayQueue from "../services/GPXDisplayQueue.js";
 import SearchService from "../services/SearchService.js";
 import TrackStyleService from "../services/TrackStyleService.js";
 import DisplayState from "../state/DisplayState.js";
+import SelectionState from "../state/SelectionState.js";
 import Toolbar from "../ui/Toolbar.js";
 import TreeView from "../ui/TreeView.js";
 import SearchView from "../ui/SearchView.js";
@@ -21,13 +22,6 @@ import MapView from "../ui/MapView.js";
  * TrailBook application coordinator.
  */
 export default class App {
-
-    #presentationState = {
-        selectedFileHandle: null,
-        selectedFileName: null,
-        selectedFilePath: null,
-        status: "idle"
-    };
 
     #refocusTimer = null;
 
@@ -55,6 +49,7 @@ export default class App {
             this.config.map.trackStyle
         );
         this.displayState = new DisplayState();
+        this.selectionState = new SelectionState();
         this.displayQueue = new GPXDisplayQueue(2);
         this.currentTrackZoomBucket = this.trackStyleService.getZoomBucket(
             this.config.map.initialZoom
@@ -151,8 +146,12 @@ export default class App {
             this.statusBar.showError();
         });
 
-        this.eventBus.on("gpx:selected", data => {
-            this.handleGPXSelected(data);
+        this.eventBus.on("gpx:selection-requested", data => {
+            this.handleSelectionRequest(data);
+        });
+
+        this.eventBus.on("selection:changed", data => {
+            this.handleSelectionChanged(data);
         });
 
         this.eventBus.on("gpx:display-toggled", data => {
@@ -179,6 +178,18 @@ export default class App {
         });
 
         this.eventBus.on("map:clear-requested", () => this.clearPresentation());
+
+        this.eventBus.on("map:track-clicked", ({ path }) => {
+            this.handleSelectionRequest({
+                path,
+                source: "map",
+                refocus: false
+            });
+        });
+
+        this.eventBus.on("map:background-clicked", () => {
+            this.clearSelection("background");
+        });
 
         this.eventBus.on("map:zoom-ended", data => {
             this.handleMapZoomEnded(data);
@@ -218,6 +229,7 @@ export default class App {
                 return;
             }
 
+            this.clearSelection("library-switch");
             this.libraryAccessPanel.showLoading(handle.name);
             this.statusBar.showLibraryLoading(handle.name);
             const library = await this.folderScanner.scan(handle);
@@ -250,6 +262,7 @@ export default class App {
 
     async handleLibraryLoaded(library) {
 
+        this.clearSelection("library-switch");
         this.displayQueue.clear();
         clearTimeout(this.#searchRefreshTimer);
         this.searchService.clear();
@@ -290,7 +303,8 @@ export default class App {
         const searchResult = this.searchService.search(query);
         const results = searchResult.results.map(entry => ({
             ...entry,
-            ...this.treeView.getSearchResultState(entry.path)
+            ...this.treeView.getSearchResultState(entry.path),
+            selected: this.selectionState.isSelected(entry.path)
         }));
 
         this.searchView.showResults(
@@ -311,16 +325,85 @@ export default class App {
         }, 0);
     }
 
-    handleGPXSelected({ path, fileHandle }) {
+    handleSelectionRequest({ path, source = "system", refocus = false } = {}) {
 
-        this.#presentationState.selectedFileHandle = fileHandle;
-        this.#presentationState.selectedFileName = fileHandle.name;
-        this.#presentationState.selectedFilePath = path;
-        this.#presentationState.status = "selected";
+        if (
+            !["tree", "search", "map"].includes(source) ||
+            !this.treeView.hasFile(path)
+        ) {
+            return false;
+        }
 
-        if (this.displayState.getDisplay(path)?.checked) {
+        const display = this.displayState.getDisplay(path);
+        const shouldRefocus = source !== "map" && refocus;
+
+        if (
+            source === "map" &&
+            (!display?.checked ||
+                display.state !== "loaded" ||
+                !this.mapView.hasDisplay(path))
+        ) {
+            return false;
+        }
+
+        if (this.selectionState.isSelected(path)) {
+            if (shouldRefocus && this.mapView.hasDisplay(path)) {
+                this.mapView.refocusGPX(path);
+            }
+            return false;
+        }
+
+        const change = this.selectionState.select(path, source);
+
+        if (!change) {
+            return false;
+        }
+
+        this.eventBus.emit("selection:changed", {
+            path: change.selectedPath,
+            previousPath: change.previousPath,
+            reason: change.source
+        });
+
+        if (shouldRefocus && this.mapView.hasDisplay(path)) {
             this.mapView.refocusGPX(path);
         }
+
+        return true;
+    }
+
+    handleSelectionChanged({ path, reason }) {
+
+        const revealFromMap = reason === "map" && path !== null;
+
+        this.treeView.setSelectedPath(path, {
+            reveal: revealFromMap,
+            scroll: revealFromMap,
+            moveFocus: false
+        });
+        this.searchView.setSelectedPath(path);
+        this.mapView.clearSelectionHighlight();
+
+        if (path) {
+            this.applySelectionHighlight(path);
+        }
+    }
+
+    clearSelection(reason = "clear") {
+
+        const change = this.selectionState.clear("system");
+
+        if (!change) {
+            return false;
+        }
+
+        this.eventBus.emit("selection:changed", {
+            path: null,
+            previousPath: change.previousPath,
+            reason
+        });
+
+        return true;
     }
 
     handleDisplayToggled({ path, fileHandle, checked }) {
@@ -386,6 +469,7 @@ export default class App {
                 this.createTrackStyle(color),
                 { showWaypoints: this.#displayOptions.showWaypoints }
             );
+            this.applySelectionHighlight(path);
             this.scheduleRefocus();
             this.updateDisplayStatus();
             this.scheduleSearchRefresh();
@@ -457,6 +541,7 @@ export default class App {
             this.createTrackStyle(display.color),
             { showWaypoints: this.#displayOptions.showWaypoints }
         );
+        this.applySelectionHighlight(path);
         this.scheduleRefocus();
         this.updateDisplayStatus();
         this.scheduleSearchRefresh();
@@ -479,6 +564,9 @@ export default class App {
             `Failed to display GPX: ${display.fileHandle.name}`,
             error
         );
+        if (this.selectionState.isSelected(path)) {
+            this.clearSelection("parse-failure");
+        }
         this.displayState.setError(path, error);
         this.treeView.setDisplayError(path);
         this.updateDisplayStatus();
@@ -492,6 +580,10 @@ export default class App {
 
         if (!display) {
             return;
+        }
+
+        if (this.selectionState.isSelected(path)) {
+            this.clearSelection("hidden");
         }
 
         this.displayQueue.invalidate(path, display.requestId);
@@ -510,6 +602,7 @@ export default class App {
 
     clearPresentation() {
 
+        this.clearSelection("clear");
         this.displayQueue.clear();
         this.displayState.clearDisplays();
         this.mapView.clear();
@@ -602,6 +695,42 @@ export default class App {
         });
     }
 
+    createSelectionStyles(color, zoomLevel = this.mapView.getZoom()) {
+
+        return {
+            selectedMainStyle: this.trackStyleService.getSelectedMainStyle({
+                color,
+                zoomLevel
+            }),
+            selectedOutlineStyle: this.trackStyleService.getSelectedOutlineStyle({
+                color,
+                zoomLevel
+            })
+        };
+    }
+
+    applySelectionHighlight(path) {
+
+        const display = this.displayState.getDisplay(path);
+
+        if (
+            !this.selectionState.isSelected(path) ||
+            !display?.checked ||
+            display.state !== "loaded" ||
+            !this.mapView.hasDisplay(path)
+        ) {
+            return false;
+        }
+
+        const styles = this.createSelectionStyles(display.color);
+
+        return this.mapView.setSelectedPath(
+            path,
+            styles.selectedMainStyle,
+            styles.selectedOutlineStyle
+        );
+    }
+
     handleMapZoomEnded({ zoom } = {}) {
 
         const bucket = this.trackStyleService.getZoomBucket(zoom);
@@ -611,6 +740,18 @@ export default class App {
         }
 
         this.currentTrackZoomBucket = bucket.name;
-        this.mapView.updateTrackWeights(bucket.weight);
+        const selectedDisplay = this.displayState.getDisplay(
+            this.selectionState.getSelectedPath()
+        );
+        const selectionStyles = this.createSelectionStyles(
+            selectedDisplay?.color,
+            zoom
+        );
+
+        this.mapView.updateTrackStyles({
+            normalWeight: bucket.weight,
+            selectedMainWeight: selectionStyles.selectedMainStyle.weight,
+            outlineWeight: selectionStyles.selectedOutlineStyle.weight
+        });
     }
 }

@@ -21,10 +21,16 @@ export default class MapView {
 
         this.layerManager = null;
 
+        this.trackRenderer = null;
+
         this.handleZoomEnd = () => {
             this.eventBus.emit("map:zoom-ended", {
                 zoom: this.getZoom()
             });
+        };
+
+        this.handleMapClick = () => {
+            this.eventBus.emit("map:background-clicked");
         };
     }
 
@@ -60,9 +66,27 @@ export default class MapView {
                 }
             ).addTo(this.map);
 
-            this.layerManager = new LayerManager(this.map, this.config.map);
+            this.trackRenderer = L.canvas({
+                tolerance: this.config.map.trackStyle.hitTolerance
+            });
+
+            this.layerManager = new LayerManager(
+                this.map,
+                this.config.map,
+                {
+                    trackRenderer: this.trackRenderer,
+                    onTrackClick: (path, event) => {
+                        this.eventBus.emit("map:track-clicked", { path });
+
+                        if (event?.originalEvent) {
+                            L.DomEvent.stopPropagation(event.originalEvent);
+                        }
+                    }
+                }
+            );
 
             this.map.on("zoomend", this.handleZoomEnd);
+            this.map.on("click", this.handleMapClick);
 
             this.showEmpty();
 
@@ -191,6 +215,30 @@ export default class MapView {
     updateTrackWeights(weight) {
 
         return this.layerManager?.updateTrackWeights(weight) ?? 0;
+    }
+
+    updateTrackStyles(styles) {
+
+        return this.layerManager?.updateTrackStyles(styles) ?? 0;
+    }
+
+    hasDisplay(path) {
+
+        return this.layerManager?.hasDisplay(path) ?? false;
+    }
+
+    setSelectedPath(path, selectedMainStyle, selectedOutlineStyle) {
+
+        return this.layerManager?.setSelectedPath(
+            path,
+            selectedMainStyle,
+            selectedOutlineStyle
+        ) ?? false;
+    }
+
+    clearSelectionHighlight() {
+
+        return this.layerManager?.clearSelectionHighlight() ?? false;
     }
 
     /**

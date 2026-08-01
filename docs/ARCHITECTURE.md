@@ -469,6 +469,10 @@ Release 1.1 Track Selection & Stylingは、既存のpath identity、App mediatio
 
 既存App private Presentation StateはUnit 3で`SelectionState`のprojectionへ移行する。主選択と`DisplayState`の表示状態を分離するDecision 0018は維持する。
 
+Unit 3実装では`SelectionState.select`、`clear`、`reset`、`isSelected`を単一pathの正本とし、同一pathの再選択は変更を返さない。Appはrequestのpathとsourceを検証してcommitし、実際に変更された場合だけ`selection:changed`を発行する。Tree / Search由来の表示中GPXだけ既存refocusを行い、Map由来ではviewportを変更しない。
+
+選択解除reasonは`background`、`hidden`、`clear`、`library-switch`、`parse-failure`としてAppが付与する。選択中GPXの個別・Folder・root OFF、Clear、Library切り替え開始、parse failureでstateと全projectionを同期して解除する。
+
 ### TrackStyleService — Pure Style Rules
 
 新規`TrackStyleService`を`src/js/services/TrackStyleService.js`へ置く。Folderから解決済みの色、zoom levelまたはbucket、selected flagを入力し、Leafletへ渡せるstyle descriptorを副作用なしで返す。
@@ -485,6 +489,8 @@ Zoom bucket初期値:
 | 8以下 | overview | 1.5 px |
 
 selected mainはnormal + 3 px、outlineはselected main + 2 pxとする。main colorはFolder colorのまま変更せず、opacityは通常0.85、selected 1.0とする。outline colorはmain colorとの明度差を確保するneutral colorをpure calculationで選ぶ。
+
+Unit 3ではmain colorの簡易luminanceにより白または濃いグレーのoutlineを選び、selected main opacity 1.0、outline opacity 0.95とする。数値とCanvas hit toleranceはConfigへ集約する。
 
 `zoomend`で現在bucketを比較し、bucketが変わった場合だけ表示中Trackをrestyleする。同じbucket内のzoomでは何もしない。
 
@@ -507,7 +513,11 @@ GPX path
 
 Release 1.1の初期方式はLeaflet Canvas rendererの`tolerance`で細線のhit areaを広げ、全Trackへ透明hit Polylineを重複生成しない。visible main Polylineがclick targetとなり、outlineは`interactive: false`とする。Canvas方式がbrowser acceptanceを満たさない場合だけ、透明hit Polylineをfallback候補として再評価し、layer数と806 GPX性能を再測定する。
 
-outlineは選択GPXだけに生成し、mainより背面の専用paneへ置く。選択mainは同一pane内で前面へ移動する。選択解除時はoutlineを削除し、mainを通常styleへ戻す。他Trackのopacityは変更しない。
+outlineは選択GPXだけに生成し、mainより背面へ置く。選択mainは同じTrack renderer内で前面へ移動する。選択解除時はoutlineを削除し、mainを通常styleへ戻す。他Trackのopacityは変更しない。
+
+Unit 3実装はTrack専用のLeaflet Canvas rendererを採用し、Configの`tolerance`でvisible main Polylineのclick領域を広げる。Waypoint Markerと背景tileはこのrendererを使用しない。outlineは選択中GPXの各Segmentへだけ生成し、`interactive: false`とする。outline追加後にselected mainを`bringToFront()`し、全Trackの順序は組み直さない。
+
+LayerManager entryはmain Segment layerと元のlatLng参照、normal style、選択中だけのoutline LayerGroupを保持する。selection・zoom変更は`setStyle`を使い、GPX再parse、geometry再構築、Bounds、Queue、cache、Waypointを変更しない。
 
 overlap時はrenderer上で最前面のhit対象1件を選ぶ。cycle selectionは行わず、隠れたGPXはTree / Searchから選択できる。Track clickはMap背景clickと区別し、double-click zoomを`preventDefault`しない。
 

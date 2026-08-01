@@ -73,6 +73,65 @@ export default class TrackStyleService {
         };
     }
 
+    getSelectedMainStyle({ color, zoomLevel } = {}) {
+
+        const normalStyle = this.getNormalStyle({ color, zoomLevel });
+
+        return {
+            ...normalStyle,
+            weight: normalStyle.weight + this.getPositiveNumber(
+                this.config.selectedWeightOffset,
+                3
+            ),
+            opacity: this.getOpacity(this.config.selectedOpacity, 1)
+        };
+    }
+
+    getSelectedOutlineStyle({ color, zoomLevel } = {}) {
+
+        const selectedStyle = this.getSelectedMainStyle({ color, zoomLevel });
+        const outlineColor = this.getOutlineColor(selectedStyle.color);
+
+        return {
+            color: outlineColor,
+            lineColor: outlineColor,
+            weight: selectedStyle.weight + this.getPositiveNumber(
+                this.config.outlineWeightOffset,
+                2
+            ),
+            opacity: this.getOpacity(this.config.outlineOpacity, 0.95),
+            interactive: false
+        };
+    }
+
+    getOutlineColor(color) {
+
+        const match = /^#([0-9a-f]{6})$/i.exec(color || "");
+
+        if (!match) {
+            return this.getConfiguredColor(
+                this.config.outlineLightColor,
+                "#ffffff"
+            );
+        }
+
+        const value = Number.parseInt(match[1], 16);
+        const red = (value >> 16) & 255;
+        const green = (value >> 8) & 255;
+        const blue = value & 255;
+        const luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255;
+
+        return luminance >= 0.6
+            ? this.getConfiguredColor(
+                this.config.outlineDarkColor,
+                "#263238"
+            )
+            : this.getConfiguredColor(
+                this.config.outlineLightColor,
+                "#ffffff"
+            );
+    }
+
     createBucketResult(bucket) {
 
         return {
@@ -106,5 +165,24 @@ export default class TrackStyleService {
     isValidWeight(weight) {
 
         return Number.isFinite(weight) && weight > 0;
+    }
+
+    getPositiveNumber(value, fallback) {
+
+        return Number.isFinite(value) && value > 0 ? value : fallback;
+    }
+
+    getOpacity(value, fallback) {
+
+        return Number.isFinite(value) && value >= 0 && value <= 1
+            ? value
+            : fallback;
+    }
+
+    getConfiguredColor(value, fallback) {
+
+        return typeof value === "string" && value.length > 0
+            ? value
+            : fallback;
     }
 }

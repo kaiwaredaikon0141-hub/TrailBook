@@ -604,7 +604,7 @@ Architecture Status: Completed
 Decision Status: Completed
 Event Contract Status: Completed
 Test Plan Status: Completed
-Production Implementation Status: In progress — Unit 2 completed、Unit 3 not started
+Production Implementation Status: In progress — Unit 3 completed、Unit 4 not started
 Current production version: `1.0.0`
 Planning baseline commit: `29d7db7`
 
@@ -614,7 +614,7 @@ Planning baseline commit: `29d7db7`
 | --- | --- | --- | --- |
 | 1 | Planning and architecture | Completed | Release 1.0 |
 | 2 | TrackStyleService and zoom-based width | Completed | Unit 1 |
-| 3 | SelectionState、Map click、highlight | Pending | Unit 2 |
+| 3 | SelectionState、Map click、highlight | Completed | Unit 2 |
 | 4 | UI settings persistence foundation | Pending | Unit 1 |
 | 5 | Folder color UI and inheritance | Pending | Unit 3、Unit 4 |
 | 6 | Monochrome Map Mode | Pending | Unit 4 |
@@ -656,8 +656,8 @@ Planned production files:
 
 - [x] TrackStyleService pure calculation — Unit 2 normal style
 - [x] zoom 8 / 9 / 12 / 15 bucket境界 — 小数、負数、`undefined`、`NaN`を含む
-- [ ] normal、selected main、outline style
-- [ ] outline contrast color
+- [x] normal、selected main、outline style — Unit 3 static test Pass
+- [x] outline contrast color — main color luminanceによる白 / 濃いグレーを確認
 - [ ] Folder明示色、親継承、子override、Default
 - [ ] FolderColorStateとDisplaySettingsStoreの責務分離
 - [ ] root Folder color
@@ -669,26 +669,26 @@ Planned production files:
 - [ ] unknown / future schema version
 - [ ] localStorage read / write / quota / security failure
 - [ ] root名変更と同名Library collision behavior
-- [x] module import — production module 28 / 28（`main.js`はDOM起動を実行しないevent listener stubで確認）
+- [x] module import — production module 29 / 29（`SelectionState.js`を含む）
 - [x] circular dependency — 0件
-- [ ] EventBus request / changed contract
-- [ ] SelectionState単一path、clear reason、Library切り替え
+- [x] EventBus request / changed contract — Unit 3 static test Pass
+- [x] SelectionState単一path、clear reason、Library切り替え — Unit 3 static test Pass
 
 ### Browser Acceptance Plan
 
-- [ ] Map Track click selection
-- [ ] thin line Canvas tolerance hit area
-- [ ] Tree selection synchronization
-- [ ] Search result selection synchronization
+- [x] Map Track click selection — Chrome / Edge Pass
+- [x] thin line Canvas tolerance hit area — tolerance 6で実用上問題なし
+- [x] Tree selection synchronization — Chrome Pass
+- [x] Search result selection synchronization — Chrome Pass
 - [ ] selected highlightが元Folder色を維持する
-- [ ] Map背景click deselect
+- [x] Map背景click deselect — Chrome / Edge Pass
 - [ ] hidden selected Trackのselection解除
-- [x] ClearとLibrary switch — Unit 2 regression Pass
+- [x] ClearとLibrary switch — Unit 3 Chrome Pass
 - [ ] parse failure後にselectionが残らない
 - [ ] Tree / Search originだけが既存refocusを行う
 - [ ] Map origin selectionでviewportが動かない
-- [ ] overlapping Trackのtopmost selection
-- [ ] Track上のdouble-click zoom
+- [x] overlapping Trackのtopmost selection — 最前面の1件を選択
+- [x] Track上のdouble-click zoom — Chrome Pass
 - [ ] Folder color Apply
 - [ ] parent inheritance、child override、root inheritance
 - [ ] Defaultへ戻す、Cancel、Escape、focus return
@@ -709,7 +709,7 @@ Planned production files:
 
 - [ ] v1.0.0の同一806 GPX Library、同一PC、同一browser / version、Waypoint OFFを比較条件として記録する
 - [ ] 806 GPX表示時のTrack / Segment / Canvas layer数を記録する
-- [ ] selection変更がprevious / nextの最大2 GPXだけを更新することを計測またはinstrumentationで確認する
+- [x] selection変更がprevious / nextの最大2 GPXだけを更新することをstatic testで確認する
 - [x] 同一zoom bucket内の`setStyle`回数が0であることをstatic testで確認する
 - [x] bucket変更時の更新対象が表示中Trackだけであることをstatic testで確認する
 - [ ] Folder色変更時の更新対象が対象Folder配下だけであることを確認する
@@ -724,7 +724,7 @@ Unit 2 Implementation Status: Completed
 Unit 2 Static Test Status: Completed
 Unit 2 Browser Acceptance Status: Completed
 Unit 2 Status: Completed
-Unit 3 Status: Not started
+Unit 3 Status at Unit 2 completion: Not started
 
 実装内容:
 
@@ -781,7 +781,103 @@ Browser acceptance result:
 - 1.5 pxは1 pxより見やすく、2 pxより重なりを抑えられる: Pass
 - 明確な性能回帰なし: Pass
 
-Unit 2の実装、static test、Chrome / Edge browser acceptanceは完了した。Monochrome Map ModeはRelease 1.1 Unit 6の未実装候補として維持し、Unit 2では実装していない。Unit 3は開始していない。
+Unit 2の実装、static test、Chrome / Edge browser acceptanceは完了した。Monochrome Map ModeはRelease 1.1 Unit 6の未実装候補として維持し、Unit 2では実装していない。
+
+### Unit 3 SelectionState, Map Track Click, and Highlight
+
+Unit 3 Implementation Status: Completed
+Unit 3 Static Test Status: Completed
+Unit 3 Browser Acceptance Status: Completed
+Unit 3 Status: Completed
+Unit 4 Status: Not started
+
+実装内容:
+
+- `SelectionState`を単一GPX pathの正本とし、source、select、clear、reset、同一path抑制を管理する。
+- Tree / Searchは`gpx:selection-requested`、Map Trackは`map:track-clicked`を発行し、Appだけがpathと表示状態を検証してstateをcommitする。
+- Appは変更後にだけ`selection:changed { path, previousPath, reason }`を発行し、Tree、Search、Mapのprojectionを同期する。
+- Tree / Search由来の表示中GPXは既存どおり個別refocusし、Map由来ではrefocusしない。同一pathのTree / Search再activateはhighlightを再生成せず、既存refocusだけを許可する。
+- Map選択時はTreeの祖先Folderと行をreveal / scrollするが、keyboard focusをMapから移動しない。Search queryと結果DOMは再生成しない。
+- Track専用Leaflet Canvas rendererとConfigのhit toleranceを使用し、visible main Polylineだけをclick targetとする。透明hit Polylineは追加しない。Waypoint Markerは対象外とする。
+- Map背景の明示clickで選択解除する。Track clickではoriginal DOM eventの伝播を止め、double click handlerは追加しない。
+- selected mainはnormal + 3 px、opacity 1.0、outlineはさらに+2 px、opacity 0.95とする。main色を維持し、outline色はmain色の明度から白または濃いグレーを選ぶ。
+- outlineは選択GPXの全Segmentだけに生成し、non-interactiveとする。選択切替・解除・hide・Clear・Library切り替えで破棄し、mainをnormal styleへ戻す。
+- zoom bucket変更時はnormal、selected main、outlineを`setStyle`で更新する。同一bucketではUnit 2どおり更新0回とする。
+- 選択中GPXの個別・Folder・root OFF、Clear、Library切り替え開始、parse failureでselectionをclearする。非選択GPXのOFFではclearしない。
+
+Config追加:
+
+- `selectedWeightOffset: 3`
+- `selectedOpacity: 1`
+- `outlineWeightOffset: 2`
+- `outlineLightColor: #ffffff`
+- `outlineDarkColor: #263238`
+- `outlineOpacity: 0.95`
+- `hitTolerance: 6`
+
+Static test result:
+
+| Test | Result | Notes |
+| --- | --- | --- |
+| SelectionState | Pass | 15 assertion。initial、select、same path、previousPath、source、invalid path、clear、reset |
+| TrackStyleService selected style | Pass | 27 assertion。zoom 8 / 9 / 12 / 15、color、opacity、outline contrast |
+| LayerManager selection / highlight | Pass | 29 assertion。全Segment、outline限定、切替、clear、hide、zoom、Waypoint不変 |
+| Map Track click contract | Pass | 21 assertion。main Polyline listener、同一GPX path、Canvas renderer、non-interactive outline、削除済みLayer抑止、background伝播境界 |
+| App selection coordination | Pass | 27 assertion。Tree / Search / Map、same path、source検証、refocus規則、background clear |
+| App cleanup | Pass | 8 assertion。hidden、Clear、Library switch、parse failure |
+| production module import | Pass | 29 / 29。`SelectionState.js`を含む |
+| circular dependency | Pass | 0件 |
+| TreeView line count | Pass | 997行 |
+
+修正後のChrome / Edge browser acceptanceは完了した。Track click、background deselect、event propagation、double-click zoom、Tree / Search同期、highlight、Clear / Library切り替え、Consoleに回帰は確認されなかった。
+
+806 GPXでもTrack click、selection反応、highlight、zoom bucket変更は実用上問題なく、明確な性能回帰は確認されなかった。Unit 4は開始していない。
+
+#### Map Track Click Browser Failure and Fix
+
+- Map Track click browser test: Failed
+- Tree selection / highlight: Pass
+- Event-path finding: Tree起点の`SelectionState`更新とhighlight描画は成立した一方、Map上のTrack clickからselectionへ到達しなかった。main Polylineのclick listenerとGPX path closureは存在したが、Canvas PolylineのinteractionとLeaflet map clickへの伝播境界が暗黙設定に依存していた。
+- Root cause: main Polylineで`interactive`とLeafletの`bubblingMouseEvents`を明示せず、native `originalEvent`の停止だけに依存していたため、Track layer clickとMap背景clickを確実に分離できていなかった。
+- Fix: 各main Polylineへ`interactive: true`、`bubblingMouseEvents: false`、固定の`gpxPath` metadataを設定した。Polyline clickでは正しいpathのselection requestを先に発行し、`originalEvent`が存在する場合だけDOM伝播を停止する。削除または置換済みのPolylineは現在のLayer entryとの同一性を検証して通知しない。
+- Canvas renderer: 継続。`L.canvas({ tolerance: 6 })`をTrack専用rendererとして各main Polylineへ明示し、outlineは`interactive: false`のままとする。通常rendererへの切り替えや透明hit layerの追加は行っていない。
+- Retest Status: Completed — Chrome / Edgeで修正経路と回帰項目を確認した。
+- Unit 3 Status: Completed
+
+#### Unit 3 Browser Acceptance Result
+
+| Test item | Windows Chrome | Windows Edge |
+| --- | --- | --- |
+| 1 GPX Track click | Pass | Pass |
+| Track clickからTree row同期 | Pass | Not separately recorded |
+| Track highlight | Pass | Pass |
+| Track click直後にselectionを維持 | Pass | Not separately recorded |
+| Map背景clickでselection解除 | Pass | Pass |
+| pan / dragだけでは解除しない | Pass | Pass |
+| zoomだけでは解除しない | Pass | Pass |
+| double-click zoom | Pass | Not separately recorded |
+| 複数Track選択 | Pass | Not separately recorded |
+| overlapping Track | Pass — 最前面の1件を選択 | Not separately recorded |
+| 同一GPXの別Segment click | Pass | Not separately recorded |
+| Search同期 | Pass | Not separately recorded |
+| Tree同期 | Pass | Not separately recorded |
+| Clearで解除 | Pass | Not separately recorded |
+| Library切り替えで解除 | Pass | Not separately recorded |
+| Console errorなし | Pass | Pass |
+| 不要なconsole log / warningなし | Pass | Not separately recorded |
+
+806 GPX Library result:
+
+- Track click実用性: Pass
+- selection反応時間: 実用上問題なし
+- highlight表示: 実用上問題なし
+- zoom bucket変更: 実用上問題なし
+- 明確な性能回帰なし: Pass
+
+Known behavior:
+
+- overlapping TrackではLeafletの描画順で最前面にある1件を選択する。
+- `TreeView.js`は997行である。以後のUI追加では1,000行規則を守るためhelper抽出を優先する。
 
 ### Unit 6 Candidate — Monochrome Map Mode
 
@@ -805,6 +901,6 @@ Folder identity: current Library内のrelative path。rootは空文字。
 
 - 同名root Folderは色設定が衝突する。Release 1.1では個人利用の既知制限として受け入れる。
 - root Folder名変更後は旧設定を自動移行できない。
-- Canvas rendererの見た目、hit tolerance、overlap順序はChrome / Edge実ブラウザ確認が必要である。
-- 806 GPXでCanvasへ変更した場合のperformanceは実測前である。
-- TreeViewは967行のため、Folder color UIを直接追加して1,000行規則を超えないよう、dialog責務を別Viewへ置く。
+- Canvas renderer、hit tolerance、overlap順序はChrome / Edgeで確認済みである。overlapping Trackでは最前面の1件を選択する。
+- 806 GPXでTrack click、highlight、zoom bucket変更に明確な性能回帰は確認されていない。
+- TreeViewは997行のため、Folder color UIを直接追加して1,000行規則を超えないよう、helperまたはdialog責務を別Viewへ置く。

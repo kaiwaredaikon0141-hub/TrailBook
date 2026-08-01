@@ -662,6 +662,8 @@ Release 1.1はPlanning状態であり、次のUI contractを実装前仕様と�
 
 TreeViewの`aria-selected`とMap highlightは`SelectionState`の同じpathを表示する。表示checkboxとSelectionは引き続き別の状態とし、selectionだけで表示ON / OFF、Queue投入、cache追加を行わない。
 
+Unit 3ではMap Track click、Tree GPX行、Search GPX result activateを同じ単一selectionへ接続する。Map由来選択は必要な祖先Folderを展開してTree行をscroll表示するが、keyboard focusをMapから移動しない。Map背景の明示clickで解除し、pan、drag、Leaflet control、attribution操作では解除しない。Search checkbox、Tree checkbox、Folder / root一括checkboxは表示操作のままとし、選択requestを発行しない。
+
 ## Selected highlight
 
 - 選択Trackのmain lineは解決済みFolder色を維持する
@@ -674,6 +676,8 @@ TreeViewの`aria-selected`とMap highlightは`SelectionState`の同じpathを表
 - outlineはclick targetにしない
 
 細線のclick領域はLeaflet Canvas rendererのtoleranceで広げる。初期実装では全Trackへ透明hit Polylineを追加しない。
+
+Unit 3のoutline色はmain色の明度に応じた白または濃いグレーとし、opacityは0.95とする。outlineはnon-interactiveで、選択中GPXのSegmentだけに存在する。他Trackの色とopacityは変更しない。
 
 ## Folder color control
 

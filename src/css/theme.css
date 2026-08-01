@@ -211,6 +211,13 @@ body{
     background:#eef4ff;
 }
 
+.search-result-item.is-selected .search-result-action{
+
+    background:#dbeafe;
+
+    box-shadow:inset 3px 0 0 var(--accent);
+}
+
 .search-result-action:focus-visible,
 .search-result-checkbox:focus-visible{
 

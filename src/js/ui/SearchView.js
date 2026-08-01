@@ -16,6 +16,7 @@ export default class SearchView {
 
         this.eventBus = eventBus;
         this.results = [];
+        this.selectedPath = null;
         this.element = this.#create();
         this.input = this.element.querySelector(".search-input");
         this.summary = this.element.querySelector(".search-summary");
@@ -48,6 +49,24 @@ export default class SearchView {
     getActiveQuery() {
 
         return this.#activeQuery;
+    }
+
+    setSelectedPath(path) {
+
+        this.selectedPath = path;
+
+        this.resultList.querySelectorAll(".search-result-item").forEach(item => {
+            const isSelected = item.dataset.searchPath === path;
+            const action = item.querySelector(".search-result-action");
+
+            item.classList.toggle("is-selected", isSelected);
+
+            if (isSelected) {
+                action?.setAttribute("aria-current", "true");
+            } else {
+                action?.removeAttribute("aria-current");
+            }
+        });
     }
 
     /**
@@ -174,6 +193,11 @@ export default class SearchView {
             this.#createResultPath(entry)
         );
         item.append(action);
+
+        if (entry.path === this.selectedPath || entry.selected) {
+            item.classList.add("is-selected");
+            action.setAttribute("aria-current", "true");
+        }
 
         return item;
     }

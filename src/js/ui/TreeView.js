@@ -643,7 +643,7 @@ export default class TreeView {
         row.classList.toggle("is-collapsed", !expanded);
     }
 
-    selectFile(fileHandle) {
+    selectFile(fileHandle, source = "tree") {
 
         const path = this.pathsByFileHandle.get(fileHandle);
 
@@ -651,9 +651,11 @@ export default class TreeView {
             return;
         }
 
-        this.selectedFilePath = path;
-        this.refreshAllFileRows();
-        this.eventBus.emit("gpx:selected", { path, fileHandle });
+        this.eventBus.emit("gpx:selection-requested", {
+            path,
+            source,
+            refocus: source !== "map"
+        });
     }
 
     setDisplayLoading(path) {
@@ -781,7 +783,7 @@ export default class TreeView {
         this.focusPath(path, true);
 
         if (metadata.kind === "file") {
-            this.selectFile(metadata.model);
+            this.selectFile(metadata.model, "search");
         }
 
         return true;
@@ -831,9 +833,37 @@ export default class TreeView {
 
     clearSelection() {
 
-        this.selectedFilePath = null;
+        this.setSelectedPath(null);
+    }
+
+    setSelectedPath(path, options = {}) {
+
+        if (path !== null && !this.hasFile(path)) {
+            return false;
+        }
+
+        if (path && options.reveal) {
+            this.#expandAncestors(path);
+        }
+
+        this.selectedFilePath = path;
 
         this.refreshAllFileRows();
+
+        const row = path ? this.fileNodes.get(path) : null;
+
+        if (row && options.moveFocus) {
+            this.focusPath(path, true);
+        } else if (row && options.scroll) {
+            row.scrollIntoView({ block: "nearest" });
+        }
+
+        return true;
+    }
+
+    hasFile(path) {
+
+        return this.nodeMetadata.get(path)?.kind === "file";
     }
 
     clearDisplayStates() {

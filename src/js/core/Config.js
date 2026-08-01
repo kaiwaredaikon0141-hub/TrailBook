@@ -31,6 +31,13 @@ const Config = {
             lineColor: "#e53935",
             lineWeight: 4,
             lineOpacity: 0.85,
+            selectedWeightOffset: 3,
+            selectedOpacity: 1,
+            outlineWeightOffset: 2,
+            outlineLightColor: "#ffffff",
+            outlineDarkColor: "#263238",
+            outlineOpacity: 0.95,
+            hitTolerance: 6,
             fallbackZoom: 8,
             fallbackWeight: 1,
             zoomBuckets: [
