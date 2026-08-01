@@ -1,1190 +1,376 @@
-\# DECISIONS.md
+# DECISIONS.md
 
+Version: 1.1
+Status: Official
 
+TrailBookの設計判断と、その理由を将来へ残す。
 
-Version : 1.0
+既存Decisionの意味は変更しない。後のReleaseで設計が発展した場合も元のDecisionを残し、新しいDecisionから関係を明記する。
 
-Status  : Official
+## Record Format
 
+各Decisionは次を記録する。
 
+- Decision ID
+- Title
+- Date
+- Status
+- Decision
+- Reason
+- Alternatives
+- Consequences
 
-Purpose :
+## Decision 0001 — GPX is the Single Source of Truth
 
-TrailBook の設計判断を記録する。
+Date: 2026-07
+Status: Accepted
 
+Decision: GPXファイルを唯一のマスターデータとする。TrailBookはGPXを管理するが、独自形式へ変換しない。
 
+Reason: GPXはオープンフォーマットであり、他ソフトとの互換性とユーザーデータの可搬性を維持できる。
 
-この文書は
+Alternatives: SQLiteへの取込、独自フォーマットへの変換。
 
-「何を決めたか」
+Consequences: GPX解析が必要になるが、ユーザー資産を閉じ込めない。
 
-ではなく
+## Decision 0002 — Folder is Database
 
-「なぜ決めたか」
+Date: 2026-07
+Status: Accepted
 
-を残すためのものである。
+Decision: Folder構造そのものをLibraryとして扱う。
 
+Reason: Explorerで自由に整理でき、他ソフトからも利用でき、バックアップが容易である。
 
+Alternatives: SQLite、IndexedDB、XML Database。
 
-設計の背景を未来へ伝える。
+Consequences: 検索性能には工夫が必要だが、データ管理は単純になる。
 
+## Decision 0003 — Framework Free
 
+Date: Not recorded
+Status: Accepted
 
-\---
+Decision: React、Vue、AngularなどのApplication frameworkを採用しない。
 
+Reason: 軽量性と長期保守性を優先し、Library依存を減らす。
 
+Alternatives: React、Vue、Angular。
 
-\# Rule
+Consequences: 一部UIを自前実装する。
 
+## Decision 0004 — JavaScript Only
 
+Date: Not recorded
+Status: Accepted
 
-新しい設計判断を行った場合
+Decision: TypeScriptを採用せず、Browserで直接動作するJavaScript ES Modulesを使用する。
 
+Reason: 開発速度と直接実行可能な構成を維持し、AIによる修正コストを抑える。
 
+Alternatives: TypeScript。
 
-以下を必ず記録する。
+Consequences: 型情報はJSDocで補う。
 
+## Decision 0005 — Event Driven Architecture
 
+Date: Not recorded
+Status: Accepted
 
-・Decision ID
+Decision: UI同士は直接通信せず、EventBusを使用する。
 
-・Date
+Reason: 疎結合を維持し、将来の機能追加を容易にする。
 
-・Status
+Alternatives: UI間の直接参照、Singleton管理。
 
-・Decision
+Consequences: Event名とpayload契約が重要になる。
 
-・Reason
+## Decision 0006 — Responsibility Based Structure
 
-・Alternatives
+Date: Not recorded
+Status: Accepted
 
-・Consequences
+Decision: Source folderは画面や機能ではなく責務で分割する。
 
+Reason: 機能追加後も構造を安定させ、配置判断を明確にする。
 
+Alternatives: 機能別、画面別の構造。
 
----
+Consequences: 初期理解には時間が必要だが、長期保守性が向上する。
 
----
+## Decision 0007 — Offline First
 
-# Decision 0010
+Date: Not recorded
+Status: Accepted
 
-Title
+Decision: ネット接続なしでも主要機能を利用可能にする。
 
-Release 0.4 Uses Single GPX Display
+Reason: ツーリング先や登山など、通信できない環境を考慮する。
 
-Date
+Alternatives: Cloud接続を前提にする。
 
-2026-08
+Consequences: 同期機能は補助機能となる。Online地図tileの完全なoffline化は別途設計を必要とする。
 
-Status
+## Decision 0008 — Human Driven Design
 
-Accepted
+Date: Not recorded
+Status: Accepted
 
-Decision
+Decision: 設計変更は人間が行い、AIは承認なく設計を変更しない。
 
-Release 0.4では、TreeViewで選択した一つのGPXだけを地図へ表示する。
-別のGPXを選択した場合、以前の表示を置き換える。
+Reason: TrailBookの設計思想と範囲を維持する。
 
-Reason
+Alternatives: AIが自由に設計を改善する。
 
-単一選択の操作が分かりやすく、大量GPXでの表示負荷と状態管理を抑えられるため。
+Consequences: 設計変更には人間のreviewが必要になる。
 
-Alternatives
+## Decision 0009 — Small Increment Development
 
-クリックごとに複数GPXを追加表示する
+Date: Not recorded
+Status: Accepted
 
-Rejected
+Decision: 小さなReleaseを積み重ねる。
 
-Consequences
+Reason: 品質を維持し、変更とreviewの範囲を限定する。
 
-複数GPX比較は将来のReleaseで追加する。
+Alternatives: 大型Release。
 
----
+Consequences: Version番号は増えるが、各段階を検証しやすい。
 
-# Decision 0011
+## Decision 0010 — Documentation First
 
-Title
+Date: Not recorded
+Status: Accepted
 
-Leaflet is Locally Bundled
+Decision: 設計文書を先に更新し、コードはその後に修正する。
 
-Date
+Reason: 設計と実装の乖離を防ぐ。
 
-2026-08
+Alternatives: Code first。
 
-Status
+Consequences: 文書更新の作業は増えるが、長期保守性が向上する。
 
-Accepted
+## Decision 0011 — FolderScanner is a Service
 
-Decision
+Date: 2026-08
+Status: Accepted
 
-Release 0.4ではLeafletをCDNではなく、src/vendor/leaflet/へローカル同梱する。
+Decision: FolderScannerをService Layerへ配置する。
 
-Reason
+Reason: Directory走査はApplication処理であり、UIやBrowser API接続の詳細から分離するため。
 
-地図表示ライブラリ本体へのCDN依存を避け、オフラインファーストの構成に近づけるため。
+Alternatives: `file/`への配置、Appへの直接実装。
 
-Alternatives
+Consequences: FolderScannerがService LayerからFolderとLibrary Modelを生成する。
 
-CDNから読み込む
+## Decision 0012 — Release 0.2 Does Not Parse GPX Content
 
-Rejected
+Date: 2026-08
+Status: Accepted
 
-Consequences
+Decision: Release 0.2ではGPXファイルの存在だけを検出し、内容を解析しない。
 
-通常のWeb地図タイルはネットワーク依存であり、
-オフライン時に背景地図が表示できない可能性は残る。
-オフラインタイル、キャッシュ、独自タイル管理はRelease 0.4の対象外とする。
+Reason: GPXParser、Track、WaypointはRelease 0.3の責務であり、Folder Libraryの範囲に含めないため。
 
----
+Alternatives: Folder走査と同時にGPX内容を解析する。
 
-# Decision 0012
+Consequences: Release 0.2はGPXファイルの一覧と件数だけを扱う。
 
-Title
+## Decision 0013 — Release 0.2 Library Events
 
-Presentation State Stays in App
+Date: 2026-08
+Status: Accepted
 
-Date
+Decision: Folder選択要求に`folder:open-requested`を使用する。`library:loaded`のpayloadは`{ library }`、`library:load-failed`は`{ error }`とし、Folder選択のcancelではfailure eventを発行しない。
 
-2026-08
+Reason: UIとServiceを分離し、cancelと実際の失敗を区別する。
 
-Status
+Alternatives: UIからFolderScannerを直接呼ぶ、cancelをfailureとして扱う。
 
-Accepted
+Consequences: Appがeventを調停し、TreeViewとStatusBarがLibrary eventを受け取る。
 
-Decision
+## Decision 0014 — Release 0.4 Uses Single GPX Display
 
-Release 0.4では、selectedFileHandle、selectedFileName、parsedResult、statusを
-App内部の非永続Presentation Stateとして保持する。
-FolderやLibraryへ解析結果は保存しない。
+Date: 2026-08
+Status: Accepted
+Scope: Release 0.4
+Extended by: Decision 0018 in Release 0.6
 
-Reason
+Decision: Release 0.4では、TreeViewで選択した一つのGPXだけを地図へ表示し、別GPXの選択で以前の表示を置き換える。
 
-Release 0.4の表示状態は小さく、独立Stateモジュールを追加せずに
-Appの調停責務内で管理できるため。
+Reason: 単一選択の操作を明確にし、大量GPXの表示負荷と初期状態管理を抑える。
 
-Alternatives
+Alternatives: Clickごとに複数GPXを追加表示する。
 
-src/js/state/AppState.jsとして分離する
+Consequences: Release 0.4では複数GPX比較を行わず、後のReleaseで追加する。
 
-Rejected
+## Decision 0015 — Leaflet is Locally Bundled
 
-Consequences
+Date: 2026-08
+Status: Accepted
 
-状態が複雑化した場合は、将来の設計判断としてAppStateへの分離を検討する。
+Decision: LeafletをCDNではなく`src/vendor/leaflet/`へlocal bundleする。
 
----
+Reason: 地図表示Library本体へのCDN依存を避け、Offline Firstへ近づける。
 
-# Decision 0013
+Alternatives: CDNからLeafletを読み込む。
 
-Title
+Consequences: 通常のWeb地図tileはnetwork依存のままである。Offline tile、cache、独自tile管理は別Releaseで扱う。
 
-App Mediates Map Display Events
+## Decision 0016 — Release 0.4 Presentation State Stays in App
 
-Date
+Date: 2026-08
+Status: Accepted
+Scope: Release 0.4
+Extended by: Decision 0018, which later extracted display state
 
-2026-08
+Decision: Release 0.4では`selectedFileHandle`、`selectedFileName`、`parsedResult`、`status`をApp内部の非永続Presentation Stateとして保持し、FolderやLibraryへ解析結果を保存しない。
 
-Status
+Reason: Release 0.4の状態は小さく、独立State moduleを追加せずAppの調停責務内で管理できる。
 
-Accepted
+Alternatives: `src/js/state/AppState.js`として分離する。
 
-Decision
+Consequences: 状態が複雑化した時点でState分離を検討する。Release 0.6では表示状態を`DisplayState`へ分離したが、主選択はAppに残る。
 
-Release 0.4ではAppがgpx:parsedを受け、MapViewへ表示を依頼する。
-MapViewはGPX解析イベントを直接購読しない。
+## Decision 0017 — App Mediates Map Display Events
 
-Reason
+Date: 2026-08
+Status: Accepted
 
-MapViewを地図表示に限定し、GPXParserとの結合を避けるため。
+Decision: AppがGPX解析結果を受け、MapViewへ表示を依頼する。MapViewはGPX解析eventを直接購読しない。
 
-Alternatives
+Reason: MapViewを地図表示へ限定し、GPXParserとの結合を避ける。
 
-MapViewがgpx:parsedを直接購読する
+Alternatives: MapViewが解析eventを直接購読する。
 
-Rejected
+Consequences: Appのevent接続は増えるが、表示経路を一箇所で管理できる。
 
-Consequences
+## Decision 0018 — Primary Selection and Display State Are Separate
 
-Appのイベント接続は増えるが、Presentation Stateと表示経路を一箇所で管理できる。
+Date: 2026-08
+Status: Accepted
 
-# Decision 0007
+Decision: Release 0.6以降、GPX行の主選択と地図表示ON/OFFを分離する。主選択はApp、path単位の表示状態は`DisplayState`が管理する。
 
-Title
+Reason: 複数GPXを同時表示しながら、操作対象を一つに保つため。
 
-FolderScanner is a Service
+Alternatives: 選択中のGPXだけを表示する、複数選択を表示状態として兼用する。
 
-Date
+Consequences: `aria-selected`とdisplay checkboxは別の意味を持つ。Decision 0014の単一表示はRelease 0.4の履歴として残るが、現在の表示Architectureは本Decisionに従う。
 
-2026-08
+## Decision 0019 — TreeView Uses Lazy DOM and Path-based Metadata
 
-Status
+Date: 2026-08
+Status: Accepted
 
-Accepted
+Decision: TreeViewはLibrary全体のmetadataを相対pathで保持し、展開FolderだけをDOM生成する。
 
-Decision
+Reason: 大量Libraryでも初期DOMと更新量を抑え、DOM未生成項目の状態を維持するため。
 
-FolderScannerをService Layerへ配置する。
+Alternatives: Library全体を常時DOM生成する、DOMを唯一の状態として扱う。
 
-Reason
+Consequences: Navigation、Folder集約、将来のSearchはDOMではなくmetadataとModelを基準にする。
 
-Directoryの走査はアプリケーション処理であり、
-UIやBrowser APIの接続処理から分離するため。
+## Decision 0020 — Display Layers Use Relative Path Identity and Session Cache
 
-Alternatives
+Date: 2026-08
+Status: Accepted
 
-fileディレクトリに配置する
+Decision: GPXの相対pathを表示状態、cache、Leaflet Layer entryの識別子として使用する。解析結果はLibrary session内だけcacheし、上限を100件とする。
 
-Appに直接実装する
+Reason: 同名GPXを区別し、再表示時の不要な再解析を減らしながらmemory使用量を制限する。
 
-Rejected
+Alternatives: File名だけをkeyにする、FileHandle object identityだけを使う、無制限cache、永続Index。
 
-Consequences
+Consequences: Library切り替えでcacheとLayerを破棄する。現在のpath hash色は安定したfallback色となる。cacheはGPXの正本ではない。
 
-FolderScannerはService LayerからModelを生成する。
+## Decision 0021 — GPX Display Queue Concurrency is Two
 
----
+Date: 2026-08
+Status: Accepted
 
-# Decision 0008
+Decision: GPX表示要求はFIFO Queueで処理し、同時実行数を最大2件とする。requestIdとlibraryGenerationで古い結果を無効化する。
 
-Title
+Reason: 一括表示時にBrowserを占有せず、一定のthroughputと応答性を両立する。
 
-Release 0.2 Does Not Parse GPX Content
+Alternatives: 無制限並列、完全直列、表示操作ごとの独立Promise管理。
 
-Date
+Consequences: queuedおよびactive requestは論理的に無効化できる。実行中読込の強制cancelではなく、callback抑止で整合性を守る。
 
-2026-08
+## Decision 0022 — Folder Bulk Display Traverses the Model
 
-Status
+Date: 2026-08
+Status: Accepted
 
-Accepted
+Decision: Folder checkboxはFolder Modelを再帰走査し、DOM未生成の子孫を含む全GPXへ既存の個別表示処理を適用する。
 
-Decision
+Reason: Lazy DOMの展開状態に関係なく、Folder単位の表示操作を一貫させる。
 
-Release 0.2ではGPXファイルの存在だけを検出し、
-内容解析は行わない。
+Alternatives: 現在DOMにあるcheckboxだけを操作する、Folder独自の表示状態をModelへ保存する。
 
-Reason
+Consequences: Folder自身のchecked状態は保存せず、子孫GPXからchecked、indeterminate、disabledを算出する。一括操作は既存DisplayStateとQueueを再利用する。
 
-GPXParser、Track、WaypointはRelease 0.3の責務であり、
-Release 0.2のFolder Libraryに含めないため。
+## Decision 0023 — Waypoints Are Optional Separate Layers
 
-Alternatives
+Date: 2026-08
+Status: Accepted
 
-GPX内容を同時に解析する
+Decision: Waypoint表示の初期値はOFFとする。pathごとのTrack LayerGroupとWaypoint LayerGroupを分離し、WaypointをTrack Boundsへ含めない。
 
-Rejected
+Reason: 大量Waypointによる視認性と描画負荷への影響を避け、Track表示と地図位置を安定させる。
 
-Consequences
+Alternatives: Waypointを常時表示する、Trackと同じLayerGroupへ格納する、Waypointをfit boundsへ含める。
 
-Release 0.2ではGPXファイルの一覧と件数だけを扱う。
+Consequences: Waypoint切り替えはcache済み結果から追加・削除し、GPX再解析、Track再描画、refocusを行わない。設定はSession中維持し、永続保存しない。
 
----
+## Decision 0024 — Release 0.9 Search Is Metadata-only Navigation
 
-# Decision 0009
+Date: 2026-08
+Status: Accepted
 
-Title
+Decision: Release 0.9 SearchはGPXファイル名、Folder名、相対pathだけをTreeView metadataから検索する。DOM未生成項目を含め、結果選択時だけ必要な祖先Folderを展開する。
 
-Release 0.2 Library Events
+Reason: GPX解析や地図表示から独立した高速なLibrary Navigationを最初に成立させるため。
 
-Date
+Alternatives: 検索時に全GPXを解析する、生成済みDOMだけを検索する、検索結果を自動表示する。
 
-2026-08
+Consequences: SearchだけではQueue投入、cache追加、MapView変更を行わない。日付、Track名、車両属性は将来のMetadata Indexで扱う。
 
-Status
+## Decision 0025 — Future Metadata, Vehicle, and Editing Boundaries
 
-Accepted
+Date: 2026-08
+Status: Accepted
+Scope: Future design boundary
 
-Decision
+Decision: 日付表示、車両属性、TrackPoint編集をRelease 0.9から分離し、書き込みを伴う機能はViewerとは別のEditor責務として設計する。
 
-Release 0.2では、ライブラリ操作に次のイベントを使用する。
+Reason: Read-only Searchへ解析、domain metadata、GPX書込みの責務を混在させず、GPX正本を保護する。
 
-folder:open-requested
+Alternatives: Release 0.9で同時にMetadata解析、車両設定、編集機能を追加する。
 
-library:loadedのペイロードは{ library }とする。
+Consequences:
 
-library:load-failedのペイロードは{ error }とする。
+- 日付候補は`metadata.time`、最初の`TrackPoint.time`、`File.lastModified`、`originalFileName`の順で将来検討する。
+- 車両候補は`vehicleId`、`vehicleName`、`vehicleType`、`vehicleColor`とする。
+- 将来は`vehicleId`をGPX extensionsへ保存し、車両設定から色を解決する。現在のpath hash色はfallbackとして維持する。
+- 編集対象は単一GPXに限定し、明示的な保存、元GPX保護、外部変更競合確認、Undo / Redo、保存失敗処理を先に設計する。
+- GPXを暗黙に上書きせず、編集中は他GPXを編集不可にする。
 
-フォルダ選択のキャンセルではlibrary:load-failedを発行しない。
+## Decision Status
 
-Reason
+- Accepted: 正式採用
+- Proposed: 提案中
+- Deprecated: 非推奨
+- Rejected: 却下
+- Superseded: 新しいDecisionに置き換え
 
-UIとServiceの依存を分離し、
-キャンセルと実際の失敗を区別するため。
+## How to Update
 
-Alternatives
+- 議論途中ではなく、確定した判断だけを書く。
+- 既存Decisionを削除または書き換えない。
+- 変更が必要な場合は新しい一意なIDを追加し、関係する過去Decisionを参照する。
+- IDは文書内で重複させない。
 
-UIからFolderScannerを直接呼び出す
+## Golden Rule
 
-キャンセルを失敗イベントとして扱う
-
-Rejected
-
-Consequences
-
-Appがイベントを中継し、
-TreeViewとStatusBarはライブラリイベントを購読する。
-
-議論途中の内容は記録しない。
-
-
-
-決定事項のみを書く。
-
-
-
-\---
-
-
-
-\# Decision 0001
-
-
-
-Title
-
-
-
-GPX is the Single Source of Truth
-
-
-
-Date
-
-
-
-2026-07
-
-
-
-Status
-
-
-
-Accepted
-
-
-
-Decision
-
-
-
-GPXファイルを唯一のマスターデータとする。
-
-
-
-TrailBook は GPX を管理するが、
-
-独自形式へ変換しない。
-
-
-
-Reason
-
-
-
-GPXはオープンフォーマットであり、
-
-将来も他ソフトとの互換性を維持できる。
-
-
-
-ユーザーの資産を閉じ込めない。
-
-
-
-Alternatives
-
-
-
-SQLiteへ取り込む
-
-
-
-独自フォーマットへ変換する
-
-
-
-Rejected
-
-
-
-Consequences
-
-
-
-GPX解析は毎回必要になる。
-
-
-
-しかしデータの可搬性が高くなる。
-
-
-
-\---
-
-
-
-\# Decision 0002
-
-
-
-Title
-
-
-
-Folder is Database
-
-
-
-Status
-
-
-
-Accepted
-
-
-
-Date
-
-
-
-2026-07
-
-
-
-Decision
-
-
-
-フォルダ構造そのものをライブラリとする。
-
-
-
-Reason
-
-
-
-ユーザーがExplorerで自由に整理できる。
-
-
-
-他ソフトでも利用できる。
-
-
-
-バックアップが容易。
-
-
-
-Alternatives
-
-
-
-SQLite
-
-
-
-IndexedDB
-
-
-
-XML Database
-
-
-
-Rejected
-
-
-
-Consequences
-
-
-
-検索性能は工夫が必要。
-
-
-
-しかし管理が非常にシンプルになる。
-
-
-
-\---
-
-
-
-\# Decision 0003
-
-
-
-Title
-
-
-
-Framework Free
-
-
-
-Status
-
-
-
-Accepted
-
-
-
-Decision
-
-
-
-React等のフレームワークを採用しない。
-
-
-
-Reason
-
-
-
-TrailBook は画面遷移中心のWebアプリではない。
-
-
-
-軽量性と長期保守を優先する。
-
-
-
-Alternatives
-
-
-
-React
-
-
-
-Vue
-
-
-
-Angular
-
-
-
-Rejected
-
-
-
-Consequences
-
-
-
-一部UIは自前実装となる。
-
-
-
-ライブラリ依存が減る。
-
-
-
-\---
-
-
-
-\# Decision 0004
-
-
-
-Title
-
-
-
-JavaScript Only
-
-
-
-Status
-
-
-
-Accepted
-
-
-
-Decision
-
-
-
-TypeScriptを採用しない。
-
-
-
-Reason
-
-
-
-開発速度を優先する。
-
-
-
-ブラウザでそのまま動くコードを維持する。
-
-
-
-AIによる修正コストも低い。
-
-
-
-Alternatives
-
-
-
-TypeScript
-
-
-
-Rejected
-
-
-
-Consequences
-
-
-
-型安全性はJSDocで補う。
-
-
-
-\---
-
-
-
-\# Decision 0005
-
-
-
-Title
-
-
-
-Event Driven Architecture
-
-
-
-Status
-
-
-
-Accepted
-
-
-
-Decision
-
-
-
-UI同士は直接通信しない。
-
-
-
-EventBusを利用する。
-
-
-
-Reason
-
-
-
-疎結合を維持できる。
-
-
-
-将来の機能追加が容易。
-
-
-
-Alternatives
-
-
-
-直接参照
-
-
-
-Singleton管理
-
-
-
-Rejected
-
-
-
-Consequences
-
-
-
-イベント設計が重要になる。
-
-
-
-\---
-
-
-
-\# Decision 0006
-
-
-
-Title
-
-
-
-Responsibility Based Structure
-
-
-
-Status
-
-
-
-Accepted
-
-
-
-Decision
-
-
-
-フォルダは責務で分割する。
-
-
-
-Reason
-
-
-
-機能追加しても構造が変わらない。
-
-
-
-AIが配置を判断しやすい。
-
-
-
-Alternatives
-
-
-
-機能別
-
-
-
-画面別
-
-
-
-Rejected
-
-
-
-Consequences
-
-
-
-最初は理解に時間がかかる。
-
-
-
-長期保守性は向上する。
-
-
-
-\---
-
-
-
-\# Decision 0007
-
-
-
-Title
-
-
-
-Offline First
-
-
-
-Status
-
-
-
-Accepted
-
-
-
-Decision
-
-
-
-ネット接続無しで主要機能を利用可能とする。
-
-
-
-Reason
-
-
-
-ツーリング先や登山など
-
-通信できない環境を考慮する。
-
-
-
-Alternatives
-
-
-
-クラウド前提
-
-
-
-Rejected
-
-
-
-Consequences
-
-
-
-同期機能は補助機能となる。
-
-
-
-\---
-
-
-
-\# Decision 0008
-
-
-
-Title
-
-
-
-Human Driven Design
-
-
-
-Status
-
-
-
-Accepted
-
-
-
-Decision
-
-
-
-設計変更は人間が行う。
-
-
-
-AIは設計を変更しない。
-
-
-
-Reason
-
-
-
-設計思想を維持するため。
-
-
-
-Alternatives
-
-
-
-AIが自由に改善する
-
-
-
-Rejected
-
-
-
-Consequences
-
-
-
-設計変更にはレビューが必要。
-
-
-
-\---
-
-
-
-\# Decision 0009
-
-
-
-Title
-
-
-
-Small Increment Development
-
-
-
-Status
-
-
-
-Accepted
-
-
-
-Decision
-
-
-
-小さなReleaseを積み重ねる。
-
-
-
-Reason
-
-
-
-品質を維持しやすい。
-
-
-
-AIによるレビューも容易。
-
-
-
-Alternatives
-
-
-
-大型リリース
-
-
-
-Rejected
-
-
-
-Consequences
-
-
-
-Version番号は多くなる。
-
-
-
-品質は向上する。
-
-
-
-\---
-
-
-
-\# Decision 0010
-
-
-
-Title
-
-
-
-Documentation First
-
-
-
-Status
-
-
-
-Accepted
-
-
-
-Decision
-
-
-
-設計書を先に更新する。
-
-
-
-コードは後で修正する。
-
-
-
-Reason
-
-
-
-設計と実装の乖離を防ぐ。
-
-
-
-Alternatives
-
-
-
-コード優先
-
-
-
-Rejected
-
-
-
-Consequences
-
-
-
-ドキュメント更新の手間は増える。
-
-
-
-長期保守性は向上する。
-
-
-
-\---
-
-
-
-\# Decision Status
-
-
-
-Accepted
-
-
-
-正式採用
-
-
-
-Proposed
-
-
-
-提案中
-
-
-
-Deprecated
-
-
-
-非推奨
-
-
-
-Rejected
-
-
-
-却下
-
-
-
-Superseded
-
-
-
-新しいDecisionに置き換え
-
-
-
-\---
-
-
-
-\# How to Update
-
-
-
-新しいDecisionを追加する場合
-
-
-
-既存を書き換えない。
-
-
-
-末尾へ追加する。
-
-
-
-Decision IDは連番。
-
-
-
-過去を書き換えない。
-
-
-
-変更が必要な場合は
-
-
-
-Superseded
-
-
-
-として新しいDecisionを追加する。
-
-
-
-\---
-
-
-
-\# Golden Rule
-
-
-
-設計は忘れる。
-
-
-
-記録は残る。
-
-
-
-コードは変わる。
-
-
-
-理由は変えてはならない。
-
-
-
-未来の開発者は
-
-
-
-コードではなく
-
-
-
-Decisionを読むことで
-
-
-
-TrailBookを理解する。
-
-
-
-End of Document
-
+設計は忘れる。記録は残る。コードは変わる。理由は残す。
