@@ -1,5 +1,18 @@
 import LayerManager from "../map/LayerManager.js";
 
+const DEFAULT_MAP_DISPLAY_MODE = "color";
+const MAP_DISPLAY_MODES = new Set([
+    DEFAULT_MAP_DISPLAY_MODE,
+    "monochrome"
+]);
+
+function normalizeMapDisplayMode(mode) {
+
+    return MAP_DISPLAY_MODES.has(mode)
+        ? mode
+        : DEFAULT_MAP_DISPLAY_MODE;
+}
+
 /**
  * Displays parsed GPX data on a Leaflet map.
  */
@@ -22,6 +35,8 @@ export default class MapView {
         this.layerManager = null;
 
         this.trackRenderer = null;
+
+        this.mapDisplayMode = DEFAULT_MAP_DISPLAY_MODE;
 
         this.handleZoomEnd = () => {
             this.eventBus.emit("map:zoom-ended", {
@@ -246,6 +261,36 @@ export default class MapView {
         return this.layerManager?.clearSelectionHighlight() ?? false;
     }
 
+    setMapDisplayMode(mode) {
+
+        const normalizedMode = normalizeMapDisplayMode(mode);
+
+        if (this.mapDisplayMode === normalizedMode) {
+            return false;
+        }
+
+        this.mapDisplayMode = normalizedMode;
+
+        const mapElement = this.element.querySelector(".map-canvas");
+        const modeSelect = this.element.querySelector(".map-mode-select");
+
+        mapElement?.classList.toggle(
+            "map--monochrome",
+            normalizedMode === "monochrome"
+        );
+
+        if (modeSelect) {
+            modeSelect.value = normalizedMode;
+        }
+
+        return true;
+    }
+
+    getMapDisplayMode() {
+
+        return this.mapDisplayMode;
+    }
+
     /**
      * Removes displayed GPX layers.
      *
@@ -293,6 +338,13 @@ export default class MapView {
 
         section.innerHTML = `
             <div class="map-toolbar">
+                <label class="map-mode-control">
+                    <span>Map:</span>
+                    <select class="map-mode-select" aria-label="背景地図の表示モード">
+                        <option value="color">Color</option>
+                        <option value="monochrome">Monochrome</option>
+                    </select>
+                </label>
                 <label class="waypoint-toggle">
                     <input type="checkbox" aria-label="Waypointを表示">
                     <span>Waypointを表示</span>
@@ -313,6 +365,14 @@ export default class MapView {
             event => this.eventBus.emit(
                 "map:waypoint-visibility-toggled",
                 { visible: event.target.checked }
+            )
+        );
+
+        section.querySelector(".map-mode-select").addEventListener(
+            "change",
+            event => this.eventBus.emit(
+                "map:display-mode-changed",
+                { mode: event.target.value }
             )
         );
 

@@ -598,13 +598,13 @@ Unit 1 / Unit 2ではRelease Procedureを実行しない。
 
 ## Release 1.1 Track Selection & Styling
 
-Release 1.1 Status: Planning
+Release 1.1 Status: In Progress
 Unit 1 Status: Completed
 Architecture Status: Completed
 Decision Status: Completed
 Event Contract Status: Completed
 Test Plan Status: Completed
-Production Implementation Status: In progress — Unit 5 completed、Unit 6 not started
+Production Implementation Status: In progress — Unit 6 completed、Unit 7 not started
 Current production version: `1.0.0`
 Planning baseline commit: `29d7db7`
 
@@ -617,7 +617,7 @@ Planning baseline commit: `29d7db7`
 | 3 | SelectionState、Map click、highlight | Completed | Unit 2 |
 | 4 | UI settings persistence foundation | Completed | Unit 1 |
 | 5 | Folder color UI and inheritance | Completed | Unit 3、Unit 4 |
-| 6 | Monochrome Map Mode | Pending | Unit 4 |
+| 6 | Monochrome Map Mode | Completed | Unit 4 |
 | 7 | Integrated acceptance、performance、documentation、Release finalization | Pending | Unit 2〜6 |
 
 Unit 4はUnit 2 / 3とproduction fileの競合を避けて実施できるが、Unit 5はselection projectionとstorage contractの両方へ依存する。Unit 6はUnit 4のUI settings persistence基盤を共用でき、Unit 7で統合確認とRelease finalizationを行う。
@@ -696,6 +696,14 @@ Planned production files:
 - [x] root Folder名変更時は別Library ID — Unit 4 Chrome Pass
 - [x] 同名Libraryが設定を共有する既知制限 — Unit 4 Chrome Pass
 - [x] localStorage unavailableでもsession操作継続 — Unit 4 Chrome Pass
+- [x] globalなし / invalid mapModeはColor — Unit 6 static test Pass
+- [x] Color / Monochrome保存、reload復元、Library切り替え維持 — Unit 6 static test Pass
+- [x] schema version 1と既存libraries / folderColorsを維持 — Unit 6 static test Pass
+- [x] 初期Color、Monochrome切り替え、Color復帰 — Unit 6 Chrome / Edge Pass
+- [x] OSM tileだけをfilterし、Track、Waypoint、control、attribution、UIを維持 — Unit 6 Chrome / Edge Pass
+- [x] 地名・道路の可読性とTrack視認性 — Unit 6 Chrome Pass
+- [x] mapMode reload復元、Library切り替え、fallback、session維持 — Unit 6 Chrome / Edge Pass
+- [x] 806 GPXで即時切り替えと実用的なzoom操作 — Unit 6 Chrome Pass
 - [x] zoom bucket内でrestyleなし — Chrome browser acceptance Pass
 - [x] zoom bucket境界で表示中Trackだけrestyle — Chrome / Edge browser acceptance Pass
 - [x] Folder色変更で対象配下だけrestyle — Chrome Pass
@@ -967,7 +975,7 @@ Unit 5 Implementation Status: Completed
 Unit 5 Static Test Status: Completed
 Unit 5 Browser Acceptance Status: Completed
 Unit 5 Status: Completed
-Unit 6 Status: Not started
+Unit 6 Status at Unit 5 completion: Not started
 
 実装内容:
 
@@ -1042,19 +1050,86 @@ Known limitations:
 
 Chrome / Edgeの実ブラウザ受け入れ確認と806 GPX Library確認が完了したため、Unit 5をCompletedとする。Unit 6 Monochrome Map Modeは未開始である。
 
-### Unit 6 Candidate — Monochrome Map Mode
+### Unit 6 Monochrome Map Mode
 
-- 背景OSM tileだけをグレースケール化し、Track、Waypoint、UIにはfilterを掛けない。
-- tile providerとOpenStreetMap attributionを維持する。
-- Color / Monochromeを切り替え可能とし、初期値はColorとする。
-- CSS filter方式を第一候補とする。
-- localStorage保存はUnit 4のFolder color persistence基盤と共用できる。
-- Mobile対応は対象外であり、Unit 2では実装しない。
+Unit 6 Implementation Status: Completed
+Unit 6 Static Test Status: Completed
+Unit 6 Browser Acceptance Status: Completed
+Unit 6 Status: Completed
+Unit 7 Status: Not started
+
+実装内容:
+
+- Map toolbarへnative selectを追加し、Color / Monochromeのcurrent stateを文字で表示する。初期値はColorで、`aria-label`と標準keyboard操作を持つ。
+- `MapView.setMapDisplayMode(mode)` / `getMapDisplayMode()`を追加する。invalid modeはColorへfallbackし、同一modeはno-op、Map未初期化でも安全である。
+- Map rootの`map--monochrome` class配下にある`.leaflet-tile-pane img`だけへCSS filterを適用する。
+- filter値はCSS custom propertyへ集約し、`grayscale(100%) brightness(108%) contrast(82%)`とする。
+- Track Canvas、Waypoint Marker、shadow、tooltip / popup、Leaflet control、attribution、sidebar、Toolbarにはfilterを適用しない。
+- tile provider、tile URL、attributionを変更せず、mode変更でtile再取得、Track再描画、Map refocus、`invalidateSize`、zoom / center変更を行わない。
+- DisplaySettingsStore schema version 1へLibrary非依存の`global.mapMode`を追加する。`global`がない既存payloadとinvalid valueはColorへfallbackする。
+- Store APIは`getMapMode()` / `setMapMode(mode)`とし、write failure時も同じsession内のmodeを維持する。既存librariesとfolderColorsを保持する。
+- Appは起動時の復元、`map:display-mode-changed`、Store更新、MapView projectionを調停する。Library切り替えでmodeを変更しない。
+
+Static test result:
+
+| Test | Result | Notes |
+| --- | --- | --- |
+| DisplaySettingsStore mapMode | Pass | default、Color / Monochrome、same value、schema 1、global保存、reload、old schema、invalid、malformed JSON、unknown version、write failure、Library切り替え、libraries / folderColors維持 |
+| MapView / UI / tile filter | Pass | mode API、class、same mode、invalid fallback、Map未初期化、native select、ARIA、event、tile image限定、Track Canvas・Waypoint・attribution非影響 |
+| App integration | Pass | 起動時復元、UI変更、Store反映、SelectionState非影響 |
+| Total assertions | Pass | 41 assertions |
+| production module import | Pass | 34 / 34 |
+| missing import | Pass | 0件 |
+| circular dependency | Pass | 0件 |
+| TreeView line count | Pass | 997行、差分なし |
+| Config / schema version | Pass | Config `1.0.0`、schema version `1` |
+
+#### Unit 6 Browser Acceptance Result
+
+Windows Chrome:
+
+| Area | Result | Verified behavior |
+| --- | --- | --- |
+| Display | Pass | 初期Color、Monochrome、Color復帰、OSM tile限定filter、Track / Folder色、selected highlight、outline、Waypoint、zoom control、attribution、Toolbar / sidebarを維持 |
+| Readability | Pass | 地名・道路が読め、淡い色を含むTrack視認性が向上し、背景が強すぎない |
+| Map / Viewer operation | Pass | pan、zoom、double-click zoom、tile load、root一括表示、Search、Clear、Library切り替え |
+| Persistence | Pass | reload復元、Library切り替え後もmode維持、localStorage削除時Color、malformed JSON時Color、write failure時session維持 |
+| Console / Network | Pass | アプリ由来error、不要なlog / warning、tile 404なし。attribution link正常 |
+
+Windows Edge:
+
+| Check | Result |
+| --- | --- |
+| Color / Monochrome切り替え | Pass |
+| OSM tileだけ白黒表示 | Pass |
+| Track色維持 | Pass |
+| reload復元 | Pass |
+| Library切り替え後もmode維持 | Pass |
+| Console error | None |
+
+806 GPX Library:
+
+| Check | Result |
+| --- | --- |
+| Monochrome切り替え | 即時（Pass） |
+| Track再描画 | なし（Pass） |
+| zoom操作 | 実用上問題なし |
+| 広域表示のTrack視認性 | 改善（Pass） |
+| 明確な性能回帰 | なし（Pass） |
+
+Known limitations:
+
+- Monochrome Map ModeはCSS filter方式である。
+- OpenStreetMap tile providerは従来どおりonline依存である。
+- Mobile UIはRelease 1.1 Unit 6の対象外である。
+
+Chrome / Edgeの実ブラウザ受け入れ確認と806 GPX Library確認が完了したため、Unit 6をCompletedとする。Unit 7は開始していない。
 
 ### Persistence Schema
 
 Storage key: `trailbook.uiSettings`
 Schema version: `1`
+Global setting: `global.mapMode`。`color`または`monochrome`、欠落・invalid valueは`color`
 Library identity: trim済みroot Folder nameをURL encodingした`root-name:<name>`。空名は`unnamed`
 Folder identity: current Library内のrelative path。rootは空文字。
 

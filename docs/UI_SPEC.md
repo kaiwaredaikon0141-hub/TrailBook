@@ -1,7 +1,7 @@
 # TrailBook UI Specification
 
 Version : 1.2
-Status  : Implemented through Release 1.0 / Release 1.1 Planning
+Status  : Implemented through Release 1.0 / Release 1.1 In Progress
 Depends : PROJECT.md, ARCHITECTURE.md, ROADMAP.md
 
 Release 0.5からRelease 0.9までの追加仕様は本書末尾に追記する。
@@ -647,7 +647,7 @@ Mobileでもsecure context、対応origin、`showDirectoryPicker`を満たす場
 
 # 21. Release 1.1 Track Selection & Styling
 
-Release 1.1はPlanning状態であり、次のUI contractを実装前仕様として確定する。
+Release 1.1は実装進行中であり、次の確定UI contractと完了Unitの実装事実を記録する。
 
 ## Track selection
 
@@ -730,15 +730,16 @@ dialogは現在Folder名、現在のresolved color、`input type="color"`、Appl
 
 Unit 2ではNormal列だけを実装する。Selected main / Selected outline、Track click、selection同期はUnit 3以降で実装し、現時点のViewer操作には追加しない。
 
-## Monochrome Map Mode — Unit 6 candidate
+## Monochrome Map Mode — Unit 6
 
 - Color / Monochromeを切り替え可能とし、初期値はColorとする。
-- Monochromeでは背景OSM tileだけをグレースケール化する。
+- Map toolbarのnative selectでcurrent stateを文字表示し、`aria-label`と標準keyboard操作を提供する。
+- Monochromeでは`.map--monochrome .leaflet-tile-pane img`だけへ`grayscale(100%) brightness(108%) contrast(82%)`を適用する。
 - Track、Waypoint、Leaflet control、TrailBook UIにはfilterを掛けない。
 - tile providerと画面上のOpenStreetMap attributionを維持する。
-- CSS filter方式を第一候補とする。
-- 設定保存はFolder colorと同じUI settings persistence基盤を共用できる。
-- Mobile対応は対象外とし、Unit 2では実装しない。
+- Colorへ戻すとfilterを完全解除し、tile再取得、Track再描画、Map refocus、zoom / center変更を行わない。
+- `global.mapMode`としてFolder colorと同じUI settings persistence基盤へ保存し、Library切り替えでも維持する。保存値がない、または不正な場合はColorとする。
+- Mobile対応は対象外とする。
 
 ## Persistence feedback
 
@@ -746,7 +747,7 @@ Folder colorはLibrary再選択またはpage reload後に復元する。root Fol
 
 GPX、Folder、FileHandle、解析geometryを保存しない。storage failureはViewerを止めずsession memoryで継続する。Unit 4はStoreの診断statusだけを提供し、StatusBar等のUI feedbackはFolder color UIを接続する後続Unitで扱う。
 
-Unit 4のstorage contractは固定key`trailbook.uiSettings`、schema version 1とする。`libraries`は`root-name:<URL encoded root Folder name>`をkeyとするplain object、`folderColors`はFolder relative pathから正規化済み`#RRGGBB`へのplain objectである。root pathは空文字を許可する。
+storage contractは固定key`trailbook.uiSettings`、schema version 1とする。Unit 6でtop-levelの`global.mapMode`を追加し、`global`がない既存schemaはColorとして読み込む。`libraries`は`root-name:<URL encoded root Folder name>`をkeyとするplain object、`folderColors`はFolder relative pathから正規化済み`#RRGGBB`へのplain objectである。root pathは空文字を許可する。
 
 Unit 5ではTreeView本体を増やさず、独立したFolder color controlがlazy DOMへswatch buttonを追加する。buttonはclickとkeydownをTree rowへ伝播せず、checkbox、展開、roving tabindexと競合しない。表示labelは`Explicit`、`Inherited`、`Auto`で、Autoは単一色ではなくchecker表示とする。native dialogのApply、Default、Cancel、Escape後は起点buttonへfocusを戻す。
 

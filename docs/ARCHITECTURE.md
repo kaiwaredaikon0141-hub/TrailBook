@@ -3,7 +3,7 @@
 Version: 1.1
 Status: Official
 Baseline: Release 1.0.0
-Next: Release 1.1 Planning
+Next: Release 1.1 In Progress
 Depends: PROJECT.md, ROADMAP.md, DECISIONS.md
 
 ## Architecture Overview
@@ -444,7 +444,7 @@ Release 1.0はRelease 0.9までのViewer機能を個人利用環境で安定さ�
 
 ## Release 1.1 Planned Architecture
 
-Release 1.1 Track Selection & Stylingは、既存のpath identity、App mediation、read-only GPX、bounded Queue / cacheを維持したまま、Selection、Track style、Folder color、UI設定storageを追加する。以下はPlanning contractであり、Release 1.0 productionの実装事実ではない。
+Release 1.1 Track Selection & Stylingは、既存のpath identity、App mediation、read-only GPX、bounded Queue / cacheを維持したまま、Selection、Track style、Folder color、UI設定storageを追加する。Unit 1で確定したcontractに従い、完了したUnitの実装事実を順次記録する。
 
 ### SelectionState — Selection Source of Truth
 
@@ -553,6 +553,9 @@ Unit 5ではFolder pathとGPXの親Folder計算をstateやUIへ重複させず�
 ```json
 {
   "version": 1,
+  "global": {
+    "mapMode": "monochrome"
+  },
   "libraries": {
     "root-name:TrailBook": {
       "folderColors": {
@@ -565,7 +568,7 @@ Unit 5ではFolder pathとGPXの親Folder計算をstateやUIへ重複させず�
 }
 ```
 
-保存対象はschema version、Library ID、Folder relative pathと明示色だけとする。Library IDのroot名部分はtrim後にURL encodingし、空名は`unnamed`へfallbackする。大文字小文字は保持し、separatorとcontrol characterを安全にidentityへ含める。GPX内容、TrackPoint、Waypoint、解析geometry、FileHandle、FolderHandle、GPX XML、解析cacheを保存しない。外部通信もしない。
+保存対象はschema version、globalなMap表示mode、Library ID、Folder relative pathと明示色だけとする。Library IDのroot名部分はtrim後にURL encodingし、空名は`unnamed`へfallbackする。大文字小文字は保持し、separatorとcontrol characterを安全にidentityへ含める。GPX内容、TrackPoint、Waypoint、解析geometry、FileHandle、FolderHandle、GPX XML、解析cacheを保存しない。外部通信もしない。
 
 JSON parse failure、invalid color、未知schema version、quota / security errorでは保存値を無視し、path hash fallbackまたはsession内設定でViewerを継続する。破損値を暗黙に上書きせず、次の明示設定操作まで保持しない。localStorage削除時はDefault色へ戻るだけである。
 
@@ -573,17 +576,19 @@ schema検証と正規化はStore内のpure処理としてstorage accessから分
 
 schema version 1から将来fieldを追加できるが、前回表示TrackやMap位置はRelease 1.1で保存しない。
 
-Unit 4では`DisplaySettingsStore`をproductionへ実装し、constructor injectionされたstorageを起動時に一度だけ読む。top-level keyは`version`と`libraries`、Library entryは`folderColors`を持つplain objectとし、unknown fieldはschema 1では無視する。配列、`null`、危険key、invalid path / colorを保存状態へ取り込まず、内部dictionaryにはprototypeを持たせない。
+Unit 4では`DisplaySettingsStore`をproductionへ実装し、constructor injectionされたstorageを起動時に一度だけ読む。Unit 6ではschema version 1を維持したままtop-levelへ`global.mapMode`を追加する。`global`がない既存payloadは`color`として読み、`color`と`monochrome`以外も`color`へfallbackする。Library entryは引き続き`folderColors`を持つplain objectとし、unknown fieldはschema 1では無視する。配列、`null`、危険key、invalid path / colorを保存状態へ取り込まず、内部dictionaryにはprototypeを持たせない。
 
 色は`#RGB`または`#RRGGBB`だけを受理し、`#RRGGBB`大文字へ正規化する。root Folder pathの`""`は有効とし、nested pathはTree metadataと同じ`/`区切りを使用する。alpha、CSS color name、`rgb()`、control character、backslash、不正separator、`__proto__`、`constructor`、`prototype` segmentを拒否する。
 
 storage未定義、read / JSON parse / write failure、quota / security errorではlocalStorageを切り離し、同じStore instanceのsession memoryで操作を継続する。Storeはstorage内容や例外文字列をConsoleへ出さず、`getStatus()`で`available`または`session-only`を診断可能にする。Unit 5ではFolder行のmode labelへ`Session only`を併記し、保存失敗時もblocking errorなしで現在sessionの色を利用できる。
 
-### Monochrome Map Mode — Unit 6 Candidate
+### Monochrome Map Mode — Unit 6
 
-背景OSM tileだけへCSS grayscale filterを適用し、Track、Waypoint、Leaflet control、TrailBook UIにはfilterを適用しない。tile providerとOpenStreetMap attributionは変更しない。Color / Monochromeを切り替え可能とし、初期値はColorとする。
+Map toolbarのnative selectからColor / Monochromeを切り替え、初期値はColorとする。`MapView.setMapDisplayMode(mode)`は`.map-canvas`の`map--monochrome` classとselectのcurrent stateだけを更新し、invalid modeはColorへfallbackする。同一modeはno-opで、Map未初期化でも安全に動作する。
 
-設定のlocalStorage保存はUnit 4のUI settings persistence基盤を共用できるが、Unit 2では実装しない。CSS filter方式を第一候補とし、Mobile対応は対象外とする。
+CSS selectorは`.map--monochrome .leaflet-tile-pane img`に限定し、`grayscale(100%) brightness(108%) contrast(82%)`を適用する。overlay paneのTrack Canvas、Marker / shadow pane、tooltip / popup、Leaflet control、attribution、TrailBook UIにはfilterを適用しない。tile provider、URL、OpenStreetMap attributionを変更せず、mode切り替えでtile再生成、Track再描画、Map refocus、`invalidateSize`、zoom / center変更を行わない。
+
+`DisplaySettingsStore.getMapMode()` / `setMapMode(mode)`はLibrary非依存の`global.mapMode`をsession stateとlocalStorageへ保存する。Appが起動時の復元、`map:display-mode-changed` request、Store更新、MapView projectionを調停する。Library切り替えではmodeを変更しない。write failure時も同じStore instanceのsession内設定を維持する。Mobile対応は対象外とする。
 
 Folder色UIは`FolderColorControl`と単一`FolderColorDialog`へ分離する。ControlはMutationObserverでlazy DOMのrender済みFolder行だけを装飾し、TreeView本体を変更しない。Dialog state、validation、storageはTreeViewへ置かず、TreeViewの997行と1,000行規則を維持する。
 
@@ -613,6 +618,7 @@ root Folder名を変更すると新Libraryとして扱いDefault色へ戻る。�
 | `folder:color-edit-requested` | FolderColorControl | App | `{ folderPath, folderName, origin }`; dialogを開く |
 | `folder:color-change-requested` | Folder color dialog | App | `{ folderPath, color }`; valid explicit color |
 | `folder:color-default-requested` | Folder color dialog | App | `{ folderPath }`; explicit valueを削除 |
+| `map:display-mode-changed` | MapView | App | `{ mode }`; `color`または`monochrome`をStoreへ保存してMapViewへ投影 |
 
 既存`gpx:selected`はUnit 3でrequest / changedを分離する際に置き換える。Search result activateはTreeViewの同じselection requestへ接続し、checkboxは選択を変更しない。既存`gpx:display-toggled`、`folder:display-toggled`、Waypoint、Queue、cache契約は変更しない。
 

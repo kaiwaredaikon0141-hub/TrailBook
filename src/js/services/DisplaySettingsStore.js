@@ -4,6 +4,8 @@ const EMPTY_ROOT_NAME = "unnamed";
 const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 const HEX_COLOR_PATTERN = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/;
+const DEFAULT_MAP_MODE = "color";
+const MAP_MODES = new Set([DEFAULT_MAP_MODE, "monochrome"]);
 
 function createDictionary() {
 
@@ -81,10 +83,18 @@ function normalizeColor(color) {
     ).toUpperCase()}`;
 }
 
+function normalizeMapMode(mode) {
+
+    return MAP_MODES.has(mode) ? mode : DEFAULT_MAP_MODE;
+}
+
 function createDefaultSettings(schemaVersion) {
 
     return {
         version: schemaVersion,
+        global: {
+            mapMode: DEFAULT_MAP_MODE
+        },
         libraries: createDictionary()
     };
 }
@@ -100,6 +110,10 @@ function sanitizePayload(payload, schemaVersion) {
     }
 
     const settings = createDefaultSettings(schemaVersion);
+
+    if (isPlainObject(payload.global)) {
+        settings.global.mapMode = normalizeMapMode(payload.global.mapMode);
+    }
 
     Object.keys(payload.libraries).forEach(libraryId => {
         const library = payload.libraries[libraryId];
@@ -181,6 +195,25 @@ export default class DisplaySettingsStore {
     getActiveLibraryId() {
 
         return this.activeLibraryId;
+    }
+
+    getMapMode() {
+
+        return normalizeMapMode(this.settings.global?.mapMode);
+    }
+
+    setMapMode(mode) {
+
+        const normalizedMode = normalizeMapMode(mode);
+
+        if (this.getMapMode() === normalizedMode) {
+            return false;
+        }
+
+        this.settings.global.mapMode = normalizedMode;
+        this.#save();
+
+        return true;
     }
 
     getFolderColors(libraryId) {

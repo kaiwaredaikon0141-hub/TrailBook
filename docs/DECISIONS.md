@@ -436,7 +436,7 @@ Date: 2026-08
 Status: Accepted
 Scope: Release 1.1
 
-Decision: 固定key`trailbook.uiSettings`のlocalStorageを、schema version付きの再生成可能なUI設定storageとして許可する。Release 1.1ではFolder明示色だけを保存する。Library IDは案Aのroot Folder name完全一致から`root-name:<name>`を作り、Folder relative pathと組み合わせる。
+Decision: 固定key`trailbook.uiSettings`のlocalStorageを、schema version付きの再生成可能なUI設定storageとして許可する。Release 1.1ではFolder明示色とglobalなMap表示modeだけを保存する。Library IDは案Aのroot Folder name完全一致から`root-name:<name>`を作り、Folder relative pathと組み合わせる。
 
 Reason: FileHandleを永続化せず、GPX内容hashや追加走査を行わず、個人利用で説明可能な最小構造にするため。localStorage削除時にDefault色へ戻るだけであり、GPXとFolder構造が正本である方針を変更しない。
 
@@ -446,7 +446,19 @@ Consequences: root Folder名変更時は新LibraryとしてDefault色になる�
 
 GPX内容、TrackPoint、Waypoint、解析geometry、FileHandle、FolderHandle、GPX XML、解析cacheを保存しない。前回表示TrackとMap位置はRelease 1.1では保存しない。将来これらのUI状態を追加する場合もschema migrationと新しいDecisionを必要とする。
 
-Implementation Note: schema version 1は`{ version: 1, libraries: { [libraryId]: { folderColors: { [folderPath]: "#RRGGBB" } } } }`とする。root Folder nameはtrim後にURL encodingし、空名を`unnamed`へfallbackして`root-name:<name>`を生成する。unknown fieldは無視し、危険key、配列、`null`、不正path / colorを取り込まない。read / write failure時はlocalStorageからsession memoryへfallbackする。
+Implementation Note: schema version 1は`{ version: 1, global: { mapMode: "color" }, libraries: { [libraryId]: { folderColors: { [folderPath]: "#RRGGBB" } } } }`とする。`global`がない既存payloadとinvalid `mapMode`はColorへfallbackする。root Folder nameはtrim後にURL encodingし、空名を`unnamed`へfallbackして`root-name:<name>`を生成する。unknown fieldは無視し、危険key、配列、`null`、不正path / colorを取り込まない。read / write failure時はlocalStorageからsession memoryへfallbackする。
+
+## Decision 0031 — Monochrome Mode Filters Only the OSM Tile Pane
+
+Date: 2026-08
+Status: Accepted
+Scope: Release 1.1
+
+Decision: Monochrome Map Modeは既存OSM tile providerを維持し、Map rootの状態class配下にあるLeaflet tile paneの画像だけへCSS filterを適用する。Track Canvas、Waypoint、Leaflet control、attribution、TrailBook UIにはfilterを適用しない。初期値はColorとし、Map表示modeはLibrary非依存の`global.mapMode`としてDisplaySettingsStoreへ保存する。
+
+Reason: GPXごとのFolder colorとselection highlightを保ったまま背景地図の彩度を抑え、Library切り替えに依存しない利用者の表示設定として扱うため。tile provider追加、tile cache、geometry再生成を避け、即時かつ可逆な表示変更に限定する。
+
+Consequences: filter値は`grayscale(100%) brightness(108%) contrast(82%)`へ集約する。Colorへ戻す場合はclassを外すだけで、tile再取得、Track再描画、Map refocus、zoom / center変更を行わない。保存値欠落・invalid valueはColorへfallbackし、storage write failure時もsession内切り替えを維持する。Mobile対応は対象外とする。
 
 ## Decision Status
 

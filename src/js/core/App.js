@@ -90,6 +90,9 @@ export default class App {
         this.statusBar = new StatusBar();
         this.libraryAccessPanel = new LibraryAccessPanel();
         this.mapView = new MapView(this.config, this.eventBus);
+        this.mapView.setMapDisplayMode(
+            this.displaySettingsStore.getMapMode()
+        );
         this.folderColorControl = new FolderColorControl(
             this.treeView,
             this.eventBus
@@ -234,6 +237,10 @@ export default class App {
 
         this.eventBus.on("map:waypoint-visibility-toggled", ({ visible }) => {
             this.setWaypointVisibility(visible);
+        });
+
+        this.eventBus.on("map:display-mode-changed", ({ mode }) => {
+            this.setMapDisplayMode(mode);
         });
 
         this.eventBus.on("map:display-failed", ({ error }) => {
@@ -723,6 +730,15 @@ export default class App {
 
             this.mapView.refocus();
         }, 250);
+    }
+
+    setMapDisplayMode(mode) {
+
+        this.displaySettingsStore.setMapMode(mode);
+
+        return this.mapView.setMapDisplayMode(
+            this.displaySettingsStore.getMapMode()
+        );
     }
 
     handleFolderColorEditRequested({
