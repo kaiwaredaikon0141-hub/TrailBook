@@ -607,8 +607,26 @@ Release 1.0は個人利用向け正式安定版であり、Release 0.9までのU
 - File System Access API非対応または非secure contextでは、Folder選択が利用できない理由を画面内で案内する
 - HTTPS、`http://localhost`、`http://127.0.0.1`を対応originとする
 - Android、iPhone、iPadの最新Chromeは実機検証に合格した端末だけをbest effortとする
-- 未確認または`showDirectoryPicker`など必要APIが不足するMobile browserは対応外とし、既知の制限へ記載する
+- 未確認のMobile browserは対応区分未確定とし、必要APIが不足する端末は対応外として既知の制限へ記載する
 - `file://`、通常のLAN内HTTP IP、Firefox、Safariは対応外とする
+
+Folder選択可否は`window.isSecureContext`、対応origin、`showDirectoryPicker`の実在で判定する。User-Agentだけでは決定せず、desktop Chromium判定は補助情報、Mobile判定は未検証案内と診断情報にだけ使用する。
+
+Mobileでもsecure context、対応origin、`showDirectoryPicker`を満たす場合はFolder選択buttonを有効にし、非ブロッキングの未検証案内を表示して実機試験を可能にする。必要APIがない場合はMobileであることではなくAPI不足を理由に無効化する。実機合格前は正式対応またはbest effort対応とは記載しない。
+
+非対応環境では「ライブラリを開く」をdisabledにし、sidebar内の常時確認できる説明と`aria-describedby`で理由を関連付ける。alertへの応答を必須にしない。
+
+## Startup and Folder access
+
+- Library未選択時はsidebarに「ライブラリを開く」、GPXを含むFolderの選択、read-onlyであることを短く表示する
+- pickerは`{ mode: "read" }`で開く
+- Cancelはerror表示またはConsole errorを発生させず、初回案内または既存Library状態へ戻る
+- permission failureはretry可能な画面内メッセージを表示し、既存Libraryを維持する
+- permission failureの内部error文字列またはstack traceを画面へ表示しない
+- GPX 0件は正常なLibraryとしてLibrary名、GPX 0件、空Folderメッセージを表示する
+- 空LibraryのSearch indexは空、Mapは初期状態、root checkboxはdisabled、Library切り替えは可能とする
+- StatusBarは`role="status"`と`aria-live="polite"`で状態を通知する
+- Mobile向けFolder選択fallbackはRelease 1.0へ追加しない
 
 ## Stable Viewer quality scope
 

@@ -23,7 +23,7 @@ export default class Toolbar {
             </div>
 
             <div class="toolbar-actions">
-                <button id="pick-folder">
+                <button id="pick-folder" type="button">
                     📁 ライブラリを開く
                 </button>
             </div>
@@ -35,6 +35,21 @@ export default class Toolbar {
 
         return header;
 
+    }
+
+    setFolderPickerState({ disabled, descriptionId, disabledReason = "" }) {
+
+        this.pickFolderButton.disabled = disabled;
+        this.pickFolderButton.setAttribute("aria-describedby", descriptionId);
+
+        if (disabled) {
+            this.pickFolderButton.setAttribute("aria-disabled", "true");
+            this.pickFolderButton.title = disabledReason;
+            return;
+        }
+
+        this.pickFolderButton.removeAttribute("aria-disabled");
+        this.pickFolderButton.removeAttribute("title");
     }
 
 }

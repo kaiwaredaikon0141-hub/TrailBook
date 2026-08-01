@@ -3,21 +3,76 @@ import Library from "../models/Library.js";
 
 const GPX_EXTENSION = ".gpx";
 
+const MOBILE_PATTERN = /Android|iPhone|iPad|iPod|Mobile/i;
+const CHROMIUM_PATTERN = /Chrome|Chromium|Edg\//i;
+
 /**
- * Opens a directory picker without treating cancellation as an error.
+ * Detects whether the current environment can open a Folder Library.
+ * Capability and origin checks take priority over browser identification.
  *
- * @returns {Promise<FileSystemDirectoryHandle|null>}
+ * @param {Window} browserWindow
+ * @param {Navigator} browserNavigator
+ * @returns {object}
  */
-export async function pickFolder() {
+export function getFolderPickerSupport(
+    browserWindow = window,
+    browserNavigator = browserWindow.navigator || {}
+) {
 
-    if (!window.showDirectoryPicker) {
+    const { protocol = "", hostname = "" } = browserWindow.location || {};
+    const isSupportedOrigin = protocol === "https:" ||
+        (protocol === "http:" &&
+            (hostname === "localhost" || hostname === "127.0.0.1"));
+    const isSecureContext = browserWindow.isSecureContext === true &&
+        isSupportedOrigin;
+    const hasDirectoryPicker =
+        typeof browserWindow.showDirectoryPicker === "function";
+    const userAgent = browserNavigator.userAgent || "";
+    const isMobile = typeof browserNavigator.userAgentData?.mobile === "boolean"
+        ? browserNavigator.userAgentData.mobile
+        : MOBILE_PATTERN.test(userAgent);
+    const isDesktopChromium = !isMobile &&
+        CHROMIUM_PATTERN.test(userAgent);
 
-        alert("このブラウザはFile System Access APIに対応していません。");
+    let reason = null;
 
-        return null;
+    if (!isSecureContext) {
+        reason = "insecure-context";
+    } else if (!hasDirectoryPicker) {
+        reason = "missing-api";
     }
 
-    return window.showDirectoryPicker();
+    return {
+        available: reason === null,
+        reason,
+        isSecureContext,
+        hasDirectoryPicker,
+        isDesktopChromium,
+        isMobile
+    };
+}
+
+/**
+ * Opens the directory picker in read-only mode.
+ * App handles the picker AbortError as a non-error cancellation.
+ *
+ * @returns {Promise<FileSystemDirectoryHandle>}
+ */
+export async function pickFolder(browserWindow = window) {
+
+    const support = getFolderPickerSupport(
+        browserWindow,
+        browserWindow.navigator
+    );
+
+    if (!support.available) {
+        const error = new Error("Folder picker is not available.");
+
+        error.name = "NotSupportedError";
+        throw error;
+    }
+
+    return browserWindow.showDirectoryPicker({ mode: "read" });
 }
 
 /**

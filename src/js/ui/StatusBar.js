@@ -19,8 +19,10 @@ export default class StatusBar {
         const footer = document.createElement("footer");
 
         footer.className = "statusbar";
-
-        footer.textContent = "Ready";
+        footer.setAttribute("role", "status");
+        footer.setAttribute("aria-live", "polite");
+        footer.setAttribute("aria-atomic", "true");
+        footer.textContent = "ライブラリを開いてください";
 
         return footer;
 
@@ -33,6 +35,13 @@ export default class StatusBar {
      * @returns {void}
      */
     showLibraryLoaded(library) {
+
+        if (library.gpxFileCount === 0) {
+            this.element.textContent =
+                `${library.name}: GPX 0件 — ` +
+                "このFolderにはGPXファイルがありません";
+            return;
+        }
 
         this.element.textContent =
             `${library.name}: ${library.folderCount} folders, ` +
@@ -47,6 +56,21 @@ export default class StatusBar {
     showError() {
 
         this.element.textContent = "ライブラリを開けませんでした";
+    }
+
+    showInitial() {
+
+        this.element.textContent = "ライブラリを開いてください";
+    }
+
+    showUnsupportedEnvironment() {
+
+        this.element.textContent = "この環境ではライブラリを開けません";
+    }
+
+    showLibraryLoading(folderName) {
+
+        this.element.textContent = `ライブラリを読み込み中: ${folderName}`;
     }
 
     /**

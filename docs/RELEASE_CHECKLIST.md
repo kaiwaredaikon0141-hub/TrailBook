@@ -30,7 +30,7 @@ Release 1.0 Stable Viewerを、個人利用環境で安全・安定・再現可�
 - [ ] その他Chromium系desktopをbest effortとして案内した。
 - [ ] Android、iPhone、iPadの最新Chromeを実機検証した。
 - [ ] 合格したMobile端末だけをREADMEのbest effort対応へ記載した。
-- [ ] 未確認または必要API不足のMobile端末を既知の制限へ記載した。
+- [ ] 未確認のMobile端末を対応区分未確定、必要API不足の端末を既知の制限へ記載した。
 
 ## Mobile Device Validation
 
@@ -38,29 +38,29 @@ Release 1.0 Stable Viewerを、個人利用環境で安全・安定・再現可�
 
 | Device | OS version | Chrome version | Test date | Result | Limitation / Notes |
 | --- | --- | --- | --- | --- | --- |
-| Android実機 | Not recorded | Not recorded | Not tested | 未確認・非対応扱い | 実機sessionなし |
-| iPhone実機 | Not recorded | Not recorded | Not tested | 未確認・非対応扱い | 実機sessionなし |
-| iPad実機 | Not recorded | Not recorded | Not tested | 未確認・非対応扱い | 実機sessionなし |
+| Android実機 | Not recorded | Not recorded | Not tested | 未確認・対応区分未確定 | 実機sessionなし |
+| iPhone実機 | Not recorded | Not recorded | Not recorded | Fail — Release 1.0非対応 | HTTPS Quick TunnelでGoogle Drive Folderの読込・Tree表示までは成功。Mobile UI / touch操作未対応 |
+| iPad実機 | Not recorded | Not recorded | Not tested | 未確認・対応区分未確定 | 実機sessionなし |
 
 各端末で次を個別に記録する。
 
 | Test item | Android Chrome | iPhone Chrome | iPad Chrome |
 | --- | --- | --- | --- |
-| HTTPS環境で起動 | 未実施 | 未実施 | 未実施 |
-| `showDirectoryPicker`の有無 | 未実施 | 未実施 | 未実施 |
-| Folder選択 | 未実施 | 未実施 | 未実施 |
-| 端末内Files / クラウドFolder参照 | 未実施 | 未実施 | 未実施 |
-| Folder走査 | 未実施 | 未実施 | 未実施 |
+| HTTPS環境で起動 | 未実施 | Pass | 未実施 |
+| `showDirectoryPicker`の有無 | 未実施 | Pass | 未実施 |
+| Folder選択 | 未実施 | Pass | 未実施 |
+| 端末内Files / クラウドFolder参照 | 未実施 | Pass — Google Drive Folder | 未実施 |
+| Folder走査 | 未実施 | Pass | 未実施 |
 | 複数GPX読込 | 未実施 | 未実施 | 未実施 |
 | Search | 未実施 | 未実施 | 未実施 |
-| GPX個別表示 | 未実施 | 未実施 | 未実施 |
+| GPX個別表示 | 未実施 | Fail — checkbox / Track表示不可 | 未実施 |
 | Folder一括表示 | 未実施 | 未実施 | 未実施 |
 | Waypoint切り替え | 未実施 | 未実施 | 未実施 |
 | Map pan / zoom | 未実施 | 未実施 | 未実施 |
-| touch操作 | 未実施 | 未実施 | 未実施 |
+| touch操作 | 未実施 | Fail | 未実施 |
 | 縦画面 | 未実施 | 未実施 | 未実施 |
 | 横画面 | 未実施 | 未実施 | 未実施 |
-| sidebar操作 | 未実施 | 未実施 | 未実施 |
+| sidebar操作 | 未実施 | Fail — pinch zoom対象 | 未実施 |
 | Library切り替え | 未実施 | 未実施 | 未実施 |
 | 画面回転後の状態 | 未実施 | 未実施 | 未実施 |
 | GPX内容が変更されない | 未実施 | 未実施 | 未実施 |
@@ -73,6 +73,31 @@ Release 1.0 Stable Viewerを、個人利用環境で安全・安定・再現可�
 - Not tested: 未確認であり、対応済みと記載しない。
 
 Release 1.0では`input type="file" webkitdirectory`、複数GPXファイル選択、ZIP Library読込、クラウドFolder import、Mobile専用Library入口を実装しない。
+
+### iPhone Chrome Result
+
+Test environment: iPhone Chrome / HTTPS Quick Tunnel / Google Drive Folder。OS version、Chrome version、test dateは記録されていない。
+
+| Test item | Result | Notes |
+| --- | --- | --- |
+| TrailBook起動 | Pass | HTTPS Quick Tunnel |
+| HTTPS secure context | Pass | |
+| Folder picker表示 | Pass | |
+| Google Drive Folder選択 | Pass | |
+| Folder scan | Pass | |
+| TreeView表示 | Pass | |
+| Folder構造表示 | Pass | |
+| GPX checkbox操作 | Fail | |
+| Track表示 | Fail | |
+| touch操作 | Fail | |
+| sidebar操作性 | Fail | sidebar部分もpinch zoom対象になる |
+| Mobile layout | Fail | PC向け横並びlayoutのままでMobileに最適化されていない |
+
+総合判定はFailとし、iPhone ChromeはRelease 1.0で非対応とする。API不足による完全非対応ではなく、Folder読込は可能だがMobile UI / touch操作未対応と分類する。READMEへbest effort対応として追加しない。
+
+Release 1.0ではMobile responsive layout、sidebar drawer、touch専用checkbox処理、touch hit area拡大、pinch zoom制御、Mobile専用toolbar、Mobile用Library入口、input file fallback、ZIP import、Google Drive syncを実装しない。
+
+将来Release候補を`Mobile Viewer UX`とする。候補範囲はresponsive layout、sidebar drawerまたはbottom sheet、touch hit target拡大、checkboxのtouch操作修正、Mapとsidebarのgesture分離、viewport設定、touch-action制御、portrait / landscape対応、iPhone / iPad / Android実機確認、Google Drive Folder再読込とする。自動同期は行わない。
 
 ## Startup and Library
 
@@ -271,6 +296,62 @@ Unit 3 Status: Completed
 - 本制限は今回のTreeView分割で新たに発生した回帰とは判断しない。
 - Release 1.0ではWaypoint大量表示の性能最適化を実装しない。
 - 将来候補はMarker clustering、Canvas renderer、Waypoint表示件数上限、現在の表示範囲内Waypointだけの描画、zoom levelによる表示制御とする。
+
+## Unit 4 Startup and Compatibility UX
+
+Unit 4 Status: Completed
+Implementation Status: Completed
+Browser Acceptance Status: Completed
+
+- [x] secure contextと対応originを判定する
+- [x] `showDirectoryPicker`の実在を判定する
+- [x] User-Agentだけで対応可否を決定しない
+- [x] Mobile User-AgentだけではFolder選択を無効化しない
+- [x] capabilityを満たすMobileで非ブロッキングの未検証案内を表示する
+- [x] Mobileを実機合格前は正式対応またはbest effort対応に含めない
+- [x] pickerを`{ mode: "read" }`で開く
+- [x] 初回Cancelをerrorにせず初期案内へ戻す
+- [x] 既存Library選択中のCancelで既存状態を維持する
+- [x] permission failureをretry可能な画面内案内へ接続する
+- [x] permission failureで既存Libraryを破棄しない
+- [x] GPX 0件を正常な空Libraryとして扱う
+- [x] 空LibraryのSearch indexを空にする
+- [x] StatusBarをlive regionにする
+- [x] Folder選択buttonと説明を`aria-describedby`で関連付ける
+- [x] Windows Chromeで初回、picker、Cancel、既存Library中のCancel、空Libraryを確認する
+- [x] Windows Edgeで初回、picker、Cancel、既存Library中のCancel、空Libraryを確認する
+- [x] keyboard、ARIA、focus、body / sidebar scrollを実ブラウザ確認する
+- [x] 1 GPX Library、通常Library、Search、Folder一括、Waypointの回帰を実ブラウザ確認する
+
+### Windows Browser Acceptance
+
+| Test item | Windows Chrome | Windows Edge |
+| --- | --- | --- |
+| 初回起動案内 | Pass | Pass |
+| Library button | Pass | Pass |
+| Folder picker | Pass | Pass |
+| Cancel | Pass | Pass |
+| 既存Library中のCancel | Pass | Pass |
+| 空Folder | Pass | Pass |
+| 1 GPX Folder | Pass | Pass |
+| 通常Library | Pass | Pass |
+| Search回帰 | Pass | Pass |
+| Folder一括回帰 | Pass | Pass |
+| Waypoint回帰 | Pass | Pass |
+| keyboard / focus / ARIA | Pass | Pass |
+| body / sidebar scroll | Pass | Pass |
+| Consoleのアプリ由来error | なし | なし |
+
+### Unit 4 Mobile Result
+
+iPhone ChromeはHTTPS起動、Google Drive Folder選択、Folder走査、Tree表示まではPassした。GPX checkbox、Track表示、touch UIはFailであり、原因はAPI不足ではなくMobile UI / touch操作未対応と分類する。Release 1.0では非対応とし、`Mobile Viewer UX`を将来候補とする。
+
+Android ChromeとiPad Chromeは未確認のまま、対応区分未確定とする。
+
+### Unit 4 Known Limitations
+
+- Mobile UIはRelease 1.0対象外である。
+- 大量GPXを表示した状態でWaypointをONにすると、多数のMarker描画により操作が重くなる。大量LibraryではWaypoint OFFを推奨する。
 
 ## Performance Acceptance
 

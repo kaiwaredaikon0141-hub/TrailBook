@@ -1,6 +1,9 @@
 import Config from "./Config.js";
 import EventBus from "./EventBus.js";
-import FolderScanner, { pickFolder } from "../services/FolderScanner.js";
+import FolderScanner, {
+    getFolderPickerSupport,
+    pickFolder
+} from "../services/FolderScanner.js";
 import GPXLoader from "../services/GPXLoader.js";
 import GPXParser from "../services/GPXParser.js";
 import GPXDisplayQueue from "../services/GPXDisplayQueue.js";
@@ -10,6 +13,7 @@ import Toolbar from "../ui/Toolbar.js";
 import TreeView from "../ui/TreeView.js";
 import SearchView from "../ui/SearchView.js";
 import StatusBar from "../ui/StatusBar.js";
+import LibraryAccessPanel from "../ui/LibraryAccessPanel.js";
 import MapView from "../ui/MapView.js";
 
 /**
@@ -40,6 +44,7 @@ export default class App {
         this.treeView = null;
         this.searchView = null;
         this.statusBar = null;
+        this.libraryAccessPanel = null;
         this.mapView = null;
         this.folderScanner = new FolderScanner();
         this.gpxLoader = new GPXLoader();
@@ -49,6 +54,7 @@ export default class App {
         this.displayQueue = new GPXDisplayQueue(2);
         this.workspace = null;
         this.mapArea = null;
+        this.currentLibrary = null;
 
         console.log(`${this.config.appName} v${this.config.version}`);
     }
@@ -58,6 +64,7 @@ export default class App {
         console.log("Initializing application...");
         this.createComponents();
         this.createLayout();
+        this.configureFolderAccess();
         this.bindEvents();
         console.log("Application Ready.");
     }
@@ -68,6 +75,7 @@ export default class App {
         this.treeView = new TreeView(this.eventBus);
         this.searchView = new SearchView(this.eventBus);
         this.statusBar = new StatusBar();
+        this.libraryAccessPanel = new LibraryAccessPanel();
         this.mapView = new MapView(this.config, this.eventBus);
     }
 
@@ -83,6 +91,7 @@ export default class App {
         this.mapArea.textContent = "Map Area";
 
         this.treeView.element.querySelector("h3").after(
+            this.libraryAccessPanel.element,
             this.searchView.element
         );
 
@@ -93,6 +102,34 @@ export default class App {
             this.workspace,
             this.statusBar.element
         );
+    }
+
+    configureFolderAccess() {
+
+        const support = getFolderPickerSupport();
+        let disabledReason = "";
+
+        if (support.reason === "insecure-context") {
+            disabledReason = "安全な接続で開いてください";
+            this.libraryAccessPanel.showInsecureContext();
+            this.statusBar.showUnsupportedEnvironment();
+        } else if (support.reason === "missing-api") {
+            disabledReason = "このbrowserではFolder選択を利用できません";
+            this.libraryAccessPanel.showUnsupportedBrowser();
+            this.statusBar.showUnsupportedEnvironment();
+        } else if (support.isMobile) {
+            this.libraryAccessPanel.showUnverifiedMobile();
+            this.statusBar.showInitial();
+        } else {
+            this.libraryAccessPanel.showInitial();
+            this.statusBar.showInitial();
+        }
+
+        this.toolbar.setFolderPickerState({
+            disabled: !support.available,
+            descriptionId: this.libraryAccessPanel.descriptionId,
+            disabledReason
+        });
     }
 
     bindEvents() {
@@ -107,6 +144,14 @@ export default class App {
 
         this.eventBus.on("library:load-failed", ({ error }) => {
             console.error("Failed to load library.", error);
+            if (
+                error.name === "NotAllowedError" ||
+                error.name === "SecurityError"
+            ) {
+                this.libraryAccessPanel.showPermissionFailure();
+            } else {
+                this.libraryAccessPanel.showLoadFailure();
+            }
             this.statusBar.showError();
         });
 
@@ -160,22 +205,47 @@ export default class App {
     async loadLibrary() {
 
         try {
+            const support = getFolderPickerSupport();
+
+            if (!support.available) {
+                this.configureFolderAccess();
+                return;
+            }
+
             const handle = await pickFolder();
 
             if (!handle) {
                 return;
             }
 
+            this.libraryAccessPanel.showLoading(handle.name);
+            this.statusBar.showLibraryLoading(handle.name);
             const library = await this.folderScanner.scan(handle);
             this.eventBus.emit("library:loaded", { library });
 
         } catch (error) {
             if (error.name === "AbortError") {
+                this.restoreLibraryAccessState();
                 return;
             }
 
             this.eventBus.emit("library:load-failed", { error });
         }
+    }
+
+    restoreLibraryAccessState() {
+
+        if (this.currentLibrary) {
+            if (this.currentLibrary.gpxFileCount === 0) {
+                this.libraryAccessPanel.showEmpty(this.currentLibrary.name);
+            } else {
+                this.libraryAccessPanel.hide();
+            }
+            this.statusBar.showLibraryLoaded(this.currentLibrary);
+            return;
+        }
+
+        this.configureFolderAccess();
     }
 
     async handleLibraryLoaded(library) {
@@ -191,7 +261,9 @@ export default class App {
         await this.treeView.render(library);
 
         this.searchService.setEntries(
-            this.treeView.getSearchSourceEntries()
+            library.gpxFileCount === 0
+                ? []
+                : this.treeView.getSearchSourceEntries()
         );
         this.searchView.setAvailable(true);
 
@@ -203,7 +275,14 @@ export default class App {
             );
         });
 
+        this.currentLibrary = library;
         this.statusBar.showLibraryLoaded(library);
+
+        if (library.gpxFileCount === 0) {
+            this.libraryAccessPanel.showEmpty(library.name);
+        } else {
+            this.libraryAccessPanel.hide();
+        }
     }
 
     handleSearchQuery(query) {

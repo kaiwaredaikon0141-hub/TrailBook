@@ -103,6 +103,7 @@ src/js/
 │  ├─ TreeView.js
 │  ├─ TreeMetadataBuilder.js
 │  ├─ SearchView.js
+│  ├─ LibraryAccessPanel.js
 │  ├─ MapView.js
 │  └─ StatusBar.js
 ├─ services/
@@ -130,6 +131,8 @@ Responsibilities:
 - Component生成とLayout構築
 - EventBusの接続
 - Folder選択とLibrary読込の調停
+- secure context、対応origin、Folder選択API、Mobile判定の調停
+- Folder選択Cancel、permission failure、空Libraryの表示調停
 - Search queryと結果選択のEvent調停
 - GPXの主選択を表す非永続Presentation State
 - `DisplayState`と`GPXDisplayQueue`の調停
@@ -142,6 +145,16 @@ Responsibilities:
 主選択は「どのGPXにユーザーの操作対象があるか」を表す。表示状態は「どのGPXが地図上でONか」を表す。両者を同一視しない。
 
 AppはFolderやLibraryへ解析結果、表示状態、選択状態を書き込まない。
+
+## Library Access — Startup and Compatibility
+
+`FolderScanner.getFolderPickerSupport()`は`window.isSecureContext`、対応origin、`showDirectoryPicker`の実在だけでFolder選択可否を判定する。User-AgentはMobileの未検証案内と診断用の補助情報にだけ使用し、Mobileであること自体を無効化理由にしない。対応originはHTTPS、`http://localhost`、`http://127.0.0.1`とする。
+
+`LibraryAccessPanel`は初回操作、非対応理由、permission failure、空Libraryをsidebar内で説明する。Toolbarは判定結果からFolder選択buttonをdisabledにし、`aria-describedby`で説明へ関連付ける。StatusBarはlive regionとして簡潔な状態を通知する。
+
+Folder pickerは`{ mode: "read" }`で開く。Cancelはerror eventまたはConsole errorを発生させず、初回案内または既存Library表示へ戻す。permission failureは内部error文字列を表示せずretry可能な案内を出し、既存Libraryを破棄しない。GPX 0件のLibraryは正常状態として表示し、空のSearch indexと既存のMap初期状態を使用する。
+
+Mobileで必要APIが利用可能ならbuttonを有効にして実機試験を可能にするが、合格前は正式対応またはbest effort対応とはしない。Mobile向けFolder選択fallbackは追加しない。
 
 ## TreeView — Lazy Library Presentation
 
@@ -419,7 +432,7 @@ SearchはLibrary metadataに対するread-onlyなNavigation機能として開始
 Release 1.0はRelease 0.9までのViewer機能を個人利用環境で安定させる品質Releaseであり、新しいLibrary機能を追加しない。
 
 - 対応環境はWindows 10 / 11と、最新安定版Chrome / Edge desktopとする。
-- Android、iPhone、iPadの最新Chromeは実機検証候補とし、合格した端末だけをbest effortへ追加する。未確認または必要API不足の端末は非対応とする。
+- Android、iPhone、iPadの最新Chromeは実機検証候補とし、合格した端末だけをbest effortへ追加する。未確認端末は対応区分未確定、必要API不足の端末は非対応とする。
 - HTTPS、`http://localhost`、`http://127.0.0.1`を対応originとし、`file://`と通常のLAN内HTTP IPは対応外とする。
 - 初回起動、File System Access API非対応、空Library、解析失敗、Library切り替えを明示的に扱う。
 - TreeViewはmetadata構築とpath計算を`TreeMetadataBuilder`へ限定分割し、DOM、Event、keyboard、表示状態の挙動を維持する。

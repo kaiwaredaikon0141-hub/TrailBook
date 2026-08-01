@@ -55,6 +55,45 @@ body{
     margin:0 0 10px;
 }
 
+.library-access-panel{
+
+    margin:0 0 12px;
+
+    padding:10px;
+
+    border:1px solid var(--border);
+
+    border-radius:4px;
+
+    background:#f8fafc;
+
+    font-size:13px;
+}
+
+.library-access-panel[data-state="error"]{
+
+    border-color:#b42318;
+
+    background:#fff4f2;
+}
+
+.library-access-title{
+
+    margin:0 0 4px;
+
+    font-size:14px;
+}
+
+.library-access-message{
+
+    margin:0;
+}
+
+.toolbar button:disabled{
+
+    cursor:not-allowed;
+}
+
 .search-view{
 
     margin-bottom:12px;
