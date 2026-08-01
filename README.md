@@ -11,12 +11,12 @@ architecture documents before making changes.
 
 ## Current Release
 
-Release 0.3: GPX Parser
+Release 0.4.0: TreeView GPX Selection and Map Display
 
 The current implementation can open a directory, recursively find subfolders
-and `.gpx` files, and parse an explicitly requested GPX file into Track,
-TrackSegment, TrackPoint, Waypoint, and Metadata models. GPX parsing does not
-start automatically when a library is opened.
+and `.gpx` files, parse an explicitly requested GPX file into Track,
+TrackSegment, TrackPoint, Waypoint, and Metadata models, and display one
+selected GPX on a Leaflet map with a clear control.
 
 ## Technical Constraints
 

@@ -16,6 +16,10 @@ body{
 
     height:100%;
 
+    min-height:0;
+
+    overflow:hidden;
+
     display:grid;
 
     grid-template-rows:
@@ -28,6 +32,10 @@ body{
 }
 
 .workspace{
+
+    min-height:0;
+
+    overflow:hidden;
 
     display:grid;
 
@@ -49,9 +57,18 @@ body{
 
 .map-canvas{
 
+    width:100%;
+
     height:100%;
 
-    min-height:240px;
+    min-height:0;
+}
+
+.leaflet-container{
+
+    width:100%;
+
+    height:100%;
 }
 
 .map-toolbar{

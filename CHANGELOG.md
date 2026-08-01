@@ -2,6 +2,8 @@
 
 ## v0.4.0
 
+Released: 2026-08-01
+
 ### Added
 
 - Leaflet 1.9.4 bundled locally

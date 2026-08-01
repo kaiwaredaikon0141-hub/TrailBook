@@ -306,6 +306,10 @@ Done Definition
 
 選択したGPXのTrackを地図へ表示できる
 
+Status
+
+Completed
+
 
 
 \---
