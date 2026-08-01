@@ -37,6 +37,8 @@ body{
 
     min-height:0;
 
+    min-width:0;
+
     background:white;
 
     border-right:1px solid var(--border);
@@ -46,6 +48,87 @@ body{
     overflow-x:hidden;
 
     overflow-y:auto;
+}
+
+.tree-root,
+.tree-group{
+
+    margin:0;
+
+    padding:0;
+
+    list-style:none;
+}
+
+.tree-group{
+
+    padding-left:14px;
+}
+
+.tree-row{
+
+    display:flex;
+
+    align-items:center;
+
+    min-width:0;
+
+    padding:4px 6px;
+
+    border-radius:3px;
+
+    cursor:pointer;
+
+    user-select:none;
+}
+
+.tree-row:focus-visible{
+
+    outline:2px solid var(--accent);
+
+    outline-offset:1px;
+}
+
+.tree-icon{
+
+    flex:0 0 16px;
+
+    width:16px;
+
+    margin-right:4px;
+
+    text-align:center;
+}
+
+.tree-label{
+
+    min-width:0;
+
+    overflow:hidden;
+
+    text-overflow:ellipsis;
+
+    white-space:nowrap;
+}
+
+.folder-row .tree-icon::before{
+
+    content:"▸";
+}
+
+.folder-row.is-expanded .tree-icon::before{
+
+    content:"▾";
+}
+
+.folder-row[aria-expanded="true"]{
+
+    font-weight:600;
+}
+
+.folder-row[data-tree-path=""]{
+
+    cursor:default;
 }
 
 .map-view{
@@ -82,10 +165,6 @@ body{
 .gpx-file{
 
     cursor:pointer;
-
-    padding:4px 6px;
-
-    border-radius:3px;
 }
 
 .gpx-file.is-selected{

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TrailBook TreeView Test</title>
+    <link rel="stylesheet" href="../../src/css/base.css">
+    <link rel="stylesheet" href="../../src/css/layout.css">
+    <link rel="stylesheet" href="../../src/css/theme.css">
+    <style>
+        body { height: 100vh; }
+        #test-app { height: 100%; display: grid; grid-template-columns: 320px 1fr; }
+        .test-panel { padding: 16px; overflow: auto; }
+        .test-panel h1 { margin-top: 0; }
+        .test-panel code { word-break: break-word; }
+        .test-result { white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <main id="test-app">
+        <section id="tree-host"></section>
+        <section class="test-panel">
+            <h1>TreeView Release 0.5 Test</h1>
+            <p>Use the tree to test lazy folders, keyboard navigation, state restoration, and long names.</p>
+            <p class="test-result" id="test-result"></p>
+        </section>
+    </main>
+    <script type="module">
+        import EventBus from "../../src/js/core/EventBus.js";
+        import Folder from "../../src/js/models/Folder.js";
+        import Library from "../../src/js/models/Library.js";
+        import TreeView from "../../src/js/ui/TreeView.js";
+
+        const rootHandle = { name: "test-root" };
+        const root = new Folder("test-root", rootHandle);
+        const bus = new EventBus();
+        const treeView = new TreeView(bus);
+        const result = document.getElementById("test-result");
+
+        for (let folderIndex = 0; folderIndex < 5; folderIndex += 1) {
+            const folder = new Folder(`folder-${folderIndex}`, { name: `folder-${folderIndex}` });
+
+            for (let fileIndex = 0; fileIndex < 200; fileIndex += 1) {
+                folder.gpxFiles.push({
+                    name: fileIndex === 0
+                        ? `a-very-long-gpx-file-name-for-truncation-check-${folderIndex}.gpx`
+                        : `track-${folderIndex}-${fileIndex}.gpx`
+                });
+            }
+
+            root.folders.push(folder);
+        }
+
+        bus.on("gpx:parse-requested", ({ fileHandle }) => {
+            result.textContent = `Selected: ${fileHandle.name}\n\n` +
+                `Visible tree items: ${treeView.element.querySelectorAll('[role="treeitem"]').length}`;
+        });
+
+        document.getElementById("tree-host").append(treeView.element);
+        await treeView.render(new Library("test-root", root, 6, 1000));
+    </script>
+</body>
+</html>

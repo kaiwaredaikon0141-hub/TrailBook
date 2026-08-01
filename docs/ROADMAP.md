@@ -320,47 +320,35 @@ Completed
 
 
 
-Map
+TreeView Scalability and Navigation
 
+Status
 
+Completed
 
 Goal
 
-
-
-GPXを地図表示
-
-
+大量のGPXを扱いやすいTreeViewへ改善する
 
 Tasks
 
+■ Lazy Folder Tree
 
+■ Folder Expand and Collapse
 
-□ Leaflet
+■ Keyboard Navigation
 
+■ Roving Focus
 
+■ ARIA Tree Structure
 
-□ Track Draw
+■ Long Name Handling
 
-
-
-□ Marker
-
-
-
-□ Auto Zoom
-
-
-
-□ Layer
-
-
+■ TreeView State Restoration
 
 Done Definition
 
-
-
-地図表示完成
+展開されたフォルダだけをDOM生成し、キーボード操作と単一GPX選択を維持できる
 
 
 

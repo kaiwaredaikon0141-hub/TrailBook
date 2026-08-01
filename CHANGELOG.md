@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Lazy folder expansion for large GPX libraries
+- Keyboard navigation and ARIA TreeView behavior
+- TreeView state restoration across same-library reloads
+- Folder and GPX name truncation with native tooltips
+
 ## v0.4.0
 
 Released: 2026-08-01

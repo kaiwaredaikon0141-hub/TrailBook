@@ -4,6 +4,8 @@ Version : 1.0
 Status  : Proposed for implementation
 Depends : PROJECT.md, ARCHITECTURE.md, ROADMAP.md
 
+Release 0.5 TreeView仕様は本書末尾に追記する。
+
 ---
 
 # 1. Purpose
@@ -473,3 +475,22 @@ Trackの描画処理は、背景タイルが取得できない場合でも可能
 8. error時にMapViewを空状態にする最終確認
 9. クリア時に地図を初期位置へ戻す最終確認
 10. TreeViewのキーボード選択をRelease 0.4に含める範囲
+
+# 15. Release 0.5 TreeView
+
+Release 0.5では、展開フォルダだけを遅延生成するTreeViewを提供する。
+
+- ルートは常に展開し、ルート直下だけを初期生成する
+- フォルダ行全体で展開・折りたたみを操作する
+- GPX選択は既存の`gpx:parse-requested`を使用する
+- 展開状態はTreeView内部で相対パスをキーに保持する
+- Folder、Library、FolderScanner、GPXParser、MapView、LayerManagerは変更しない
+- ArrowUp、ArrowDown、ArrowLeft、ArrowRight、Home、Endを提供する
+- EnterとSpaceでフォルダ操作またはGPX選択を行う
+- `role="tree"`、`role="treeitem"`、`aria-expanded`、`aria-selected`を使用する
+- フォーカス管理はroving tabindexとする
+- 折りたたまれたフォルダの子DOMは削除する
+- loading、loaded、error状態は折りたたみ後の再展開で復元する
+- 同じライブラリの再読み込みでは展開、フォーカス、スクロール位置だけを復元する
+- GPXの選択状態と解析状態はライブラリ再読み込み時に解除する
+- 仮想スクロール、複数GPX表示、検索、編集、統計、Replay、HeatMapは対象外とする
