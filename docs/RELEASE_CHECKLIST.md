@@ -604,7 +604,7 @@ Architecture Status: Completed
 Decision Status: Completed
 Event Contract Status: Completed
 Test Plan Status: Completed
-Production Implementation Status: Not started
+Production Implementation Status: In progress — Unit 2 completed、Unit 3 not started
 Current production version: `1.0.0`
 Planning baseline commit: `29d7db7`
 
@@ -612,14 +612,15 @@ Planning baseline commit: `29d7db7`
 
 | Unit | Scope | Status | Dependency |
 | --- | --- | --- | --- |
-| 1 | Scope、Architecture、Decisions、event contract、test plan | Completed | Release 1.0 |
-| 2 | TrackStyleService、zoom-based width、static / browser acceptance | Pending | Unit 1 |
-| 3 | SelectionState、Map Track click、Tree / Search同期、highlight | Pending | Unit 2 |
-| 4 | UI settings persistence、Library identity、schema / failure handling | Pending | Unit 1 |
-| 5 | Folder color UI、inheritance、selective restyle | Pending | Unit 3、Unit 4 |
-| 6 | Integrated acceptance、performance、documentation、finalization | Pending | Unit 2〜5 |
+| 1 | Planning and architecture | Completed | Release 1.0 |
+| 2 | TrackStyleService and zoom-based width | Completed | Unit 1 |
+| 3 | SelectionState、Map click、highlight | Pending | Unit 2 |
+| 4 | UI settings persistence foundation | Pending | Unit 1 |
+| 5 | Folder color UI and inheritance | Pending | Unit 3、Unit 4 |
+| 6 | Monochrome Map Mode | Pending | Unit 4 |
+| 7 | Integrated acceptance、performance、documentation、Release finalization | Pending | Unit 2〜6 |
 
-Unit 4はUnit 2 / 3とproduction fileの競合を避けて実施できるが、Unit 5はselection projectionとstorage contractの両方へ依存する。
+Unit 4はUnit 2 / 3とproduction fileの競合を避けて実施できるが、Unit 5はselection projectionとstorage contractの両方へ依存する。Unit 6はUnit 4のUI settings persistence基盤を共用でき、Unit 7で統合確認とRelease finalizationを行う。
 
 Planned production files:
 
@@ -653,8 +654,8 @@ Planned production files:
 
 ### Static Test Plan
 
-- [ ] TrackStyleService pure calculation
-- [ ] zoom 8 / 9 / 12 / 15 bucket境界
+- [x] TrackStyleService pure calculation — Unit 2 normal style
+- [x] zoom 8 / 9 / 12 / 15 bucket境界 — 小数、負数、`undefined`、`NaN`を含む
 - [ ] normal、selected main、outline style
 - [ ] outline contrast color
 - [ ] Folder明示色、親継承、子override、Default
@@ -668,8 +669,8 @@ Planned production files:
 - [ ] unknown / future schema version
 - [ ] localStorage read / write / quota / security failure
 - [ ] root名変更と同名Library collision behavior
-- [ ] module import
-- [ ] circular dependency
+- [x] module import — production module 28 / 28（`main.js`はDOM起動を実行しないevent listener stubで確認）
+- [x] circular dependency — 0件
 - [ ] EventBus request / changed contract
 - [ ] SelectionState単一path、clear reason、Library切り替え
 
@@ -682,7 +683,7 @@ Planned production files:
 - [ ] selected highlightが元Folder色を維持する
 - [ ] Map背景click deselect
 - [ ] hidden selected Trackのselection解除
-- [ ] ClearとLibrary switch
+- [x] ClearとLibrary switch — Unit 2 regression Pass
 - [ ] parse failure後にselectionが残らない
 - [ ] Tree / Search originだけが既存refocusを行う
 - [ ] Map origin selectionでviewportが動かない
@@ -695,27 +696,101 @@ Planned production files:
 - [ ] root Folder名変更時はDefault
 - [ ] 同名Libraryが設定を共有する既知制限
 - [ ] localStorage unavailableでもsession操作継続
-- [ ] zoom bucket内でrestyleなし
-- [ ] zoom bucket境界で表示中Trackだけrestyle
+- [x] zoom bucket内でrestyleなし — Chrome browser acceptance Pass
+- [x] zoom bucket境界で表示中Trackだけrestyle — Chrome / Edge browser acceptance Pass
 - [ ] Folder色変更で対象配下だけrestyle
 - [ ] keyboard accessibility、ARIA、色以外の状態説明
-- [ ] GPX個別、Folder / root bulk checkbox regression
-- [ ] Search checkbox regression
-- [ ] Waypoint OFF / ON regression
-- [ ] Console errorなし
+- [x] GPX個別、Folder / root bulk checkbox regression — Unit 2 Pass
+- [x] Search checkbox regression — Unit 2 Pass
+- [x] Waypoint OFF / ON regression — Unit 2 Pass
+- [x] Console errorなし — Chrome / Edge Pass
 
 ### Performance Plan
 
 - [ ] v1.0.0の同一806 GPX Library、同一PC、同一browser / version、Waypoint OFFを比較条件として記録する
 - [ ] 806 GPX表示時のTrack / Segment / Canvas layer数を記録する
 - [ ] selection変更がprevious / nextの最大2 GPXだけを更新することを計測またはinstrumentationで確認する
-- [ ] 同一zoom bucket内の`setStyle`回数が0であることを確認する
-- [ ] bucket変更時の更新対象が表示中Trackだけであることを確認する
+- [x] 同一zoom bucket内の`setStyle`回数が0であることをstatic testで確認する
+- [x] bucket変更時の更新対象が表示中Trackだけであることをstatic testで確認する
 - [ ] Folder色変更時の更新対象が対象Folder配下だけであることを確認する
 - [ ] outlineが選択中GPXだけに存在することを確認する
 - [ ] Canvas rendererで全806 GPX表示時のpan / zoomをGood / Acceptable / Poorで記録する
 - [ ] SVG + transparent hit layer fallbackを採用する場合はlayer数と操作感を再測定する
 - [ ] Queue並列数2、cache上限100、Search上限100に変更がないことを確認する
+
+### Unit 2 TrackStyleService and Zoom-based Width
+
+Unit 2 Implementation Status: Completed
+Unit 2 Static Test Status: Completed
+Unit 2 Browser Acceptance Status: Completed
+Unit 2 Status: Completed
+Unit 3 Status: Not started
+
+実装内容:
+
+- `TrackStyleService`へzoom bucket、normal weight、normal styleのpure calculationを集約した。
+- normal weightはzoom 15以上で4 px、12以上15未満で3 px、9以上12未満で2 px、9未満で1.5 pxとした。非数値zoomはConfigのfallback zoomを使用する。
+- Appが現在bucketを保持し、MapViewはLeafletの`zoomend`後だけ`map:zoom-ended`を通知する。
+- 同一bucketではLayerManager更新を呼ばず、bucket変更時は現在表示中のTrack LayerGroup内で`setStyle({ weight })`を持つLayerだけを更新する。
+- 初回Polyline生成時も現在zoomのnormal weightを使用する。既存のrelative path hash color、opacity、Track Bounds、Waypoint、refocus、Queue、cache、Search契約は変更していない。
+- Track click、SelectionState、selected main、outline、Folder color、localStorageは実装していない。
+
+Static test result:
+
+| Test | Result | Notes |
+| --- | --- | --- |
+| zoom bucket / weight | Pass | 16 assertion。zoom 8以下1.5 px、9で2 px、12で3 px、15で4 px。小数、負数、`undefined`、`NaN`を含む |
+| normal style | Pass | color、opacity、determinism、入力非破壊を確認 |
+| displayed Track update | Pass | weightだけ変更、color維持、Marker非更新、削除済みLayer非更新を含む9 assertion |
+| App bucket coordination | Pass | 同一bucket 0回、境界変更時だけ更新を含む7 assertion |
+| production module import | Pass | 28 / 28。`TrackStyleService.js`と`main.js`を含む |
+| circular dependency | Pass | 0件 |
+
+Browser acceptance result:
+
+| Test | Windows Chrome | Windows Edge |
+| --- | --- | --- |
+| 初回起動 | Pass | Not recorded |
+| 通常Library読込 | Pass | Pass |
+| 1 GPX表示 | Pass | Pass |
+| 複数GPX表示 | Pass | Not recorded |
+| root一括表示 | Pass | Pass |
+| zoom 8以下 — 1.5 px | Pass | Pass — 8 / 9 / 12 / 15境界として確認 |
+| zoom 9〜11 — 2 px | Pass | Pass — 8 / 9 / 12 / 15境界として確認 |
+| zoom 12〜14 — 3 px | Pass | Pass — 8 / 9 / 12 / 15境界として確認 |
+| zoom 15以上 — 4 px | Pass | Pass — 8 / 9 / 12 / 15境界として確認 |
+| 同一bucket内で線幅維持 | Pass | Not recorded |
+| bucket境界で線幅変更 | Pass | Pass |
+| zoom終了後にstyle更新 | Pass | Not recorded |
+| Track色維持 | Pass | Pass |
+| opacity維持 | Pass | Not recorded |
+| Waypoint表示維持 | Pass | Pass |
+| Search回帰 | Pass | Not recorded |
+| Folder / root一括回帰 | Pass | Not recorded |
+| Clear | Pass | Not recorded |
+| Library切り替え | Pass | Not recorded |
+| Console errorなし | Pass | Pass |
+| 不要なconsole log / warningなし | Pass | Not recorded |
+
+806 GPX Library result:
+
+- zoom操作可能: Pass
+- 同一bucket内で目立つ待ち時間なし: Pass
+- bucket変更時も実用上問題なし: Pass
+- 広域表示時の視認性改善: Pass
+- 1.5 pxは1 pxより見やすく、2 pxより重なりを抑えられる: Pass
+- 明確な性能回帰なし: Pass
+
+Unit 2の実装、static test、Chrome / Edge browser acceptanceは完了した。Monochrome Map ModeはRelease 1.1 Unit 6の未実装候補として維持し、Unit 2では実装していない。Unit 3は開始していない。
+
+### Unit 6 Candidate — Monochrome Map Mode
+
+- 背景OSM tileだけをグレースケール化し、Track、Waypoint、UIにはfilterを掛けない。
+- tile providerとOpenStreetMap attributionを維持する。
+- Color / Monochromeを切り替え可能とし、初期値はColorとする。
+- CSS filter方式を第一候補とする。
+- localStorage保存はUnit 4のFolder color persistence基盤と共用できる。
+- Mobile対応は対象外であり、Unit 2では実装しない。
 
 ### Persistence Schema
 

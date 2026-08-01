@@ -406,7 +406,7 @@ Reason: 806 GPXで細いTrackを操作可能にしながら、Polylineを常時�
 
 Alternatives: SVG visible lineだけをclick targetにする、全Segmentへ透明hit Polylineを追加する、全Trackへ常設outlineを追加する、他Trackを薄くする、Map背景clickでは選択を解除しない。
 
-Consequences: `zoomend`後にbucketが変わった場合だけ表示中Trackを更新する。初期bucketは15以上4 px、12〜14は3 px、9〜11は2 px、8以下は1 pxとし、selected mainは+3 px、outlineはさらに+2 pxとする。main colorを選択色へ置換せず、他Trackのopacityも変えない。Canvas acceptanceに問題がある場合だけ透明hit layerを再評価し、806 GPX性能を再確認する。
+Consequences: `zoomend`後にbucketが変わった場合だけ表示中Trackを更新する。初期bucketは15以上4 px、12〜14は3 px、9〜11は2 px、8以下は1.5 pxとし、selected mainは+3 px、outlineはさらに+2 pxとする。main colorを選択色へ置換せず、他Trackのopacityも変えない。Canvas acceptanceに問題がある場合だけ透明hit layerを再評価し、806 GPX性能を再確認する。
 
 Map背景clickはselection clear requestとする。layer eventはLeaflet eventのsourceを見て背景clickと区別し、double-click zoomをpreventしない。overlap時は最前面の1件を選び、cycle selectionは実装しない。
 

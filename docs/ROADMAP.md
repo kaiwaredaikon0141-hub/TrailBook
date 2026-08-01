@@ -258,7 +258,7 @@ Completed内容:
 
 Status: Planning
 
-Goal: MapとTreeViewで同期する単一Track選択、Folder単位の継承色、zoomに応じた線幅、再生成可能なUI設定の永続化を追加する。GPXとFolder構造はread-onlyの正本として維持する。
+Goal: MapとTreeViewで同期する単一Track選択、Folder単位の継承色、zoomに応じた線幅、再生成可能なUI設定の永続化、背景tileのMonochrome表示候補を追加する。GPXとFolder構造はread-onlyの正本として維持する。
 
 Scope:
 
@@ -270,6 +270,7 @@ Scope:
 - Folder colorとschema versionを、GPXから再生成可能なUI設定として`localStorage`へ保存する。
 - FileHandle、FolderHandle、GPX XML、解析geometry、cacheは永続化しない。
 - storage失敗時もsession内のViewerと色設定操作を継続する。
+- Color / Monochrome切り替えをUnit 6候補とし、背景OSM tileだけをグレースケール化する。初期値はColorとし、Track、Waypoint、UI、tile provider、attributionは変更しない。
 - 806 GPXでselection、zoom、Folder color変更の回帰とlayer更新範囲を確認する。
 
 Out of Scope:
@@ -280,17 +281,19 @@ Out of Scope:
 - Mobile Viewer UX、Waypoint clustering、hover preview
 - GPX単位色、共有palette、Cloud Sync
 - Folder構造変更
+- Mobile向けMonochrome UI
 
 Unit Plan:
 
-1. Scope、Architecture、Decisions、event contract、test plan
-2. `TrackStyleService`、zoom-based width、static test、browser acceptance
-3. `SelectionState`、Map Track click、Tree / Search同期、highlight、browser acceptance
-4. UI settings persistence、Library識別、schema、migration / failure handling
-5. Folder color UI、継承、選択的restyle、browser acceptance
-6. 統合受け入れ、性能確認、文書、Release 1.1確定
+1. Planning and architecture
+2. `TrackStyleService` and zoom-based width
+3. `SelectionState`、Map click、highlight
+4. UI settings persistence foundation
+5. Folder color UI and inheritance
+6. Monochrome Map Mode
+7. Integrated acceptance、performance、documentation、Release finalization
 
-Unit 2でstyle計算とzoom更新を先に独立させ、Unit 3で選択とhighlightを接続する。永続化は選択から独立するためUnit 4、Folder UIはstorage契約確定後のUnit 5とする。
+Unit 2でstyle計算とzoom更新を先に独立させ、Unit 3で選択とhighlightを接続する。永続化は選択から独立するためUnit 4、Folder UIはstorage契約確定後のUnit 5とする。Unit 6はUnit 4のUI settings persistence基盤を共用でき、Unit 7で全機能を統合確認する。
 
 Done Definition:
 
@@ -299,6 +302,7 @@ Done Definition:
 - Folder色が対象Folder自身、rootを含む最も近い祖先、GPX relative path hash、最終fallbackの規定順で解決される。
 - zoom 8 / 9 / 12 / 15の境界がtestされ、同じbucket内で全Trackを再styleしない。
 - reload後に同じLibrary名のFolder色が復元され、storage unavailable、破損JSON、未知schemaでもViewerが動作する。
+- Monochrome Map Modeを採用する場合は初期Colorを維持し、背景tileだけへfilterを適用してTrack、Waypoint、UI、attributionへ影響させない。
 - 806 GPXで既存表示、bulk checkbox、Search、Waypointに明確な回帰がない。
 
 ## Future Design Boundaries

@@ -720,9 +720,21 @@ dialogは現在Folder名、現在のresolved color、`input type="color"`、Appl
 | 15以上 | 4 px | 7 px | 9 px |
 | 12〜14 | 3 px | 6 px | 8 px |
 | 9〜11 | 2 px | 5 px | 7 px |
-| 8以下 | 1 px | 4 px | 6 px |
+| 8以下 | 1.5 px | 4.5 px | 6.5 px |
 
 同じbucket内ではTrack styleを更新しない。bucket変更時は表示中Trackだけを更新し、refocus、GPX再解析、Queue、cache、Waypointを変更しない。
+
+Unit 2ではNormal列だけを実装する。Selected main / Selected outline、Track click、selection同期はUnit 3以降で実装し、現時点のViewer操作には追加しない。
+
+## Monochrome Map Mode — Unit 6 candidate
+
+- Color / Monochromeを切り替え可能とし、初期値はColorとする。
+- Monochromeでは背景OSM tileだけをグレースケール化する。
+- Track、Waypoint、Leaflet control、TrailBook UIにはfilterを掛けない。
+- tile providerと画面上のOpenStreetMap attributionを維持する。
+- CSS filter方式を第一候補とする。
+- 設定保存はFolder colorと同じUI settings persistence基盤を共用できる。
+- Mobile対応は対象外とし、Unit 2では実装しない。
 
 ## Persistence feedback
 

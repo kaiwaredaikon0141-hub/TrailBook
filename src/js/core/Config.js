@@ -30,7 +30,15 @@ const Config = {
         trackStyle: {
             lineColor: "#e53935",
             lineWeight: 4,
-            lineOpacity: 0.85
+            lineOpacity: 0.85,
+            fallbackZoom: 8,
+            fallbackWeight: 1,
+            zoomBuckets: [
+                { name: "near", minZoom: 15, weight: 4 },
+                { name: "middle", minZoom: 12, weight: 3 },
+                { name: "far", minZoom: 9, weight: 2 },
+                { name: "overview", minZoom: null, weight: 1.5 }
+            ]
         },
 
         displayPalette: [

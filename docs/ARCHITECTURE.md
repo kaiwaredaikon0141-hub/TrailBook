@@ -482,11 +482,13 @@ Zoom bucket初期値:
 | 15以上 | near | 4 px |
 | 12〜14 | middle | 3 px |
 | 9〜11 | far | 2 px |
-| 8以下 | overview | 1 px |
+| 8以下 | overview | 1.5 px |
 
 selected mainはnormal + 3 px、outlineはselected main + 2 pxとする。main colorはFolder colorのまま変更せず、opacityは通常0.85、selected 1.0とする。outline colorはmain colorとの明度差を確保するneutral colorをpure calculationで選ぶ。
 
 `zoomend`で現在bucketを比較し、bucketが変わった場合だけ表示中Trackをrestyleする。同じbucket内のzoomでは何もしない。
+
+Unit 2では`TrackStyleService`のnormal style計算だけを実装する。Appが現在bucketを保持し、MapViewの`map:zoom-ended`を受けてbucket変更時だけLayerManagerへweight更新を依頼する。LayerManagerは現在のpath entryにあるTrack LayerGroupだけを`setStyle({ weight })`で更新し、色、opacity、Bounds、Waypoint LayerGroup、Layer数を変更しない。selected main、outline、Canvas hit tolerance、z-orderはUnit 3以降の設計として維持し、Unit 2では実装しない。
 
 ### LayerManager — Clickable and Highlighted Track Layers
 
@@ -558,6 +560,12 @@ JSON parse failure、invalid color、未知schema version、quota / security err
 `DisplaySettingsStore.migrate(payload)`はpure functionとして分離する。初期schema 1にはlegacy migrationを持たず、version 1を検証して読み込み、未知または新しいversionはfail closedで無視する。将来version追加時は旧versionから新versionへの明示migration testを追加する。
 
 schema version 1から将来fieldを追加できるが、前回表示TrackやMap位置はRelease 1.1で保存しない。
+
+### Monochrome Map Mode — Unit 6 Candidate
+
+背景OSM tileだけへCSS grayscale filterを適用し、Track、Waypoint、Leaflet control、TrailBook UIにはfilterを適用しない。tile providerとOpenStreetMap attributionは変更しない。Color / Monochromeを切り替え可能とし、初期値はColorとする。
+
+設定のlocalStorage保存はUnit 4のUI settings persistence基盤を共用できるが、Unit 2では実装しない。CSS filter方式を第一候補とし、Mobile対応は対象外とする。
 
 Folder色UIは`src/js/ui/FolderColorDialog.js`の単一dialogへ分離する。TreeViewはrender済みFolder行のswatchとedit requestだけを担当し、dialog state、validation、storageを持たない。TreeViewの1,000行規則を維持する。
 

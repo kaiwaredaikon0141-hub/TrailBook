@@ -20,6 +20,12 @@ export default class MapView {
         this.map = null;
 
         this.layerManager = null;
+
+        this.handleZoomEnd = () => {
+            this.eventBus.emit("map:zoom-ended", {
+                zoom: this.getZoom()
+            });
+        };
     }
 
     /**
@@ -55,6 +61,8 @@ export default class MapView {
             ).addTo(this.map);
 
             this.layerManager = new LayerManager(this.map, this.config.map);
+
+            this.map.on("zoomend", this.handleZoomEnd);
 
             this.showEmpty();
 
@@ -169,6 +177,20 @@ export default class MapView {
         if (this.layerManager) {
             this.layerManager.removeWaypoints(path);
         }
+    }
+
+    getZoom() {
+
+        if (typeof this.map?.getZoom === "function") {
+            return this.map.getZoom();
+        }
+
+        return this.config.map.initialZoom;
+    }
+
+    updateTrackWeights(weight) {
+
+        return this.layerManager?.updateTrackWeights(weight) ?? 0;
     }
 
     /**

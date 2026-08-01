@@ -130,6 +130,28 @@ export default class LayerManager {
         return [...this.layers.keys()];
     }
 
+    updateTrackWeights(weight) {
+
+        if (!Number.isFinite(weight) || weight <= 0) {
+            return 0;
+        }
+
+        let updatedCount = 0;
+
+        this.layers.forEach(entry => {
+            entry.trackLayerGroup.eachLayer(layer => {
+                if (typeof layer?.setStyle !== "function") {
+                    return;
+                }
+
+                layer.setStyle({ weight });
+                updatedCount += 1;
+            });
+        });
+
+        return updatedCount;
+    }
+
     #allBounds() {
 
         return [...this.layers.values()].flatMap(entry => entry.trackBounds);

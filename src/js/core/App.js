@@ -8,6 +8,7 @@ import GPXLoader from "../services/GPXLoader.js";
 import GPXParser from "../services/GPXParser.js";
 import GPXDisplayQueue from "../services/GPXDisplayQueue.js";
 import SearchService from "../services/SearchService.js";
+import TrackStyleService from "../services/TrackStyleService.js";
 import DisplayState from "../state/DisplayState.js";
 import Toolbar from "../ui/Toolbar.js";
 import TreeView from "../ui/TreeView.js";
@@ -50,8 +51,14 @@ export default class App {
         this.gpxLoader = new GPXLoader();
         this.gpxParser = new GPXParser();
         this.searchService = new SearchService();
+        this.trackStyleService = new TrackStyleService(
+            this.config.map.trackStyle
+        );
         this.displayState = new DisplayState();
         this.displayQueue = new GPXDisplayQueue(2);
+        this.currentTrackZoomBucket = this.trackStyleService.getZoomBucket(
+            this.config.map.initialZoom
+        ).name;
         this.workspace = null;
         this.currentLibrary = null;
     }
@@ -172,6 +179,10 @@ export default class App {
         });
 
         this.eventBus.on("map:clear-requested", () => this.clearPresentation());
+
+        this.eventBus.on("map:zoom-ended", data => {
+            this.handleMapZoomEnded(data);
+        });
 
         this.eventBus.on("map:waypoint-visibility-toggled", ({ visible }) => {
             this.setWaypointVisibility(visible);
@@ -585,11 +596,21 @@ export default class App {
 
     createTrackStyle(color) {
 
-        return {
+        return this.trackStyleService.getNormalStyle({
             color,
-            lineColor: color,
-            weight: this.config.map.trackStyle.lineWeight,
-            opacity: this.config.map.trackStyle.lineOpacity
-        };
+            zoomLevel: this.mapView.getZoom()
+        });
+    }
+
+    handleMapZoomEnded({ zoom } = {}) {
+
+        const bucket = this.trackStyleService.getZoomBucket(zoom);
+
+        if (bucket.name === this.currentTrackZoomBucket) {
+            return;
+        }
+
+        this.currentTrackZoomBucket = bucket.name;
+        this.mapView.updateTrackWeights(bucket.weight);
     }
 }
