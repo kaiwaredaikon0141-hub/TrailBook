@@ -742,23 +742,33 @@ Done Definition
 
 1 Release
 
+Folder Bulk Display
 
+Status
 
-=
-
-
-
-1 Commit
-
-
-
-Commit例
+Completed
 
 
 
+フォルダ行のcheckboxで、配下の全GPXを一括ON/OFFできる
+
+
+
+■ Folder Display Checkbox
+
+■ Descendant GPX Enumeration
+
+■ Aggregate Checked State
 Release 0.3
+■ Indeterminate State
 
+■ Bulk Queue Integration
 
+■ Lazy DOM Compatibility
+
+Done Definition
+
+折りたたみ中の子孫GPXを含め、フォルダ単位で表示を一括制御できる
 
 Implement GPX Parser
 

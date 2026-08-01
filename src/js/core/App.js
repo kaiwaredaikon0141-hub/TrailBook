@@ -103,6 +103,10 @@ export default class App {
             this.handleDisplayToggled(data);
         });
 
+        this.eventBus.on("folder:display-toggled", data => {
+            this.handleFolderDisplayToggled(data);
+        });
+
         this.eventBus.on("map:clear-requested", () => this.clearPresentation());
 
         this.eventBus.on("map:display-failed", ({ error }) => {
@@ -188,6 +192,36 @@ export default class App {
         }
 
         this.startDisplay(path, fileHandle);
+    }
+
+    handleFolderDisplayToggled({ fileEntries, checked }) {
+
+        fileEntries.forEach(({ path, fileHandle }) => {
+
+            let display = this.displayState.getDisplay(path);
+
+            if (!display) {
+                this.displayState.registerFile(
+                    path,
+                    fileHandle,
+                    this.getColor(path)
+                );
+
+                display = this.displayState.getDisplay(path);
+            }
+
+            if (
+                checked &&
+                display.checked &&
+                (display.state === "loading" || display.state === "loaded")
+            ) {
+                return;
+            }
+
+            this.handleDisplayToggled({ path, fileHandle, checked });
+        });
+
+        this.updateDisplayStatus();
     }
 
     startDisplay(path, fileHandle) {

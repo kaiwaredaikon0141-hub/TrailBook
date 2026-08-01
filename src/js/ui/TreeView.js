@@ -266,10 +266,18 @@ export default class TreeView {
         row.tabIndex = -1;
         row.title = folder.name;
         row.innerHTML = `
+            <input
+                class="folder-display-toggle"
+                type="checkbox"
+            >
             <span class="tree-icon" aria-hidden="true"></span>
             <span class="tree-label"></span>
         `;
         row.querySelector(".tree-label").textContent = folder.name;
+        row.querySelector(".folder-display-toggle").setAttribute(
+            "aria-label",
+            `配下のGPXを地図に表示: ${folder.name}`
+        );
         item.append(row);
         this.folderNodes.set(path, row);
 
@@ -278,6 +286,7 @@ export default class TreeView {
         }
 
         this.updateFolderRow(row, isRoot || this.expandedPaths.has(path));
+        this.refreshFolderRow(path);
 
         return item;
     }
@@ -357,9 +366,54 @@ export default class TreeView {
         });
     }
 
+    collectDescendantFiles(folder, parentPath) {
+
+        const entries = folder.gpxFiles.map(fileHandle => ({
+            path: this.joinPath(parentPath, fileHandle.name),
+            fileHandle
+        }));
+
+        folder.folders.forEach(childFolder => {
+            entries.push(
+                ...this.collectDescendantFiles(
+                    childFolder,
+                    this.joinPath(parentPath, childFolder.name)
+                )
+            );
+        });
+
+        return entries;
+    }
+
+    setFolderDisplay(path, checked) {
+
+        const folder = this.nodeMetadata.get(path)?.model;
+
+        if (!folder) {
+            return;
+        }
+
+        const fileEntries = this.collectDescendantFiles(folder, path);
+
+        fileEntries.forEach(entry => {
+            this.setDisplayChecked(entry.path, checked);
+        });
+
+        this.refreshFolderAncestors(path);
+
+        this.eventBus.emit("folder:display-toggled", {
+            path,
+            fileEntries,
+            checked
+        });
+    }
+
     handleClick(event) {
 
-        if (event.target.closest(".gpx-display-toggle")) {
+        if (
+            event.target.closest(".gpx-display-toggle") ||
+            event.target.closest(".folder-display-toggle")
+        ) {
             event.stopPropagation();
             return;
         }
@@ -386,7 +440,9 @@ export default class TreeView {
 
     handleChange(event) {
 
-        const checkbox = event.target.closest(".gpx-display-toggle");
+        const checkbox = event.target.closest(
+            ".gpx-display-toggle, .folder-display-toggle"
+        );
 
         if (!checkbox) {
             return;
@@ -402,6 +458,12 @@ export default class TreeView {
 
         const path = row.dataset.treePath;
         const checked = checkbox.checked;
+
+        if (row.dataset.nodeKind === "folder") {
+            this.setFolderDisplay(path, checked);
+
+            return;
+        }
 
         this.setDisplayChecked(path, checked);
 
@@ -420,7 +482,9 @@ export default class TreeView {
             return;
         }
 
-        if (event.target.matches(".gpx-display-toggle")) {
+        if (event.target.matches(
+            ".gpx-display-toggle, .folder-display-toggle"
+        )) {
             return;
         }
 
@@ -465,6 +529,18 @@ export default class TreeView {
             event.preventDefault();
 
             if (row.dataset.nodeKind === "folder") {
+                if (event.key === " ") {
+                    const checkbox = row.querySelector(
+                        ".folder-display-toggle"
+                    );
+                    const checked = checkbox?.indeterminate
+                        ? true
+                        : !checkbox?.checked;
+
+                    this.setFolderDisplay(path, checked);
+                    return;
+                }
+
                 if (path !== ROOT_PATH) {
                     this.toggleFolder(path);
                 }
@@ -603,6 +679,7 @@ export default class TreeView {
         this.expandedPaths.add(path);
         this.appendFolderChildren(item, folder, path);
         this.updateFolderRow(row, true);
+        this.refreshFolderRow(path);
         this.applyFocusState();
     }
 
@@ -623,6 +700,7 @@ export default class TreeView {
         this.removeRenderedDescendants(path);
         this.expandedPaths.delete(path);
         this.updateFolderRow(row, false);
+        this.refreshFolderRow(path);
         this.applyFocusState();
 
         if (this.focusedPath === path) {
@@ -714,6 +792,7 @@ export default class TreeView {
 
         metadata.checked = checked;
         this.refreshFileRow(path);
+        this.refreshFolderAncestors(metadata.parentPath);
     }
 
     setDisplayIdle(path) {
@@ -760,6 +839,7 @@ export default class TreeView {
         });
 
         this.refreshAllFileRows();
+        this.refreshAllFolderRows();
     }
 
     clearTransientStates() {
@@ -776,6 +856,52 @@ export default class TreeView {
 
     refreshAllFileRows() {
         this.fileNodes.forEach((row, path) => this.refreshFileRow(path));
+    }
+
+    refreshAllFolderRows() {
+        this.folderNodes.forEach((row, path) => this.refreshFolderRow(path));
+    }
+
+    refreshFolderAncestors(path) {
+
+        let currentPath = path;
+
+        while (true) {
+            this.refreshFolderRow(currentPath);
+
+            if (!currentPath) {
+                break;
+            }
+
+            currentPath = this.parentPath(currentPath);
+        }
+    }
+
+    refreshFolderRow(path) {
+
+        const row = this.folderNodes.get(path);
+
+        if (!row) {
+            return;
+        }
+
+        const files = [...this.nodeMetadata.values()].filter(metadata => {
+            return metadata.kind === "file" &&
+                (path === ROOT_PATH ||
+                    metadata.path.startsWith(`${path}/`));
+        });
+
+        const checkedCount = files.filter(metadata => metadata.checked).length;
+        const checkbox = row.querySelector(".folder-display-toggle");
+
+        if (!checkbox) {
+            return;
+        }
+
+        checkbox.disabled = files.length === 0;
+        checkbox.checked = files.length > 0 && checkedCount === files.length;
+        checkbox.indeterminate = checkedCount > 0 &&
+            checkedCount < files.length;
     }
 
     refreshFileRow(path) {
@@ -806,6 +932,8 @@ export default class TreeView {
         if (colorIndicator) {
             colorIndicator.style.backgroundColor = metadata.color || "";
         }
+
+        this.refreshFolderAncestors(metadata.parentPath);
     }
 
     findRenderedRow(path) {

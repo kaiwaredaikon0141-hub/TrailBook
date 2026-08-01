@@ -514,3 +514,20 @@ Release 0.6では、GPX行のcheckboxで複数GPXを個別に地図表示する�
 - 表示中GPX全体のBoundsへ250ms debounce後に自動fitする
 - 表示クリアは全GPXをOFFにし、主選択とcacheは維持する
 - フォルダ一括表示、Canvas renderer、検索、編集、統計、Replay、HeatMapは対象外とする
+
+# 17. Release 0.7 Folder Bulk Display
+
+Release 0.7では、Folder行のnative checkboxで配下GPXを一括表示する。
+
+- Folder名・展開アイコンのクリックは展開・折りたたみだけを行う
+- Folder checkboxはFolder Modelを再帰走査し、DOM未生成の子孫GPXも対象にする
+- `folder:display-toggled`をFolder操作ごとに1回発行する
+- Folder checkboxは配下GPXのchecked状態からchecked、indeterminate、disabledを算出する
+- 空Folderのcheckboxはdisabledとする
+- Folder自身のchecked状態はModelへ保存しない
+- 一括ON/OFFは既存のDisplayStateとGPXDisplayQueueを利用する
+- 一括ON中のOFFではqueued・実行中の結果を無効化する
+- 個別GPXの表示状態、主選択、loading、loaded、errorを維持する
+- 折りたたみ中の子孫GPXも表示対象にできる
+- 表示クリア時は全GPXと全Folder checkboxをuncheckedにする
+- Folder一括専用の進捗UI、キャンセル、検索、編集、統計、Replay、HeatMapは追加しない

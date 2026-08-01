@@ -89,6 +89,18 @@ body{
     margin:0 6px 0 0;
 }
 
+.folder-display-toggle{
+
+    flex:0 0 auto;
+
+    margin:0 6px 0 0;
+}
+
+.folder-display-toggle:disabled{
+
+    cursor:not-allowed;
+}
+
 .tree-color-indicator{
 
     flex:0 0 8px;

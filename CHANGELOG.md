@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.7.0
+
+Released: 2026-08-01
+
+### Added
+
+- Folder checkboxes for bulk descendant GPX display toggles
+- Checked, indeterminate, and disabled aggregate folder states
+- Folder Model traversal for collapsed and lazily generated descendants
+- Bulk display operations using the existing bounded GPX display queue
+
 ## v0.6.0
 
 Released: 2026-08-01

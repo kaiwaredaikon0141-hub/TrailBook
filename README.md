@@ -11,13 +11,13 @@ architecture documents before making changes.
 
 ## Current Release
 
-Release 0.6.0: Multiple GPX Display
+Release 0.7.0: Folder Bulk Display
 
 The current implementation can open a directory, recursively find subfolders
 and `.gpx` files, parse an explicitly requested GPX file into Track,
 TrackSegment, TrackPoint, Waypoint, and Metadata models, navigate large
-libraries through a lazy TreeView, and display multiple GPX files on the map
-independently.
+libraries through a lazy TreeView, display multiple GPX files independently,
+and toggle all descendant GPX files from a folder checkbox.
 
 ## Technical Constraints
 
