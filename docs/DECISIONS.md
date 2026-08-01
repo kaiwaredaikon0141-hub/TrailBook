@@ -1,6 +1,6 @@
 # DECISIONS.md
 
-Version: 1.1
+Version: 1.2 Planning
 Status: Official
 
 TrailBookの設計判断と、その理由を将来へ残す。
@@ -466,6 +466,8 @@ Date: 2026-08
 Status: Proposed
 Scope: Future Candidate — Release 1.2 Shared Library Settings
 
+Historical Note: Decision記録時点ではFuture Candidateだった。Release 1.1完了後にNext ReleaseのPlanningへ移行した。
+
 Decision Proposal: Library固有設定をLibrary root直下の候補ファイル`trailbook.json`へ保存し、Google Driveなど外部Folder同期を通じて共有できる境界を検討する。TrailBook自身はGoogle Drive APIによるcloud syncを実装せず、同期は外部Folder同期へ委ねる。Folder colors、将来のvehicle metadata、Library固有の分類 / 表示規則、編集関連metadataを共有候補とし、Color / Monochrome、Map center / zoom、前回表示Track、selected Track、sidebarなど端末固有UI状態とは分離する。
 
 Future Principle: TrailBookは、ユーザーの明示的な保存操作なしにGPXやLibrary設定ファイルを変更、移動、削除しない。
@@ -473,6 +475,44 @@ Future Principle: TrailBookは、ユーザーの明示的な保存操作なし�
 Required Design Work: `trailbook.json` schema、readwrite permission、設定ファイルだけを書き込む境界、localStorage Folder色からの移行、ファイル欠落・保存失敗時のfallback、外部変更検出、競合処理、Import / Export、将来のGPX編集保存基盤との共通化を設計し、人間の承認を得る。
 
 Current Boundary: このProposalはRelease 1.1のread-only契約を変更しない。Release 1.1はGPXとLibrary設定ファイルを作成・更新せず、現在のAccepted Decision 0030のlocalStorage UI設定だけを使用する。
+
+Extended by: Decision 0033、0034、0035でRelease 1.2のschema、source precedence、permission、save、conflict方針を具体化する。
+
+## Decision 0033 — Shared Settings Use a Versioned File at the Library Root
+
+Date: 2026-08
+Status: Accepted
+Scope: Release 1.2 Planning
+
+Decision: Library固有設定は、実際に開いたLibrary root直下の固定名`trailbook.json`へ保存する。schema version 1は`{ schemaVersion: 1, settings: { folderColors } }`とし、Release 1.2で読み書きするsettingはFolder colorsだけとする。Folder keyはrootを空文字`""`とする`/`区切りrelative path、色は正規化済み`#RRGGBB`とする。
+
+Reason: fileをLibrary Folderと共に移動・同期でき、root名をidentityにするlocalStorageの同名衝突を解消できる。root直下の可視fileは個人利用者が発見、backup、手動reviewしやすく、隠しFolderより単純である。`settings` envelopeとschema versionにより将来fieldの明示migrationが可能になる。
+
+Consequences: UTF-8 BOMなし、LF、2-space indent、最終改行、stable key orderingを使用する。array、`null`、comment、dangerous key、不正path / color、未知schema、未知structural fieldはfail closedとし、既存fileを暗黙修復しない。orphan Folder pathは保持するが適用せず、Folder改名 / 移動を自動追従しない。FileHandle、GPX、geometry、cache、device-local UI状態は保存しない。
+
+## Decision 0034 — Shared Settings Require Explicit Permission and Save
+
+Date: 2026-08
+Status: Accepted
+Scope: Release 1.2 Planning
+
+Decision: Library openは`showDirectoryPicker({ mode: "read" })`を維持し、Folder openだけでwrite permissionを要求しない。Folder color Applyはsession / local fallbackを更新してdirty化するだけとし、別の`Libraryへ保存`操作でのみ`queryPermission({ mode: "readwrite" })`、必要時の`requestPermission({ mode: "readwrite" })`、`trailbook.json`書き込みを行う。
+
+Reason: 通常Viewerのread-only起動を維持し、permission promptと外部同期へのwrite回数を抑えながら、利用者が保存境界と失敗を理解できるようにするため。browser再起動後もpermissionが保持されるとは仮定しない。
+
+Consequences: 保存前に既存fileを再読込し、読込時のexact content SHA-256、`lastModified`、sizeとのfingerprint差を検出する。外部変更時はwriteを停止してReload / 明示Overwrite / Cancelを提示し、自動mergeと無条件last-write-winsを行わない。競合がない場合だけ`getFileHandle(..., { create: true })`、`createWritable()`、full write、`close()`を行い、close後の再読込一致でsavedとする。独自`.tmp` / `.bak` / renameは初期実装に追加しない。
+
+## Decision 0035 — Shared JSON Is Authoritative and Local Storage Is a Fallback
+
+Date: 2026-08
+Status: Accepted
+Scope: Release 1.2 Planning
+
+Decision: validかつsupportedな`trailbook.json`が存在する場合、その`folderColors` map全体を共有正本とする。JSONが空、またはFolder keyが欠落している場合はAutoであり、旧localStorage Folder colorを項目単位で混ぜない。JSONがmissingまたは一時的にunreadableな場合だけlocalStorageをfallbackとし、その後はpath hash colorを使う。
+
+Reason: JSONとdevice-local値をmergeすると、別端末で削除した明示色が古いlocalStorageにより復活し、共有正本が不明確になるため。Viewer継続用fallbackとshared source of truthを分離する。
+
+Consequences: JSONがない状態でlegacy colorがある場合は、非blockingな`現在の色設定をLibraryへ保存`を提示する。自動file作成と自動移行はせず、JSON既存時はmigrationを提案しない。成功後もRelease 1.2ではlocalStorage値をrecovery fallbackとして保持する。Color / Monochrome等の端末固有設定はDisplaySettingsStoreへ残す。Library open / reselection / page reloadと明示ReloadでJSONを読み、polling、File System Observer、cloud API、Import / Exportは初期scopeに含めない。
 
 ## Decision Status
 

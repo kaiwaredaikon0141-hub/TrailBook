@@ -7,7 +7,7 @@ TrailBookの開発を始める人とAIのための入口です。
 - Current Version: `1.1.0`
 - Current Release: Track Selection & Styling
 - Completed: Release 0.1からRelease 1.1
-- Next Candidate: Release 1.2 Shared Library Settings（Future / Not started）
+- Next Release: Release 1.2 Shared Library Settings（Planning / Production not started）
 - Branch: `main`
 
 Gitの状態は作業開始時に必ず再確認する。
@@ -65,16 +65,16 @@ GPXファイル名、Folder名、相対パスをmetadataから検索する。検
 
 Release 1.1 Track Selection & Stylingは完了している。zoom連動Track線幅、Map / TreeView / Searchの単一選択同期、selected highlight / outline、Folder色と継承、UI設定限定の`localStorage`、Color / Monochrome背景地図表示を実装した。806 GPX Libraryの人間による定性的性能評価はAcceptableで、明確な回帰やUIが固まる操作は確認されていない。数値benchmarkと20%比較は実施していない。
 
-Release 1.2 Shared Library SettingsはFuture Candidateであり、`trailbook.json`、設定書き込み、Google Drive API連携をまだ実装していない。Mobile Viewer UX、Waypoint性能最適化、数値性能再測定、日付表示、vehicle metadata、GPX Editing Foundation、TrackPoint Editing、GPX size reductionなども`ROADMAP.md`のFuture Candidatesとして扱う。
+Release 1.2 Shared Library Settingsは次ReleaseとしてPlanning中である。Library root直下の`trailbook.json`へFolder colorsだけを明示保存し、外部Folder同期により共有する設計を確定した。通常openはread-only、JSONがvalidなら共有正本、保存直前のfingerprint差はconflictとして停止する。production実装、GPX書き込み、Google Drive API連携はまだ開始していない。Mobile Viewer UX、Waypoint性能最適化、数値性能再測定、日付表示、vehicle metadata、GPX Editing Foundation、TrackPoint Editing、GPX size reductionなどは`ROADMAP.md`のFuture Candidatesとして扱う。
 
 ## Non-Negotiable Rules
 
 - GPXは唯一の正本である。
-- ユーザーのGPXを暗黙に変更、移動、削除、上書きしない。
+- ユーザーの明示的な保存操作なしにGPXやLibrary設定ファイルを変更、移動、削除しない。
 - Folder構造とGPXファイルをデータの正本とする。
 - SQLite、IndexedDBなどの独自DBを持たない。一時的なセッションcacheは独自DBに含めない。
 - 独自DBを持たない方針を変更する場合は、新しいDecisionを必要とする。
-- Release 1.1では再生成可能なFolder色とMap表示modeだけを`localStorage`へ保存できる。GPX内容、解析結果、FileHandle、FolderHandle、cacheの永続化は禁止する。
+- 現行Release 1.1では再生成可能なFolder色とMap表示modeだけを`localStorage`へ保存できる。Release 1.2ではFolder色だけをshared fileへ移行する計画だが未実装である。GPX内容、解析結果、FileHandle、FolderHandle、cacheの永続化は禁止する。
 - Framework、TypeScript、Node.jsを追加しない。
 - UI同士を直接接続せず、EventBusとAppの調停を使用する。
 - ModelへUI状態を保存しない。

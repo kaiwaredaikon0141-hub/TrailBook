@@ -6,9 +6,9 @@
 
 - Current Release: `1.1.0` Track Selection & Styling
 - Completed: Release 0.1からRelease 1.1
-- Next Candidate: Release 1.2 Shared Library Settings（Future / Not started）
+- Next Release: Release 1.2 Shared Library Settings（Planning / Production not started）
 
-Release 1.1は個人利用向けStable Viewerとして完了しています。Track selection、Folder color、zoom-based width、UI設定persistence、Monochrome Map Modeを実装済みです。Release 1.2 Shared Library Settingsは将来候補であり、production実装は開始していません。
+Release 1.1は個人利用向けStable Viewerとして完了しています。Track selection、Folder color、zoom-based width、UI設定persistence、Monochrome Map Modeを実装済みです。Release 1.2 Shared Library Settingsは次ReleaseとしてPlanning中であり、production実装は開始していません。
 
 ## Read Order
 
@@ -58,7 +58,7 @@ Release 1.1 Unit roles:
 
 ## Future Features
 
-Release 1.2 Shared Library Settingsは、Library rootの候補ファイル`trailbook.json`へLibrary固有設定を保存し、外部Folder同期を通じて共有する将来候補です。Release 1.1ではファイル書き込みやGoogle Drive API同期を実装していません。
+Release 1.2 Shared Library Settingsは、Library root直下の`trailbook.json`へFolder colorsを明示保存し、外部Folder同期を通じて共有する次Releaseです。schema、permission、migration、conflict方針はPlanningとして確定していますが、Release 1.1ではfile書き込みやGoogle Drive API同期を実装していません。
 
 Statistics、Replay、HeatMap、GPX Metadata Index、日付表示、vehicle metadata、GPX編集、GPX size reduction、Cloud Sync、Mobile Viewer UX、Waypoint性能最適化、数値性能再測定、Plugin、AI Searchなども未実装の将来候補です。
 

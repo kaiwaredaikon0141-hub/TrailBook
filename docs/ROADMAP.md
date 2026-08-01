@@ -1,9 +1,9 @@
 # ROADMAP.md
 
-Version: 1.1
+Version: 1.2 Planning
 Status: Official
 Current Release: 1.1.0 Track Selection & Styling
-Next Candidate: 1.2 Shared Library Settings
+Next Release: 1.2 Shared Library Settings（Planning / Production not started）
 
 ## Version Policy
 
@@ -316,41 +316,58 @@ Completed内容:
 - Chrome統合受け入れとUnit 2〜6のEdge受け入れ
 - 806 GPX Libraryの定性的性能評価Acceptable、明確な性能回帰なし
 
-## Future Candidate — Release 1.2 Shared Library Settings
+## Next Release — Release 1.2 Shared Library Settings
 
-Status: Candidate / Not started
+Status: Planning / Production not started
 
-Goal: Folder colorなどLibrary固有設定をLibrary root直下の候補ファイル`trailbook.json`へ保存し、Google Driveなど外部Folder同期を通じて異なるbrowserや端末で共有できる構造を検討する。TrailBook自身はGoogle Drive APIによるcloud syncを実装せず、同期処理は外部Folder同期へ委ねる。
+Goal: Folder colorをLibrary root直下の`trailbook.json`へ保存し、同じFolderを開くChrome、Edge、別PC、将来の対応端末でLibrary固有設定を共有できる基盤を作る。TrailBookはGoogle Drive / OneDrive APIや独自cloud syncを実装せず、通常ファイルの同期は外部Folder同期へ委ねる。
 
-Shared setting candidates:
+### Scope
 
-- Folder colors
-- 将来のvehicle metadata
-- Library固有の分類 / 表示規則
-- 将来の編集関連metadata
+- Release 1.2 schema version 1の`trailbook.json`読込、検証、明示保存
+- rootを含むFolder relative pathとFolder colorsの共有
+- JSON、legacy localStorage、Auto / path hash colorの優先順位
+- readwrite permission、保存失敗fallback、明示的な再読込
+- 読込時fingerprintと保存直前再読込による外部変更検出
+- localStorage Folder色からの明示移行
+- Chrome / EdgeとGoogle Drive同期Folderの実機確認
+- 既存Viewer、GPX read-only、端末固有UI設定の維持
 
-Device-local setting candidates:
+### Shared and Device-local Boundary
 
-- Color / Monochrome
-- Map center / zoom
-- 前回表示Track
-- selected Track
-- sidebarなどのUI状態
+`trailbook.json`へ保存するRelease 1.2の設定はFolder colorsだけとする。vehicle metadata、Folder表示名、Library固有の分類 / 表示規則、Date Tree補助設定、編集関連metadataはschemaを拡張可能にする将来候補であり、Release 1.2では保存しない。
 
-Design topics:
+Color / Monochrome、Map center / zoom、前回表示Track、selected Track、sidebar状態、検索文字列は端末固有とし、`trailbook.json`へ保存しない。FileHandle、FolderHandle、GPX XML、TrackPoint、parsed geometry、cache、Queue状態も保存しない。
 
-- `trailbook.json` schema
-- readwrite permission取得
-- 設定ファイルだけを安全に書き込む境界
-- localStorage Folder色からの移行
-- JSONが存在しない場合のfallback
-- 保存失敗時のsession / localStorage fallback
-- Google Drive同期Folderでの再読込
-- 外部変更検出と競合時の扱い
-- Import / Exportの必要性
-- 将来のGPX編集保存基盤との共通化
+### Save and Conflict Boundary
 
-Release 1.2 candidateはproduction未実装である。Release 1.1は引き続きread-onlyで、`trailbook.json`の作成・更新も行わない。
+- Folder openと通常閲覧はread-onlyとし、ファイルを作成または変更しない。
+- Folder color Applyはsessionとdevice-local fallbackだけを更新し、shared settingsをdirtyとする。
+- 別の明示的な`Libraryへ保存`操作でのみreadwrite permissionを確認し、`trailbook.json`を書き込む。
+- 権限拒否または保存失敗でもViewerを継続し、session / localStorageの色を失わない。
+- 保存直前に既存fileを再読込し、読込時fingerprintとの差を検出した場合は保存を停止する。Reload / 明示Overwrite / Cancelを提示し、自動mergeとlast-write-winsを行わない。
+- Library open、再選択、page reloadで設定を読み、明示的な`設定を再読み込み`も提供する。polling、background sync、File System Observerは使わない。
+
+### Units
+
+1. Scope、Architecture、Decisions、schema、permission / conflict policy、test plan
+2. read-only loader、schema validation、Library open時の読込、localStorage fallback
+3. readwrite permission、safe writer、明示保存、failure handling
+4. localStorage migration、status UI、manual reload、conflict handling
+5. Chrome / Edge、Google Drive Folder、統合受け入れ、文書、Release finalization
+
+Unit 1はPlanningであり、Unit 2以降のproduction実装は開始していない。
+
+### Out of Scope
+
+- GPX編集、GPX上書き、TrackPoint編集、GPX容量削減
+- Folder移動 / 改名とorphan pathの自動追従
+- Google Drive / OneDrive等のcloud API、background sync
+- automatic merge、multi-user collaboration、account、server、database
+- Mobile Viewer UX、Date Tree、vehicle metadata本体、previous display state restoration
+- Import / Export UI、backup / temporary file管理、GPX編集保存基盤の実装
+
+正式な保存原則は「TrailBookは、ユーザーの明示的な保存操作なしにGPXやLibrary設定ファイルを変更、移動、削除しない。」とする。Release 1.1の実装は引き続きread-onlyで、Release 1.2のproduction codeは未実装である。
 
 ## Future Design Boundaries
 
@@ -413,10 +430,9 @@ Release 0.9では、車両情報の読み込み、保存、編集、色変更を
 
 ## Future Candidates
 
-Release 1.2 Shared Library Settingsは上記のFuture Candidateとして扱う。以下の候補は設計承認時にRelease番号を決定する。
+Release 1.2 Shared Library Settingsは上記のNext ReleaseとしてPlanning中である。以下はRelease 1.2より後の候補であり、設計承認時にRelease番号を決定する。
 
 - GPX Metadata Index
-- Shared Library Settings（Release 1.2 candidate）
 - Date-based Display
 - Vehicle Metadata / Track Style
 - GPX Editing Foundation

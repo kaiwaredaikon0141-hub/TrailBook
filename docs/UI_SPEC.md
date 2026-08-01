@@ -1,7 +1,7 @@
 # TrailBook UI Specification
 
 Version : 1.2
-Status  : Implemented through Release 1.1 Completed
+Status  : Implemented through Release 1.1 Completed / Release 1.2 Planning
 Depends : PROJECT.md, ARCHITECTURE.md, ROADMAP.md
 
 Release 0.5からRelease 0.9までの追加仕様は本書末尾に追記する。
@@ -767,3 +767,51 @@ Unit 5ではTreeView本体を増やさず、独立したFolder color controlがl
 - GPX単位色、palette共有、Cloud Sync、hover previewを追加しない
 - Mobile Viewer UXとWaypoint clusteringを追加しない
 - GPXまたはFolder構造へ色を保存しない
+
+## Release 1.2 Planned UI — Shared Library Settings
+
+Status: Planning / Production not started
+
+通常閲覧とFolder color操作はRelease 1.1のまま維持する。Libraryを開いただけではwrite permissionを要求せず、`trailbook.json`を作成または変更しない。
+
+### Minimum UI
+
+Library sidebarの既存操作を妨げない位置へ、compactなshared settings statusと必要時だけ表示するnative buttonを置く。
+
+- text status: `Shared: Loaded`、`Local only`、`Unsaved`、`Read-only`、`Invalid`、`Conflict`、`Save failed`
+- `Libraryへ保存`: dirtyなFolder colors、またはlegacy localStorage色の明示移行時に使用する
+- `設定を再読み込み`: 外部Folder同期後に`trailbook.json`を再読込する
+- `Retry`: permission denied / revokedまたは一時的なwrite failure後に再試行する。通常はSave buttonが兼ねる
+- conflict dialog: `Reload`、`Overwrite`、`Cancel`
+
+`共有設定を無効化`はsourceと削除の意味が曖昧になるためRelease 1.2の最小UIへ含めない。Import / Export UIもFuture Candidateとする。
+
+Folder color dialogのApplyは画面とsession / local fallbackへ反映して`Unsaved`とするだけで、fileへ即時保存しない。userが`Libraryへ保存`を選んだ時だけreadwrite permissionとwriteを開始する。Library switch時にdirtyならSave / local fallbackへ残してDiscard / Cancelを提示し、暗黙保存しない。
+
+### State and Error Presentation
+
+- statusは文字と`aria-live="polite"`で通知し、色だけで表現しない。
+- save、reload、migration、conflictの操作はnative keyboardで到達・実行できる。
+- errorは画面内に残し、alertだけに依存しない。内部path、JSON全文、例外stackを利用者向け表示へ出さない。
+- permission denied、save failure、invalid JSONでもViewerと現在のFolder color表示を継続する。
+- invalid / unsupported JSONでは通常Saveを無効にし、理由とReloadを示す。既存fileを置き換える場合は内容を失う可能性を説明した別の明示Overwriteを必要とする。
+- JSONが存在せずlegacy localStorage色がある場合は、起動ごとのmodalではなく`現在の色設定をLibraryへ保存`を非blockingに提示し、Folder color件数と作成対象`trailbook.json`を示す。
+- valid JSONが空、またはFolder keyがない場合は共有設定上のAutoであり、古いlocalStorage色を混ぜない。
+- orphan settingは適用せず、件数をwarningとして示す。Release 1.2ではFolder改名 / 移動や自動削除を行わない。
+
+### External Change Flow
+
+`設定を再読み込み`はLibrary open時に取得したshared snapshotを再取得する。dirty変更がある場合は破棄確認なしにreloadしない。保存直前にexternal changeを検出した場合はwriteせずconflict dialogを開く。
+
+- Reload: external fileを正本として読み、local dirty変更をsharedへ保存しない
+- Overwrite: external変更を置き換えることを再確認したうえで明示saveする
+- Cancel: dialogを閉じ、dirty session / local fallbackを維持する
+
+自動merge、polling、background sync、sync progress表示は行わない。Google Drive等の同期完了はTrailBookが判定せず、利用者が同期完了後にReloadまたはLibrary再選択を行う。
+
+### Accessibility and Scope Boundary
+
+- current status、保存結果、conflictをscreen readerへ意味のあるtextで伝える
+- dialog open時のinitial focus、EscapeでCancel、close後のfocus returnを維持する
+- disabled buttonには常時確認できる理由を関連付ける
+- Mobile最適化、Import / Export、Folder操作、GPX編集、previous display restorationはRelease 1.2の対象外とする

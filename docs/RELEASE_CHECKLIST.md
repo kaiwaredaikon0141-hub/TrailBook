@@ -1206,7 +1206,7 @@ Unit 2の数値baselineは履歴として維持し、将来必要な場合は同
 - tag: Pending
 - push: Pending
 
-Release 1.2 Shared Library SettingsはFuture Candidateである。Library root直下の`trailbook.json`、Library固有設定の共有、外部Folder同期との協調を検討対象とするが、Release 1.1ではproduction実装、設定ファイル書き込み、Google Drive API同期を行わない。
+Release 1.1 finalization時点でRelease 1.2 Shared Library SettingsはFuture Candidateだった。その後Next ReleaseのPlanningへ移行したが、Release 1.1 productionは引き続き設定file書き込みやGoogle Drive API同期を行わない。
 
 ### Persistence Schema
 
@@ -1225,3 +1225,125 @@ Folder identity: current Library内のrelative path。rootは空文字。
 - Canvas renderer、hit tolerance、overlap順序はChrome / Edgeで確認済みである。overlapping Trackでは最前面の1件を選択する。
 - 806 GPXでTrack click、highlight、zoom bucket変更に明確な性能回帰は確認されていない。
 - TreeViewは997行のため、Folder color UIを直接追加して1,000行規則を超えないよう、helperまたはdialog責務を別Viewへ置く。
+
+## Release 1.2 Shared Library Settings
+
+Release 1.2 Status: Planning
+Current Release: `1.1.0`
+Production Implementation Status: Not started
+
+### Unit Status
+
+| Unit | Scope | Status | Depends on |
+| ---: | --- | --- | --- |
+| 1 | Scope、Architecture、Decisions、schema、permission / conflict policy、test plan | Completed | Release 1.1 completed baseline |
+| 2 | read-only loader、schema validation、Library open時の読込、localStorage fallback | Not started | Unit 1 |
+| 3 | readwrite permission、safe writer、explicit save、failure handling | Not started | Unit 2 |
+| 4 | localStorage migration、status UI、manual reload、conflict handling | Not started | Unit 2、3 |
+| 5 | Google Drive Folder、Chrome / Edge、integrated acceptance、documentation、Release finalization | Not started | Unit 2〜4 |
+
+Unit 1 Planning Status: Completed
+Unit 1 Production Implementation Status: Not started
+
+### Scope and Data Boundary
+
+- [x] Library root直下の固定名`trailbook.json`を採用
+- [x] Release 1.2のshared settingをFolder colorsだけに限定
+- [x] root path `""`と`/`区切りrelative Folder pathを採用
+- [x] Color / Monochrome等の端末固有設定をlocalStorageへ維持
+- [x] FileHandle、FolderHandle、GPX、TrackPoint、geometry、cache、Queueを永続化対象外とする
+- [x] GPX write、Folder移動 / 改名、cloud API、background sync、automatic mergeをOut of Scopeとする
+- [x] 正式原則を「ユーザーの明示的な保存操作なしにGPXやLibrary設定ファイルを変更、移動、削除しない」とする
+
+### Schema Contract
+
+- File: Library root / `trailbook.json`
+- Schema: `{ "schemaVersion": 1, "settings": { "folderColors": { "": "#455A64" } } }`
+- Encoding: UTF-8 without BOM
+- Newline: LF、final newline required
+- Formatting: 2-space indent、stable property order、Folder pathをUnicode code point順にsort
+- Color: `#RGB` / `#RRGGBB` inputを大文字`#RRGGBB`へnormalize。alpha、name、`rgb()`はreject
+- Validation: arrays、`null`、dangerous keys、control character、backslash、不正separator、`.` / `..` segmentをreject
+- Unknown schema / structural field: fail closed。Viewerはfallbackで継続するが通常saveで上書きしない
+- Orphan path: preserve、do not apply、do not auto-delete
+
+### Source, Migration, Permission, and Save Contract
+
+- [x] valid supported JSON全体 > missing / unreadable時だけlegacy localStorage > Auto / path hash > Config fallback
+- [x] valid JSONのempty map / missing Folder keyへlegacy localStorageを混ぜない
+- [x] JSON既存時にlocalStorageで上書きしない
+- [x] JSONなし + legacy colorありの場合だけ非blockingな明示migrationを提示
+- [x] migration成功後もRelease 1.2ではlocalStorage fallbackを保持
+- [x] pickerは`mode: "read"`を維持し、Save時だけreadwrite permissionを確認
+- [x] Folder color Applyはdirty化のみ。別の`Libraryへ保存`で書き込む
+- [x] permission denied / revoked、write / close failureでもViewerとsession / local fallbackを維持
+- [x] read時exact content SHA-256 + `lastModified` + sizeのfingerprintを保持
+- [x] save直前に再読込し、external change時は停止してReload / explicit Overwrite / Cancelを提示
+- [x] automatic merge、unconditional last-write-wins、独自`.tmp` / `.bak`を初期scopeに含めない
+- [x] `createWritable()`、full write、`close()`、close後の再読込一致でsavedとする
+
+### Planned UI
+
+- Shared status: Loaded / Local only / Unsaved / Read-only / Invalid / Conflict / Save failed
+- `Libraryへ保存`
+- `設定を再読み込み`
+- JSON missing時の`現在の色設定をLibraryへ保存`
+- Conflict dialog: Reload / Overwrite / Cancel
+- text + `aria-live`、native keyboard操作、dialog focus return、disabled reason
+- `共有設定を無効化`、Import / Export、Mobile optimizationはRelease 1.2の最小UIへ含めない
+
+### External Folder Sync Contract
+
+- [x] Google Drive / OneDrive同期Folder内のJSONを通常fileとして扱う
+- [x] TrailBookはcloud API、sync status、provider metadataを使用しない
+- [x] 別端末反映には外部providerの同期完了が必要
+- [x] Library open / reselection / page reload / explicit Reloadで再読込
+- [x] offline時は端末上の最新同期済みcopyを読む
+- [x] polling、visibility auto reload、File System Observerを使用しない
+
+### Static Test Plan
+
+- [ ] valid `trailbook.json`
+- [ ] missing file
+- [ ] empty file
+- [ ] malformed JSON
+- [ ] unknown schema
+- [ ] unknown structural field
+- [ ] partial invalid Folder colors
+- [ ] dangerous keys / prototype pollution
+- [ ] array / `null`
+- [ ] Japanese path
+- [ ] root path `""`
+- [ ] nested Folder and orphan path
+- [ ] stable serialization、UTF-8、LF、final newline
+- [ ] JSON precedence、empty JSON、localStorage fallback
+- [ ] permission granted / denied / revoked
+- [ ] write / close / quota failure
+- [ ] read fingerprint、external change、missing-to-created conflict
+- [ ] migration、existing JSON no-overwrite
+- [ ] no GPX / FileHandle / geometry persistence and no GPX write
+- [ ] production module import and circular dependency
+
+### Browser and Integration Test Plan
+
+- [ ] Chrome / Edge: Library without JSON and with valid JSON
+- [ ] Folder colors load、root / nested / Japanese path、inheritance / Auto
+- [ ] same JSONをChrome / Edgeで再現
+- [ ] localStorage migration preview、accept、deny、retry
+- [ ] explicit save、reload、Library switch、dirty confirmation
+- [ ] external file change、conflict Reload / Overwrite / Cancel
+- [ ] malformed / unsupported JSONでもViewer継続
+- [ ] Google Drive同期Folder read / write / resync / manual Reload
+- [ ] offline時の最新同期済みcopy
+- [ ] existing Viewer、Search、selection、Folder bulk、Waypoint、Monochrome regression
+- [ ] Console、keyboard、ARIA、focus
+- [ ] GPX content / timestamp unchanged、GPXへ`createWritable`なし
+
+### Known Limits and Open Validation
+
+- File System Access APIのpermission persistenceとprovider挙動はbrowser / user grantに依存するため、保存時に毎回照会する。
+- fingerprint確認後から`close()`までのexternal write raceを完全には排除できない。
+- Google Drive等の同期完了、offline freshness、conflict解消をTrailBookは保証しない。
+- orphan pathは自動追従しない。automatic mergeとfield-level mergeは未実装とする。
+- Import / Export、backup、exclusive writer、File System ObserverはFuture Candidateとする。
+- Unit 2以降のproduction implementationとChrome / Edge / Google Drive実機testは未開始である。

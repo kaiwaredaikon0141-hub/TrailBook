@@ -1,9 +1,9 @@
 # ARCHITECTURE.md
 
-Version: 1.1
+Version: 1.2 Planning
 Status: Official
-Baseline: Release 1.0.0
-Current: Release 1.1 Completed
+Baseline: Release 1.1.0
+Current: Release 1.1 Completed / Release 1.2 Planning
 Depends: PROJECT.md, ROADMAP.md, DECISIONS.md
 
 ## Architecture Overview
@@ -633,6 +633,132 @@ root Folder名を変更すると新Libraryとして扱いDefault色へ戻る。�
 - style変更ではGPX Parser、GPXDisplayQueue、100件cache、Track Bounds、Waypoint LayerGroup、refocusを変更しない。
 - SVG維持案と透明hit layer案はfallbackとし、採用時は806 GPXでlayer数、click、pan / zoomを再評価する。
 
+## Release 1.2 Planned Architecture — Shared Library Settings
+
+Release 1.2はLibrary root直下の`trailbook.json`をLibrary固有設定の共有先とする。現在のReleaseは1.1.0のままであり、このsectionはPlanning contractであってproduction実装済みの説明ではない。
+
+### File Placement and Identity
+
+採用案はLibrary root直下の固定名`trailbook.json`である。隠しFolderや別名は個人利用時の発見性と手動確認を下げるため採用しない。
+
+- fileそのものが、実際に選択したLibrary rootへ紐づく。root名だけで識別しないため、同名Libraryでも別fileなら衝突しない。
+- root Folderを改名または移動しても、fileがLibrary root内に残れば設定は付いてくる。
+- Folder color keyはrootからの`/`区切りrelative pathとし、rootは空文字`""`とする。
+- 子Folderを外部で改名または移動すると旧pathは一致しなくなる。Release 1.2は自動追従せず、存在しないpathをorphan settingとして保持して適用しない。
+- 将来TrailBookがFolder操作を実装する場合は、Folder操作と設定path更新を同じ明示操作として設計する。
+
+### Schema Version 1
+
+```json
+{
+  "schemaVersion": 1,
+  "settings": {
+    "folderColors": {
+      "": "#455A64",
+      "bike/crf": "#795548",
+      "car": "#7E57C2"
+    }
+  }
+}
+```
+
+`settings` envelopeを採用し、Library metadataや将来設定との責務境界を明示する。Release 1.2が読み書きするsettingは`folderColors`だけである。
+
+- JSONはUTF-8、BOMなし、LF、2-space indent、最終改行ありとする。commentは許可しない。
+- property順は`schemaVersion`、`settings`、`folderColors`とし、Folder pathはUnicode code point順に安定sortする。root `""`は先頭となる。stable outputは人間のreviewと外部同期diffを小さくするため必要である。
+- 色は`#RGB`または`#RRGGBB`を入力時に受理し、保存前に大文字`#RRGGBB`へ正規化する。alpha、CSS color name、`rgb()`は拒否する。
+- plain objectだけを受理し、array、`null`、control character、backslash、不正separator、`.` / `..` segment、`__proto__`、`constructor`、`prototype`を拒否する。内部dictionaryはprototypeを持たせない。
+- 未知`schemaVersion`、空file、malformed JSON、不正なenvelope、dangerous key、未知のtop-level / settings fieldはfail closedとする。Viewerは継続できるがshared fileを正本として採用せず、通常saveを無効にして暗黙の修復やdata lossを防ぐ。
+- 一部のFolder color entryだけが不正な場合はvalid entryをpreviewへ分離できるが、通常saveは停止する。userがfileを修正してReloadするか、内容を確認した明示Overwriteを選ぶまで既存fileを書き換えない。
+- 将来schemaはversionを上げ、旧versionからのpure migrationとtestを追加する。同じschema versionに未知fieldを黙って追加しない。
+
+### Shared / Device-local Boundary and Precedence
+
+| Data | Shared `trailbook.json` | Device-local `DisplaySettingsStore` |
+| --- | --- | --- |
+| Folder colors | Release 1.2の共有対象 | JSON欠落・読込不能時のlegacy fallback / migration source |
+| Color / Monochrome | 保存しない | 継続して保存 |
+| Map center / zoom、previous / selected Track、sidebar、search query | 保存しない | Release 1.2でも追加しない |
+| FileHandle、FolderHandle、GPX / geometry、cache / Queue | 保存しない | 保存しない |
+
+読込優先順位は次とする。
+
+1. validかつsupportedな`trailbook.json`のFolder colors
+2. JSONが存在しない、または権限・一時的な同期状態等で読めない場合だけ、現行localStorageのLibrary Folder colors
+3. Auto / GPX relative path hash color
+4. Configの最終fallback色
+
+valid JSONが存在する場合は、その`folderColors` map全体が共有正本である。JSONが空map、または特定Folder keyがないことは明示色なしを意味し、そのFolderについて古いlocalStorage値を混ぜない。JSONとlocalStorageが異なる場合もJSONを優先する。invalid / unsupported JSONではlocalStorageをViewer継続用に利用できるが、invalid fileを自動上書きしない。
+
+### Responsibilities and Dependencies
+
+```text
+LibrarySettingsPanel / SettingsConflictDialog
+                    │ request / projection
+                    ▼
+                   App
+       ┌────────────┼─────────────┐
+       ▼            ▼             ▼
+LibrarySettings  FolderColor   DisplaySettings
+State            State         Store (device-local)
+       ▲
+       │ result / snapshot
+LibrarySettingsRepository
+       │
+       ▼
+Library root FileSystemDirectoryHandle / trailbook.json
+```
+
+- `LibrarySettingsRepository`はroot `FileSystemDirectoryHandle`を入力として`trailbook.json`のread / validation / serialization / permission / write / fingerprint / conflict checkを担当する。DOM、Leaflet、Folder color resolution、localStorageを参照しない。
+- `LibrarySettingsState`はcurrent Libraryのvalidated snapshot、source、load fingerprint、dirty data、`loaded` / `local-only` / `unsaved` / `read-only` / `invalid` / `conflict` / `save-failed` statusを保持する。File System APIとUIを参照しない。
+- `FolderColorState`はrelative pathによるcolor resolutionとsession projectionを維持し、RepositoryやFile System APIの詳細を知らない。
+- `DisplaySettingsStore`はglobal Map modeなど端末固有設定と、Release 1.2移行期間のlegacy Folder color fallbackだけを扱う。shared settingsの正本にならない。
+- `App`がLibrary load、fallback選択、save、reload、migration、conflict UI、FolderColorStateへのprojectionを調停する。UI同士は直接接続しない。
+- `LibrarySettingsPanel`と`SettingsConflictDialog`は状態表示とuser requestだけを担当し、fileを直接操作しない。
+- 依存方向はAppから各Service / State / UIへ、Repositoryからpure schema helperへ向ける。RepositoryからApp / UI / FolderColorStateへの逆参照と循環参照を禁止する。
+
+### Read, Permission, and Explicit Save Flow
+
+Library pickerは`showDirectoryPicker({ mode: "read" })`を維持する。Folder openだけでreadwrite permissionを求めない。
+
+1. Library scan成功後、Repositoryがrootから`trailbook.json`をread-onlyで探して読み、schemaとfingerprintを返す。
+2. Folder color Applyはsessionとdevice-local fallbackへ反映し、shared stateをdirtyにする。file writeとpermission promptは行わない。
+3. userが`Libraryへ保存`を実行した時だけ`queryPermission({ mode: "readwrite" })`を確認し、`prompt`ならそのuser activation内で`requestPermission({ mode: "readwrite" })`を呼ぶ。
+4. `denied`またはAPI / provider failureでもViewerを停止せず、local / session状態を維持してRetryを可能にする。permissionがbrowser session間で保持されると仮定せず、保存ごとに確認する。
+5. save中は同じApp instanceの多重saveを直列化する。保存成功を確認するまでdirty状態を解除しない。
+
+この方式はreadwrite pickerを初回から要求する案、Applyごとの即時保存、debounce autosave、Library switch時の暗黙保存を採用しない。明示保存はpermission promptとGoogle Drive等へのwrite回数を抑え、保存失敗を利用者へ説明できる。
+
+### Minimum Safe Write and Conflict Policy
+
+読込時にfileのexact byte contentからSHA-256を求め、`lastModified`とsizeを併記したfingerprintを保持する。保存直前にfileの有無と内容を再読込し、読込時fingerprintと異なる、または当初missingだったfileが作成されている場合はconflictとして保存を停止する。`lastModified`だけには依存しない。
+
+競合時はReload / 明示Overwrite / Cancelを提示し、自動mergeと無条件last-write-winsを行わない。Overwriteはcurrent external contentを表示上確認した後の別の明示操作とする。
+
+競合がない場合だけ`getFileHandle("trailbook.json", { create: true })`、`createWritable()`、full documentの`write()`、`close()`を実行する。`createWritable`が使用するbrowser側のtemporary swapとclose commitを利用し、Release 1.2では独自`.tmp` / `.bak` / renameを追加しない。write / close / quota / permission / provider failure時は可能ならwriterをabortし、dirtyなsession / localStorage fallbackを保持する。close後は再読込して内容を検証し、一致した場合だけsavedとする。
+
+この最小策でも、fingerprint確認後からcloseまでの外部write、provider固有の同期遅延、browser crash時の挙動を完全には排除できない。exclusive writer対応、backup、field単位merge、transaction journalは将来強化候補とする。
+
+### Migration, Reload, and External Sync
+
+- JSONがなくlegacy localStorage色がある場合、非blocking statusと`現在の色設定をLibraryへ保存`を表示する。自動作成、自動移行、起動ごとのmodal promptは行わない。
+- migration buttonは保存対象件数と作成file名を示し、同じ明示save flowを使う。成功後はJSONが正本となる。Release 1.2ではlocalStorage値をfallbackとして保持し、削除しない。
+- JSONが既にある場合はlocalStorageで上書きせず、migrationを提案しない。全entryのdiff previewは必須にせず、件数とsourceを表示する。
+- Library open / reselection / page reloadで毎回読む。`設定を再読み込み`はexternal sync後の反映手段とする。dirty時のReloadとLibrary switchはSave / local fallbackへ残してDiscard / Cancelを選ばせる。
+- polling、`visibilitychange`自動reload、File System Observer、background syncはRelease 1.2では行わない。
+
+Google Drive / OneDrive同期Folderでも`trailbook.json`を通常fileとして扱う。TrailBookはcloud API、sync status、provider metadataを利用せず、offline時は端末上の最新同期済みcopyを読む。別端末の変更はproviderの同期完了後にmanual reloadまたはLibrary再選択で反映する。同時編集と同期遅延は競合し得る。
+
+### Import / Export Boundary
+
+Release 1.2の必須scopeはsupported Chrome / EdgeでのLibrary file read / explicit writeである。Import / ExportはFile System Access API非対応環境、backup、手動共有に有用だが、保存先選択、session/localのsource、conflict UXを増やすためFuture Candidateとする。API非対応環境ではRelease 1.2も現在のlocalStorage / session Viewerを継続し、shared fileを自動生成しない。
+
+### Data Protection Principle
+
+TrailBookは、ユーザーの明示的な保存操作なしにGPXやLibrary設定ファイルを変更、移動、削除しない。Release 1.2のwrite boundaryはLibrary rootの`trailbook.json`だけであり、GPXへ`createWritable`を使わない。将来のGPX編集も通常閲覧から分離し、明示保存、競合確認、保存失敗処理を備えるまで実装しない。
+
+File System Access APIのpermissionとwrite lifecycleは[Chrome File System Access documentation](https://developer.chrome.com/docs/capabilities/web-apis/file-system-access)、[File System Access specification](https://wicg.github.io/file-system-access/)、[MDN `createWritable()`](https://developer.mozilla.org/en-US/docs/Web/API/FileSystemFileHandle/createWritable)を設計根拠とする。
+
 ## Architecture Principles
 
 - Single Responsibility
@@ -648,7 +774,7 @@ root Folder名を変更すると新Libraryとして扱いDefault色へ戻る。�
 
 - `docs/`を設計の正本とする。
 - GPXを唯一のデータ正本とし、Folder構造をLibraryとして扱う。
-- ユーザーのGPXを暗黙に変更または上書きしない。
+- ユーザーの明示的な保存操作なしにGPXやLibrary設定ファイルを変更、移動、削除しない。
 - Frameworkを追加しない。
 - LayerとClassの責務分離を守る。
 - UIは永続データを持たない。
