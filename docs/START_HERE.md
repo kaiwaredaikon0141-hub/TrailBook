@@ -4,10 +4,10 @@ TrailBookの開発を始める人とAIのための入口です。
 
 ## Current Status
 
-- Current Version: `1.0.0`
-- Current Release: Stable Viewer
-- Completed: Release 0.1からRelease 1.0
-- Next Release: Release 1.1 Track Selection & Styling（Planning）
+- Current Version: `1.1.0`
+- Current Release: Track Selection & Styling
+- Completed: Release 0.1からRelease 1.1
+- Next Candidate: Release 1.2 Shared Library Settings（Future / Not started）
 - Branch: `main`
 
 Gitの状態は作業開始時に必ず再確認する。
@@ -26,14 +26,14 @@ GPXを独自形式へ取り込むのではなく、ユーザーのGPX資産を�
 2. `VISION.md` — 長期的な製品像
 3. `ARCHITECTURE.md` — 現在の責務分割とデータフロー
 4. `CODING_RULES.md` — 実装規約
-5. `ROADMAP.md` — 完了ReleaseとRelease 1.1 Scope
-6. `UI_SPEC.md` — Release 1.0までの確定UI仕様とRelease 1.1計画
+5. `ROADMAP.md` — 完了Releaseと将来候補
+6. `UI_SPEC.md` — Release 1.1までの確定UI仕様
 7. `DECISIONS.md` — 採用済み設計判断と理由
 8. `AI_GUIDE.md` — AIとの開発手順
 9. `CONTRIBUTING.md` — 作業規約
 10. `GLOSSARY.md` — 用語
 11. リポジトリルートの`README.md`、`CHANGELOG.md` — 公開概要とリリース履歴
-12. `RELEASE_CHECKLIST.md` — Release 1.0のbaseline、受け入れtest、完了記録
+12. `RELEASE_CHECKLIST.md` — Release 1.0 / 1.1のbaseline、受け入れtest、完了記録
 
 ## Current Architecture
 
@@ -49,8 +49,13 @@ GPXを独自形式へ取り込むのではなく、ユーザーのGPX資産を�
 - `SearchService`はTreeView metadataを検索し、総一致件数と先頭100件を返す。
 - `SearchView`は検索入力、結果表示、ARIAとキーボード操作を担当する。
 - `SearchEntry`は`kind`、`path`、`name`だけを保持し、FileHandleやGPX内容を持たない。
+- `SelectionState`がMap / TreeView / Searchで共有する単一GPX pathを管理する。
+- `TrackStyleService`がzoom bucket、normal、selected main、outlineのstyleを副作用なしで計算する。
+- `FolderColorState`がrootを含むFolder明示色とnearest ancestor継承を解決する。
+- `DisplaySettingsStore`はFolder色とglobal Map modeだけをschema version 1の`localStorage`へ保存する。
+- Monochrome Map Modeは背景OSM tileだけへCSS filterを適用する。
 
-## Release 1.0 Completed Scope
+## Implemented Through Release 1.1
 
 Release 1.0 Stable Viewerは完了している。Release 0.9までのFolder Library、GPX Parser、複数GPX表示、Folder / root一括表示、Waypoint option、Searchを維持し、個人利用向けの起動・互換性UX、品質整理、文書、licenseと第三者表記を確定した。
 
@@ -58,9 +63,9 @@ GPXファイル名、Folder名、相対パスをmetadataから検索する。検
 
 現在の制限としてMobile UIは非対応であり、Android ChromeとiPad Chromeは未確認である。大量GPX表示中のWaypoint ONは操作が重くなるため、大量LibraryではWaypoint OFFを推奨する。OSM背景tileはオンライン接続を必要とする。
 
-Release 1.1 Track Selection & StylingはPlanning中である。Map / TreeViewの選択同期、Folder色と継承、zoom-based width、UI設定限定の`localStorage`を設計対象とする。production実装はまだ開始していない。
+Release 1.1 Track Selection & Stylingは完了している。zoom連動Track線幅、Map / TreeView / Searchの単一選択同期、selected highlight / outline、Folder色と継承、UI設定限定の`localStorage`、Color / Monochrome背景地図表示を実装した。806 GPX Libraryの人間による定性的性能評価はAcceptableで、明確な回帰やUIが固まる操作は確認されていない。数値benchmarkと20%比較は実施していない。
 
-Mobile Viewer UX、Waypoint性能最適化、数値性能再測定、日付表示、vehicle metadata、GPX Editing Foundation、TrackPoint EditingなどはRelease 1.1の対象外であり、`ROADMAP.md`のFuture Candidatesとして扱う。
+Release 1.2 Shared Library SettingsはFuture Candidateであり、`trailbook.json`、設定書き込み、Google Drive API連携をまだ実装していない。Mobile Viewer UX、Waypoint性能最適化、数値性能再測定、日付表示、vehicle metadata、GPX Editing Foundation、TrackPoint Editing、GPX size reductionなども`ROADMAP.md`のFuture Candidatesとして扱う。
 
 ## Non-Negotiable Rules
 
@@ -69,7 +74,7 @@ Mobile Viewer UX、Waypoint性能最適化、数値性能再測定、日付表�
 - Folder構造とGPXファイルをデータの正本とする。
 - SQLite、IndexedDBなどの独自DBを持たない。一時的なセッションcacheは独自DBに含めない。
 - 独自DBを持たない方針を変更する場合は、新しいDecisionを必要とする。
-- Release 1.1では再生成可能なUI表示設定だけを`localStorage`へ保存できる。GPX内容、解析結果、FileHandle、FolderHandle、cacheの永続化は禁止する。
+- Release 1.1では再生成可能なFolder色とMap表示modeだけを`localStorage`へ保存できる。GPX内容、解析結果、FileHandle、FolderHandle、cacheの永続化は禁止する。
 - Framework、TypeScript、Node.jsを追加しない。
 - UI同士を直接接続せず、EventBusとAppの調停を使用する。
 - ModelへUI状態を保存しない。

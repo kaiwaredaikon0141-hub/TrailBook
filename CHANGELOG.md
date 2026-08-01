@@ -1,5 +1,42 @@
 # Changelog
 
+## v1.1.0
+
+Date: 2026-08-01
+Status: Ready for final commit and tag
+
+### Added
+
+- Map Track click selection
+- SelectionState as the single GPX selection source of truth
+- Selected Track highlight and outline
+- Folder color controls
+- Folder color inheritance from the nearest explicit ancestor
+- Regenerable UI settings persistence
+- Monochrome Map Mode
+
+### Changed
+
+- Track line width now follows the zoom level
+- Centralized Track style calculation in TrackStyleService
+- Synchronized TreeView, Search, and Map selection
+- Enabled visible Track color updates without GPX reload or layer recreation
+- Enabled OSM tile presentation filtering without changing the tile provider
+
+### Known Limitations
+
+- Overlapping Tracks select the front-most Track
+- Root Folders with the same name may share UI settings
+- Renaming a root Folder creates a new Library identity
+- Mobile UI is unsupported
+- Displaying many Waypoints remains performance-intensive
+
+### Performance
+
+- Passed qualitative acceptance with the same 806 GPX Library
+- No clear performance regression or UI-freezing operation was observed
+- Numerical benchmarking and the 20% comparison were not repeated
+
 ## v1.0.0
 
 Released: 2026-08-01

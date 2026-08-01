@@ -4,10 +4,10 @@ TrailBookは、GPXを含むFolderをLibraryとして閲覧する、個人利用�
 
 ## Current Status
 
-- Current Release: `1.0.0` Stable Viewer
-- Release 1.0 Stable Viewer: Completed
+- Current Release: `1.1.0` Track Selection & Styling
+- Release 1.1 Track Selection & Styling: Completed
 
-Release 1.0は一般公開版ではなく、Folder Library、GPX表示、SearchなどのViewer機能を個人利用環境で安全・安定・再現可能に使うための正式安定版です。
+Release 1.1は個人利用向けStable Viewerを維持しながら、Track選択、表示style、Folder色、背景地図表示設定を追加した完成Releaseです。一般公開版や配布artifactではありません。
 
 ## Implemented Features
 
@@ -19,6 +19,12 @@ Release 1.0は一般公開版ではなく、Folder Library、GPX表示、Search�
 - Folder名、GPXファイル名、相対pathを対象とするmetadata Search
 - 表示中GPXの個別refocusと全体refocus
 - Waypoint表示option（初期OFF）
+- zoom levelに応じたTrack線幅
+- Map、TreeView、Searchで同期する単一Track選択
+- 元のTrack色を維持するselected highlightとoutline
+- rootとnested Folderの明示色、最も近い祖先色の継承、Default / Auto
+- Color / Monochrome背景地図表示（初期Color）
+- Folder色とMap表示modeに限定したUI設定の`localStorage`保存
 - ローカル同梱したLeaflet 1.9.4による地図表示
 
 SearchはGPX内容を解析せず、検索入力だけでGPX表示、Queue、cache、Mapを変更しません。
@@ -27,7 +33,8 @@ SearchはGPX内容を解析せず、検索入力だけでGPX表示、Queue、cac
 
 - GPXは読み取り専用で扱います。
 - GPXを変更、移動、削除、保存しません。
-- SQLite、IndexedDB、localStorageなどの独自DBを使用しません。
+- SQLite、IndexedDBなどの独自DBを使用しません。
+- `localStorage`はFolder色とMap表示modeだけに使用し、GPXや解析結果を保存しません。
 - Folder構造とGPXファイルが唯一の正本です。
 - FileHandleと解析cacheは現在のbrowser sessionだけで保持し、Library切り替えで破棄します。
 
@@ -53,7 +60,7 @@ File System Access API、secure context、対応originが必要です。対応or
 
 ### Mobile
 
-iPhone Chromeでは、HTTPSでの起動、Google Drive上のFolder選択、Folder走査、Tree表示までは成功しました。一方、GPX checkbox、Track表示、touch UIは動作しなかったため、Release 1.0では非対応です。原因分類はAPI不足ではなくMobile UI / touch操作未対応です。
+iPhone Chromeでは、HTTPSでの起動、Google Drive上のFolder選択、Folder走査、Tree表示までは成功しました。一方、GPX checkbox、Track表示、touch UIは動作しなかったため、Release 1.1では非対応です。原因分類はAPI不足ではなくMobile UI / touch操作未対応です。
 
 Android ChromeとiPad Chromeは未確認です。将来候補`Mobile Viewer UX`でresponsive layout、touch操作、gesture分離などを検討します。
 
@@ -114,7 +121,9 @@ TrailBookはGPXファイルやGPX内容を外部serverへアップロードし�
 - pickerはread-only modeを指定し、`createWritable`を使用しません。
 - GPXを変更、移動、削除、保存しません。
 - FileHandleと解析cacheはsession限定で、Library切り替え時に破棄します。
-- SQLite、IndexedDB、localStorageを使用しません。
+- SQLiteとIndexedDBを使用しません。
+- `localStorage`にはFolder色とColor / Monochrome modeだけを保存します。
+- FileHandle、FolderHandle、GPX XML、TrackPoint、解析geometryを永続化しません。
 - 自動同期や外部serverへのGPX送信を行いません。
 
 ## Known Limitations
@@ -130,6 +139,9 @@ TrailBookはGPXファイルやGPX内容を外部serverへアップロードし�
 - Google DriveはFolder選択時点でbrowserから参照できる内容を読むだけです。Drive側の更新後はLibraryを再読込してください。
 - File System Access API対応browserと対応originが必要です。
 - `file://`では起動できません。
+- overlapping Trackをclickした場合は、最前面の1件を選択します。
+- 同名root Folderは同じLibrary IDとなり、Folder色設定が共有される場合があります。root名を変更すると別Libraryとして扱われます。
+- Monochrome Map Modeは既存OSM tileへCSS filterを適用する方式です。
 
 ## Documentation
 

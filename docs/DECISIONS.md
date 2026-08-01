@@ -460,6 +460,20 @@ Reason: GPXごとのFolder colorとselection highlightを保ったまま背景�
 
 Consequences: filter値は`grayscale(100%) brightness(108%) contrast(82%)`へ集約する。Colorへ戻す場合はclassを外すだけで、tile再取得、Track再描画、Map refocus、zoom / center変更を行わない。保存値欠落・invalid valueはColorへfallbackし、storage write failure時もsession内切り替えを維持する。Mobile対応は対象外とする。
 
+## Decision 0032 — Shared Library Settings File Boundary
+
+Date: 2026-08
+Status: Proposed
+Scope: Future Candidate — Release 1.2 Shared Library Settings
+
+Decision Proposal: Library固有設定をLibrary root直下の候補ファイル`trailbook.json`へ保存し、Google Driveなど外部Folder同期を通じて共有できる境界を検討する。TrailBook自身はGoogle Drive APIによるcloud syncを実装せず、同期は外部Folder同期へ委ねる。Folder colors、将来のvehicle metadata、Library固有の分類 / 表示規則、編集関連metadataを共有候補とし、Color / Monochrome、Map center / zoom、前回表示Track、selected Track、sidebarなど端末固有UI状態とは分離する。
+
+Future Principle: TrailBookは、ユーザーの明示的な保存操作なしにGPXやLibrary設定ファイルを変更、移動、削除しない。
+
+Required Design Work: `trailbook.json` schema、readwrite permission、設定ファイルだけを書き込む境界、localStorage Folder色からの移行、ファイル欠落・保存失敗時のfallback、外部変更検出、競合処理、Import / Export、将来のGPX編集保存基盤との共通化を設計し、人間の承認を得る。
+
+Current Boundary: このProposalはRelease 1.1のread-only契約を変更しない。Release 1.1はGPXとLibrary設定ファイルを作成・更新せず、現在のAccepted Decision 0030のlocalStorage UI設定だけを使用する。
+
 ## Decision Status
 
 - Accepted: 正式採用

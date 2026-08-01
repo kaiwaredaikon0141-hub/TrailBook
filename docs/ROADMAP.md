@@ -2,8 +2,8 @@
 
 Version: 1.1
 Status: Official
-Current Release: 1.0.0 Stable Viewer
-Next Release: 1.1 Track Selection & Styling
+Current Release: 1.1.0 Track Selection & Styling
+Next Candidate: 1.2 Shared Library Settings
 
 ## Version Policy
 
@@ -183,7 +183,7 @@ Done Definition:
 - `vehicleType`
 - `vehicleColor`
 
-## Current Release
+## Previous Stable Release
 
 ### Release 1.0 — Stable Viewer
 
@@ -252,13 +252,13 @@ Completed内容:
 - README、LICENSE、third-party notices
 - Windows Chrome / Edge統合受け入れ
 
-## Next Release
+## Current Release
 
 ### Release 1.1 — Track Selection & Styling
 
-Status: Planning
+Status: Completed
 
-Goal: MapとTreeViewで同期する単一Track選択、Folder単位の継承色、zoomに応じた線幅、再生成可能なUI設定の永続化、背景tileのMonochrome表示候補を追加する。GPXとFolder構造はread-onlyの正本として維持する。
+Goal: MapとTreeViewで同期する単一Track選択、Folder単位の継承色、zoomに応じた線幅、再生成可能なUI設定の永続化、背景tileのMonochrome表示を追加する。GPXとFolder構造はread-onlyの正本として維持する。
 
 Scope:
 
@@ -267,10 +267,10 @@ Scope:
 - Folderごとに明示色を設定できる。対象Folder自身の明示色を最優先し、自身が未設定の場合だけroot方向へ探索して最初に見つかる最も近い祖先色を継承する。Library内に明示色がなければv1.0.0と同じGPX relative path hash色を維持する。
 - Folder行のkeyboard操作可能なcolor swatch buttonから、単一のFolder color dialogを開く。Apply、Defaultへ戻す、Cancelを提供する。
 - Mapの`zoomend`後、zoom bucketが変化した場合だけ表示中Trackの線幅を更新する。
-- Folder colorとschema versionを、GPXから再生成可能なUI設定として`localStorage`へ保存する。
+- Folder colorとglobal Map modeを、GPXから再生成可能なschema version 1のUI設定として`localStorage`へ保存する。
 - FileHandle、FolderHandle、GPX XML、解析geometry、cacheは永続化しない。
 - storage失敗時もsession内のViewerと色設定操作を継続する。
-- Color / Monochrome切り替えをUnit 6候補とし、背景OSM tileだけをグレースケール化する。初期値はColorとし、Track、Waypoint、UI、tile provider、attributionは変更しない。
+- Color / Monochrome切り替えを提供し、背景OSM tileだけをグレースケール化する。初期値はColorとし、Track、Waypoint、UI、tile provider、attributionは変更しない。
 - 806 GPXでselection、zoom、Folder color変更の回帰とlayer更新範囲を確認する。
 
 Out of Scope:
@@ -302,12 +302,59 @@ Done Definition:
 - Folder色が対象Folder自身、rootを含む最も近い祖先、GPX relative path hash、最終fallbackの規定順で解決される。
 - zoom 8 / 9 / 12 / 15の境界がtestされ、同じbucket内で全Trackを再styleしない。
 - reload後に同じLibrary名のFolder色が復元され、storage unavailable、破損JSON、未知schemaでもViewerが動作する。
-- Monochrome Map Modeを採用する場合は初期Colorを維持し、背景tileだけへfilterを適用してTrack、Waypoint、UI、attributionへ影響させない。
+- Monochrome Map Modeは初期Colorを維持し、背景tileだけへfilterを適用してTrack、Waypoint、UI、attributionへ影響させない。
 - 806 GPXで既存表示、bulk checkbox、Search、Waypointに明確な回帰がない。
+
+Completed内容:
+
+- zoom 8以下1.5 px、9〜11は2 px、12〜14は3 px、15以上4 pxのTrack線幅
+- `SelectionState`によるMap / TreeView / Searchの単一GPX選択同期
+- Map Track click、背景click解除、元色を維持するselected highlight / outline
+- rootを含むFolder明示色、nearest ancestor継承、Default / Auto
+- Folder色とglobal Map modeに限定したschema version 1のUI設定persistence
+- 背景OSM tileだけへ適用するColor / Monochrome表示
+- Chrome統合受け入れとUnit 2〜6のEdge受け入れ
+- 806 GPX Libraryの定性的性能評価Acceptable、明確な性能回帰なし
+
+## Future Candidate — Release 1.2 Shared Library Settings
+
+Status: Candidate / Not started
+
+Goal: Folder colorなどLibrary固有設定をLibrary root直下の候補ファイル`trailbook.json`へ保存し、Google Driveなど外部Folder同期を通じて異なるbrowserや端末で共有できる構造を検討する。TrailBook自身はGoogle Drive APIによるcloud syncを実装せず、同期処理は外部Folder同期へ委ねる。
+
+Shared setting candidates:
+
+- Folder colors
+- 将来のvehicle metadata
+- Library固有の分類 / 表示規則
+- 将来の編集関連metadata
+
+Device-local setting candidates:
+
+- Color / Monochrome
+- Map center / zoom
+- 前回表示Track
+- selected Track
+- sidebarなどのUI状態
+
+Design topics:
+
+- `trailbook.json` schema
+- readwrite permission取得
+- 設定ファイルだけを安全に書き込む境界
+- localStorage Folder色からの移行
+- JSONが存在しない場合のfallback
+- 保存失敗時のsession / localStorage fallback
+- Google Drive同期Folderでの再読込
+- 外部変更検出と競合時の扱い
+- Import / Exportの必要性
+- 将来のGPX編集保存基盤との共通化
+
+Release 1.2 candidateはproduction未実装である。Release 1.1は引き続きread-onlyで、`trailbook.json`の作成・更新も行わない。
 
 ## Future Design Boundaries
 
-以下はRelease番号未定であり、Release 1.0には含めない。
+以下はRelease 1.1には含めない将来設計境界である。
 
 ### GPX Internal Date and Date-based Display
 
@@ -366,9 +413,10 @@ Release 0.9では、車両情報の読み込み、保存、編集、色変更を
 
 ## Future Candidates
 
-Release番号は設計承認時に決定する。
+Release 1.2 Shared Library Settingsは上記のFuture Candidateとして扱う。以下の候補は設計承認時にRelease番号を決定する。
 
 - GPX Metadata Index
+- Shared Library Settings（Release 1.2 candidate）
 - Date-based Display
 - Vehicle Metadata / Track Style
 - GPX Editing Foundation
@@ -377,6 +425,7 @@ Release番号は設計承認時に決定する。
 - Waypoint Performance Optimization
 - Unit 2-equivalent Performance Remeasurement
 - Previous Display / Map Position Restoration
+- GPX Size Reduction
 - Replay
 - HeatMap
 - Bookmark

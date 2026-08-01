@@ -1,7 +1,7 @@
 # TrailBook Release Checklist
 
-Version: 1.0.0 release record / 1.1 planning
-Status: Release 1.0 Completed / Release 1.1 Planning
+Version: 1.0.0 release record / 1.1.0 ready for final commit and tag
+Status: Release 1.0 Completed / Release 1.1 Ready for final commit and tag
 Baseline: v0.9.0
 
 ## Purpose
@@ -598,14 +598,14 @@ Unit 1 / Unit 2ではRelease Procedureを実行しない。
 
 ## Release 1.1 Track Selection & Styling
 
-Release 1.1 Status: In Progress
+Release 1.1 Status: Ready for final commit and tag
 Unit 1 Status: Completed
 Architecture Status: Completed
 Decision Status: Completed
 Event Contract Status: Completed
 Test Plan Status: Completed
-Production Implementation Status: In progress — Unit 6 completed、Unit 7 not started
-Current production version: `1.0.0`
+Production Implementation Status: Completed
+Current production version: `1.1.0`
 Planning baseline commit: `29d7db7`
 
 ### Unit Plan
@@ -618,7 +618,7 @@ Planning baseline commit: `29d7db7`
 | 4 | UI settings persistence foundation | Completed | Unit 1 |
 | 5 | Folder color UI and inheritance | Completed | Unit 3、Unit 4 |
 | 6 | Monochrome Map Mode | Completed | Unit 4 |
-| 7 | Integrated acceptance、performance、documentation、Release finalization | Pending | Unit 2〜6 |
+| 7 | Integrated acceptance、performance、documentation、Release finalization | Completed | Unit 2〜6 |
 
 Unit 4はUnit 2 / 3とproduction fileの競合を避けて実施できるが、Unit 5はselection projectionとstorage contractの両方へ依存する。Unit 6はUnit 4のUI settings persistence基盤を共用でき、Unit 7で統合確認とRelease finalizationを行う。
 
@@ -1056,7 +1056,7 @@ Unit 6 Implementation Status: Completed
 Unit 6 Static Test Status: Completed
 Unit 6 Browser Acceptance Status: Completed
 Unit 6 Status: Completed
-Unit 7 Status: Not started
+Unit 7 Status at Unit 6 completion: Not started
 
 実装内容:
 
@@ -1123,7 +1123,90 @@ Known limitations:
 - OpenStreetMap tile providerは従来どおりonline依存である。
 - Mobile UIはRelease 1.1 Unit 6の対象外である。
 
-Chrome / Edgeの実ブラウザ受け入れ確認と806 GPX Library確認が完了したため、Unit 6をCompletedとする。Unit 7は開始していない。
+Chrome / Edgeの実ブラウザ受け入れ確認と806 GPX Library確認が完了したため、Unit 6をCompletedとする。Unit 6完了時点ではUnit 7は未開始だった。
+
+### Unit 7 Integrated Acceptance, Performance, Documentation, and Release Finalization
+
+Unit 7 Implementation Status: Completed
+Unit 7 Integration Status: Completed
+Unit 7 Documentation Status: Completed
+Unit 7 Version Status: Completed
+Unit 7 Status: Completed
+
+Release 1.1 Completion Status: Ready for final commit and tag
+
+#### Chrome Integrated Acceptance
+
+806 GPX Libraryを使用したWindows Chromeの通し操作結果:
+
+| Area | Verified behavior | Result |
+| --- | --- | --- |
+| Library | Library選択、root一括表示、Library切り替え | Pass |
+| Zoom style | zoom連動Track線幅 | Pass |
+| Selection | Map Track click、selected highlight / outline、Map背景click解除、Search selection | Pass |
+| Folder color | root色、child override、継承、Default、Auto、保存、復元 | Pass |
+| Monochrome | Color / Monochrome切り替え、保存、復元 | Pass |
+| Viewer regression | Folder / root一括ON / OFF、Waypoint、OSM attribution | Pass |
+| Console | アプリ由来error、不要なlog / warningなし | Pass |
+
+#### Edge Integrated Acceptance
+
+Unit 2〜6で完了したWindows Edge受け入れ結果を統合判定に使用した。
+
+| Area | Result |
+| --- | --- |
+| zoom連動Track線幅 | Pass |
+| Track click / highlight / selection解除 | Pass |
+| Folder color / persistence | Pass |
+| Color / Monochrome | Pass |
+| Library切り替え / Search | Pass |
+| Console error | None |
+
+#### 806 GPX Qualitative Performance
+
+Performance classification: **Acceptable**
+
+これは人間による定性的受け入れ結果であり、数値benchmarkと20%比較は実施していない。
+
+| Operation | Result |
+| --- | --- |
+| root一括表示 | 実用上問題なし |
+| zoom bucket変更 / 同一bucket zoom | 実用上問題なし |
+| Track click / selection highlight | 実用上問題なし |
+| root / deep Folder色変更 | 実用上問題なし |
+| selected Track色変更 | 実用上問題なし |
+| Monochrome切り替え | 即時 |
+| Search / pan / zoom | 実用上問題なし |
+| UIが固まる操作 | なし |
+| 明確な性能回帰 | なし |
+
+Unit 2の数値baselineは履歴として維持し、将来必要な場合は同じ手順で再測定する。
+
+#### Data Protection Acceptance
+
+- [x] 通常閲覧中にGPX内容と更新日時を変更しない
+- [x] `createWritable`を使用しない
+- [x] GPXを移動、削除、保存しない
+- [x] localStorageにはFolder色とglobal Map modeだけを保存する
+- [x] FileHandle、FolderHandle、GPX XML、TrackPoint、geometryを保存しない
+- [x] Library切り替えでselection、Folder color projection、display stateを混在させない
+
+#### Release Finalization State
+
+- Version: `1.1.0`
+- Unit 1〜7: Completed
+- Chrome integration: Completed
+- Edge integration: Completed
+- 806 GPX qualitative performance: Passed（Acceptable）
+- Folder color persistence: Confirmed
+- Monochrome persistence: Confirmed
+- Mobile UI: Unsupported
+- Known limitations: Documented
+- final commit: Pending
+- tag: Pending
+- push: Pending
+
+Release 1.2 Shared Library SettingsはFuture Candidateである。Library root直下の`trailbook.json`、Library固有設定の共有、外部Folder同期との協調を検討対象とするが、Release 1.1ではproduction実装、設定ファイル書き込み、Google Drive API同期を行わない。
 
 ### Persistence Schema
 

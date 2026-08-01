@@ -1,7 +1,7 @@
 # TrailBook UI Specification
 
 Version : 1.2
-Status  : Implemented through Release 1.0 / Release 1.1 In Progress
+Status  : Implemented through Release 1.1 Completed
 Depends : PROJECT.md, ARCHITECTURE.md, ROADMAP.md
 
 Release 0.5からRelease 0.9までの追加仕様は本書末尾に追記する。

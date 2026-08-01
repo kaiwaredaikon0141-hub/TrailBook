@@ -4,11 +4,11 @@
 
 ## Current Status
 
-- Current Release: `1.0.0` Stable Viewer
-- Completed: Release 0.1からRelease 1.0
-- Next Release: Release 1.1 Track Selection & Styling（Planning）
+- Current Release: `1.1.0` Track Selection & Styling
+- Completed: Release 0.1からRelease 1.1
+- Next Candidate: Release 1.2 Shared Library Settings（Future / Not started）
 
-Release 1.0は個人利用向け正式安定版として完了しています。Release 1.1はTrack selection、Folder color、zoom-based width、UI設定persistenceの設計段階であり、production実装はまだ開始していません。
+Release 1.1は個人利用向けStable Viewerとして完了しています。Track selection、Folder color、zoom-based width、UI設定persistence、Monochrome Map Modeを実装済みです。Release 1.2 Shared Library Settingsは将来候補であり、production実装は開始していません。
 
 ## Read Order
 
@@ -24,9 +24,19 @@ Release 1.0は個人利用向け正式安定版として完了しています。
 10. [CONTRIBUTING.md](CONTRIBUTING.md) — Gitと変更手順
 11. [GLOSSARY.md](GLOSSARY.md) — 用語
 
-Release 1.0のUnit 1〜8（scope確定、baseline、TreeView限定分割、起動・互換性UX、品質整理、文書・license、統合受け入れ、Release確定）は[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)に記録しています。
+Release 1.0のUnit 1〜8とRelease 1.1のUnit 1〜7は[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)に記録しています。
 
-## Implemented Through Release 1.0
+Release 1.1 Unit roles:
+
+1. Planning and architecture
+2. TrackStyleService and zoom-based width
+3. SelectionState、Map click、highlight
+4. UI settings persistence foundation
+5. Folder color UI and inheritance
+6. Monochrome Map Mode
+7. Integrated acceptance、qualitative performance、documentation、Release finalization
+
+## Implemented Through Release 1.1
 
 - Folder Libraryと再帰走査
 - GPX Parser
@@ -38,12 +48,19 @@ Release 1.0のUnit 1〜8（scope確定、baseline、TreeView限定分割、起�
 - Folder名、GPXファイル名、相対pathのSearch
 - 初回起動、非対応環境、read-only Folder選択の案内
 - Stable Viewer向け品質整理、利用文書、licenseと第三者表記
+- zoom連動Track線幅
+- Map / TreeView / Searchの単一Track選択とhighlight / outline
+- root / nested Folder color、nearest ancestor継承、Default / Auto
+- Folder色とglobal Map modeに限定したUI設定persistence
+- 背景OSM tileだけを対象とするColor / Monochrome表示
 
 実装済み範囲の詳細は[CHANGELOG.md](../CHANGELOG.md)、Release順序は[ROADMAP.md](ROADMAP.md)を正本とします。
 
 ## Future Features
 
-Statistics、Replay、HeatMap、GPX Metadata Index、日付表示、vehicle metadata、GPX編集、Cloud Sync、Mobile Viewer UX、Waypoint性能最適化、数値性能再測定、Plugin、AI SearchなどはRelease 1.1対象外の将来候補です。Release 1.0の実装済み機能またはRelease 1.1 Scopeとして扱いません。
+Release 1.2 Shared Library Settingsは、Library rootの候補ファイル`trailbook.json`へLibrary固有設定を保存し、外部Folder同期を通じて共有する将来候補です。Release 1.1ではファイル書き込みやGoogle Drive API同期を実装していません。
+
+Statistics、Replay、HeatMap、GPX Metadata Index、日付表示、vehicle metadata、GPX編集、GPX size reduction、Cloud Sync、Mobile Viewer UX、Waypoint性能最適化、数値性能再測定、Plugin、AI Searchなども未実装の将来候補です。
 
 ## Source of Truth
 

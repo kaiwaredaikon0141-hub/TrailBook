@@ -3,7 +3,7 @@
 Version: 1.1
 Status: Official
 Baseline: Release 1.0.0
-Next: Release 1.1 In Progress
+Current: Release 1.1 Completed
 Depends: PROJECT.md, ROADMAP.md, DECISIONS.md
 
 ## Architecture Overview
