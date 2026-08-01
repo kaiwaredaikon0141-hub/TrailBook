@@ -9,6 +9,12 @@ export default class Toolbar {
         this.pickFolderButton =
             this.element.querySelector("#pick-folder");
 
+        this.folderPickerState = {
+            disabled: false,
+            descriptionId: "",
+            disabledReason: ""
+        };
+
     }
 
     create() {
@@ -39,8 +45,36 @@ export default class Toolbar {
 
     setFolderPickerState({ disabled, descriptionId, disabledReason = "" }) {
 
+        this.folderPickerState = {
+            disabled,
+            descriptionId,
+            disabledReason
+        };
+
+        this.#applyFolderPickerState(this.folderPickerState);
+    }
+
+    setFolderPickerBusy(busy) {
+
+        if (!busy) {
+            this.#applyFolderPickerState(this.folderPickerState);
+            return;
+        }
+
+        this.#applyFolderPickerState({
+            ...this.folderPickerState,
+            disabled: true,
+            disabledReason: "Library設定を保存中です"
+        });
+    }
+
+    #applyFolderPickerState({ disabled, descriptionId, disabledReason }) {
+
         this.pickFolderButton.disabled = disabled;
-        this.pickFolderButton.setAttribute("aria-describedby", descriptionId);
+
+        if (descriptionId) {
+            this.pickFolderButton.setAttribute("aria-describedby", descriptionId);
+        }
 
         if (disabled) {
             this.pickFolderButton.setAttribute("aria-disabled", "true");

@@ -770,15 +770,17 @@ Unit 5ではTreeView本体を増やさず、独立したFolder color controlがl
 
 ## Release 1.2 Planned UI — Shared Library Settings
 
-Status: Planning / Unit 2 Completed
+Status: In progress / Unit 3 Completed
 
-Unit 2 Status: Completed。Unit 2は新しいvisible UIを追加しない。shared JSON、legacy localStorage、Autoのどれを採用した場合も既存Folder color swatch、Track color、selection highlightへ同じFolderColorState projectionを使用する。invalid JSONはlegacy色を混ぜずAuto表示とし、Viewer操作を継続する。source / statusの画面表示はUnit 4で実装する。
+Unit 2 Status: Completed。Unit 3 Implementation / Static Test / Browser Acceptance Status: Completed。shared JSON、legacy localStorage、Autoのどれを採用した場合も既存Folder color swatch、Track color、selection highlightへ同じFolderColorState projectionを使用する。invalid JSONはlegacy色を混ぜずAuto表示とし、Viewer操作を継続する。
 
 通常閲覧とFolder color操作はRelease 1.1のまま維持する。Libraryを開いただけではwrite permissionを要求せず、`trailbook.json`を作成または変更しない。
 
 ### Minimum UI
 
 Library sidebarの既存操作を妨げない位置へ、compactなshared settings statusと必要時だけ表示するnative buttonを置く。
+
+Unit 3では独立した`LibrarySettingsPanel`をLibrary controls付近へ追加し、status、dirty / saving / saved / permission denied / conflict / failure表示と`Libraryへ保存`buttonだけを実装する。statusは`role="status"`、`aria-live="polite"`で通知し、save buttonはnative keyboard操作とstatusの`aria-describedby`を使用する。Reload、Overwrite、migration専用UI、Conflict dialogはUnit 4まで実装しない。
 
 - text status: `Shared: Loaded`、`Local only`、`Unsaved`、`Read-only`、`Invalid`、`Conflict`、`Save failed`
 - `Libraryへ保存`: dirtyなFolder colors、またはlegacy localStorage色の明示移行時に使用する

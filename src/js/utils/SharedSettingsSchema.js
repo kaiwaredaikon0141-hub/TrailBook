@@ -134,4 +134,43 @@ export function normalizeSharedSettings(payload, schemaVersion) {
     };
 }
 
+/**
+ * Serializes only a validated normalized snapshot using the shared format.
+ */
+export function serializeSharedSettings(snapshot, schemaVersion) {
+
+    const normalized = normalizeSharedSettings({
+        schemaVersion,
+        settings: {
+            folderColors: snapshot?.folderColors
+        }
+    }, schemaVersion);
+
+    if (!normalized.snapshot) {
+        return {
+            snapshot: null,
+            serializedText: null,
+            errorCode: normalized.errorCode
+        };
+    }
+
+    const folderColors = {};
+
+    Object.entries(normalized.snapshot.folderColors)
+        .forEach(([folderPath, color]) => {
+            folderColors[folderPath] = color;
+        });
+
+    const document = {
+        schemaVersion,
+        settings: { folderColors }
+    };
+
+    return {
+        snapshot: normalized.snapshot,
+        serializedText: `${JSON.stringify(document, null, 2)}\n`,
+        errorCode: null
+    };
+}
+
 export { isValidFolderPath, normalizeColor };

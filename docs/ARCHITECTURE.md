@@ -635,7 +635,7 @@ root Folder名を変更すると新Libraryとして扱いDefault色へ戻る。�
 
 ## Release 1.2 Planned Architecture — Shared Library Settings
 
-Release 1.2はLibrary root直下の`trailbook.json`をLibrary固有設定の共有先とする。現在のReleaseは1.1.0のままであり、このsectionはPlanning contractであってproduction実装済みの説明ではない。
+Release 1.2はLibrary root直下の`trailbook.json`をLibrary固有設定の共有先とする。現在のReleaseは1.1.0のままである。Unit 1のPlanning contractに基づき、Unit 2のread-only loaderとUnit 3のexplicit saveはBrowser AcceptanceまでCompletedである。
 
 ### File Placement and Identity
 
@@ -702,6 +702,20 @@ Unit 2は`LibrarySettingsRepository`、`LibrarySettingsState`、pureな`SharedSe
 - `LibrarySettingsState`はsource、status、dirty false、normalized snapshot、fingerprint、lastModified、size、errorCodeを保持する。`beginLoad()`のrequestIdと`App`のLibrary generationを両方確認し、stale resultをState、FolderColorState、Mapへ適用しない。
 - Appはshared settings結果を確定してからFolderColorStateとDisplayStateへ色を投影するため、Track表示が旧色で始まってから再parseされることはない。Library切り替えでは旧snapshotと旧explicit colorsを新しいload結果で置き換える。
 
+### Unit 3 Explicit Save Implementation
+
+Unit 3は`LibrarySettingsCoordinator`へLibrary settingsのload / save調停、dirty state投影、stale Library guard、status UI更新を抽出する。AppはFolder color Apply / Default後のdirty通知と、Library選択前の切り替え確認だけを行い、permission、fingerprint比較、writer lifecycleを扱わない。
+
+- `LibrarySettingsPanel`はshared statusと`Libraryへ保存`buttonを提供し、EventBusへ明示save requestだけを発行する。file、State、FolderColorStateを直接操作しない。
+- Folder color Apply / Defaultは従来どおり表示とlegacy localStorageへ即時反映し、shared snapshotをdirtyにするだけでfileへ書き込まない。Cancel、selection、zoom、Map mode、Searchはdirtyにしない。
+- save request時だけ`queryPermission({ mode: "readwrite" })`を行い、必要な場合だけ同じ明示操作の流れで`requestPermission({ mode: "readwrite" })`を行う。Library openは`mode: "read"`を維持する。
+- `LibrarySettingsRepository.save()`はbaselineとcurrent fileのSHA-256 fingerprintを比較し、missing / existingの変化、fingerprint不一致、invalid current file、fingerprint取得不能では書き込みを停止する。
+- conflictがない場合だけnormalized snapshotをUTF-8、BOMなし、LF、2-space indent、final newline付きでserializeし、`getFileHandle("trailbook.json", { create: true })`、`createWritable()`、full write、`close()`を行う。
+- close後に同じRepositoryで再読込し、expected serialized bytesのSHA-256と一致した場合だけStateを`shared-json` / `loaded` / dirty falseへ更新する。不一致、permission / create / write / close failureではdirtyなsession色を維持し、Viewerを継続する。
+- 保存中はLibrary pickerを一時disableする。保存開始前にdirtyなLibraryを切り替える場合はnative confirmで破棄を明示し、自動保存しない。generation / requestIdが変わったstale resultは新Libraryへ適用しない。
+- snapshot更新時はcurrent Treeに存在するexplicit colorsを置き換え、既存snapshotのorphan pathを保持する。inherited / Auto resolved color、端末固有Map mode、FileHandle、GPX、geometry、cacheは保存しない。
+- fingerprint確認後から`close()`までのexternal write raceは完全には排除できない。post-save verificationで不一致をfailureにできるが、exclusive writer、merge、Overwrite UIはUnit 3の範囲外である。
+
 ### Responsibilities and Dependencies
 
 ```text
@@ -725,8 +739,8 @@ Library root FileSystemDirectoryHandle / trailbook.json
 - `LibrarySettingsState`はcurrent Libraryのvalidated snapshot、source、load fingerprint、dirty data、`loaded` / `local-only` / `unsaved` / `read-only` / `invalid` / `conflict` / `save-failed` statusを保持する。File System APIとUIを参照しない。
 - `FolderColorState`はrelative pathによるcolor resolutionとsession projectionを維持し、RepositoryやFile System APIの詳細を知らない。
 - `DisplaySettingsStore`はglobal Map modeなど端末固有設定と、Release 1.2移行期間のlegacy Folder color fallbackだけを扱う。shared settingsの正本にならない。
-- `App`がLibrary load、fallback選択、save、reload、migration、conflict UI、FolderColorStateへのprojectionを調停する。UI同士は直接接続しない。
-- `LibrarySettingsPanel`と`SettingsConflictDialog`は状態表示とuser requestだけを担当し、fileを直接操作しない。
+- `LibrarySettingsCoordinator`がLibrary load、fallback選択、explicit save、State更新、FolderColorStateへのprojection、stale guardを調停する。Unit 4予定のreload、migration、conflict解消は未実装である。
+- `LibrarySettingsPanel`は状態表示とexplicit save requestだけを担当し、fileを直接操作しない。`SettingsConflictDialog`はUnit 4予定であり未実装である。
 - 依存方向はAppから各Service / State / UIへ、Repositoryからpure schema helperへ向ける。RepositoryからApp / UI / FolderColorStateへの逆参照と循環参照を禁止する。
 
 ### Read, Permission, and Explicit Save Flow

@@ -92,6 +92,11 @@ body{
     margin:0;
 }
 
+.library-settings-save{
+
+    margin-top:8px;
+}
+
 .toolbar button:disabled{
 
     cursor:not-allowed;

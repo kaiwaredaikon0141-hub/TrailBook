@@ -109,6 +109,22 @@ export default class FolderColorState {
         return this.explicitColors.get(folderPath) || null;
     }
 
+    getExplicitColors() {
+
+        const colors = Object.create(null);
+
+        this.explicitColors.forEach((color, folderPath) => {
+            colors[folderPath] = color;
+        });
+
+        return colors;
+    }
+
+    getFolderPaths() {
+
+        return [...this.folderPaths];
+    }
+
     hasFolderPath(folderPath) {
 
         return this.folderPaths.has(folderPath);
