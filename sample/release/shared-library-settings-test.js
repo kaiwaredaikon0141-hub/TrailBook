@@ -342,7 +342,7 @@ async function testAppIntegration() {
         gpxFileCount: 1
     };
 
-    app.librarySettingsRepository = {
+    app.librarySettingsCoordinator.repository = {
         async load(handle) {
             assert(handle === rootHandle, "App did not use Library root handle");
 
@@ -361,6 +361,8 @@ async function testAppIntegration() {
         getFolderColors() { return { "": "#111111" }; },
         getStatus() { return { persistence: "available" }; }
     };
+    app.librarySettingsCoordinator.displaySettingsStore =
+        app.displaySettingsStore;
     app.folderColorState.store = app.displaySettingsStore;
     app.treeView = {
         async render() {},
@@ -388,38 +390,40 @@ async function testAppIntegration() {
     const completed = await app.handleLibraryLoaded(library);
 
     assert(completed === true, "App shared load did not complete");
-    assert(app.librarySettingsState.getStatus().source === "shared-json", "App source");
+    assert(app.librarySettingsCoordinator.state.getStatus().source === "shared-json", "App source");
     assert(app.folderColorState.getExplicitColor("") === "#ABCDEF", "App mixed legacy");
     assert(app.displayState.getDisplay("track.gpx").color === "#ABCDEF", "display color");
 
-    app.librarySettingsRepository.load = async () => stateResult("missing");
+    app.librarySettingsCoordinator.repository.load = async () => stateResult("missing");
     await app.handleLibraryLoaded(library);
-    assert(app.librarySettingsState.getStatus().source === "legacy-local", "App missing fallback");
+    assert(app.librarySettingsCoordinator.state.getStatus().source === "legacy-local", "App missing fallback");
     assert(app.folderColorState.getExplicitColor("") === "#111111", "App legacy color");
 
     app.displaySettingsStore.getFolderColors = () => ({});
     await app.handleLibraryLoaded(library);
-    assert(app.librarySettingsState.getStatus().source === "auto", "App Auto source");
+    assert(app.librarySettingsCoordinator.state.getStatus().source === "auto", "App Auto source");
     assert(app.folderColorState.getExplicitColor("") === null, "App Auto kept explicit color");
 
     app.displaySettingsStore.getFolderColors = () => ({ "": "#111111" });
-    app.librarySettingsRepository.load = async () => stateResult("invalid", {
+    app.librarySettingsCoordinator.repository.load = async () => stateResult("invalid", {
         errorCode: "malformed-json",
         fallbackAllowed: false
     });
     await app.handleLibraryLoaded(library);
-    assert(app.librarySettingsState.getStatus().source === "auto", "App invalid used legacy");
+    assert(app.librarySettingsCoordinator.state.getStatus().source === "auto", "App invalid used legacy");
     assert(app.folderColorState.getExplicitColor("") === null, "App invalid kept legacy color");
 
     const staleApp = new App();
     const pendingLoads = new Map();
 
-    staleApp.librarySettingsRepository = {
+    staleApp.librarySettingsCoordinator.repository = {
         load(handle) {
             return new Promise(resolve => pendingLoads.set(handle, resolve));
         }
     };
     staleApp.displaySettingsStore = app.displaySettingsStore;
+    staleApp.librarySettingsCoordinator.displaySettingsStore =
+        staleApp.displaySettingsStore;
     staleApp.folderColorState.store = staleApp.displaySettingsStore;
     staleApp.treeView = app.treeView;
     staleApp.searchService = app.searchService;
