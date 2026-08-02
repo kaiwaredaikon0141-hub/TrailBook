@@ -1740,3 +1740,174 @@ Final commit / tag / push: Pending
 - 大量GPX表示中のWaypoint ONは引き続き性能上の既知制限
 
 Release 1.2はfinal commitとtagを作成できる状態である。commit、tag、pushはこのUnitでは実行しない。
+
+## Release 1.3 Previous View Restoration — Planning
+
+Release Status: Planning
+
+Current Release: `1.2.0`。Release 1.2 Unit 1〜5のCompleted記録、v1.2.0 baseline、shared settings schema version 1を変更しない。
+
+### Unit 1 Preflight
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| working tree before planning edit | Pass | clean |
+| branch / remote | Pass | `main` = `origin/main` = `d441923` |
+| release tag | Pass | HEADに`v1.2.0` |
+| Config version | Pass | `1.2.0` |
+| production module baseline | Pass | v1.2.0 acceptance record 40 / 40。current graph 40 modules、missing import 0、cycle 0 |
+| App / TreeView size | Pass | 974 / 997 lines |
+| DisplaySettingsStore / shared schema | Pass | version 1 / version 1 |
+| production difference | Pass | Unit 1はdocsだけを変更 |
+
+Current runtime contract: `DisplayState.checked`が表示意図、loading / loaded / error、requestId、Library generationの正本である。`SelectionState`が単一selected pathを管理する。MapViewは`getZoom()`とdefault `resetView()`を持つがcenter snapshot / arbitrary restore APIは持たない。Library切り替えはold Queue / Search / Map / DisplayState / selectionをclearしてshared settingsを投影する。現行sidebarはTreeViewが所有する常時openの`aside`で、open / closed APIはない。
+
+### Unit Status
+
+| Unit | Scope | Status |
+| --- | --- | --- |
+| 1 | Scope、Architecture、Decisions、schema、identity、restore order、performance / test plan | Ready for human approval |
+| 2 | ViewStateStore / schema、Map state、desktop sidebar、Reset基盤 | Not started |
+| 3 | visible Track restore、existing Queue、bulk coalescing、stale guard、performance | Not started |
+| 4 | selected Track restore、Reset UI、error / lifecycle integration | Not started |
+| 5 | Chrome / Edge、806 GPX、documentation、Release finalization | Not started |
+
+Production Implementation Status: Not started
+
+### Frozen Planning Scope
+
+- [ ] Map center / zoomをLibrary単位でdevice-local保存・復元する
+- [ ] visible GPX relative path listを保存し、current metadataに存在するpathだけを既存display pipelineへ復元する
+- [ ] visibleかつloadedなselected TrackだけをSelectionStateへ復元する
+- [ ] desktop sidebar open / closedを保存・復元する。widthは保存しない
+- [ ] current Libraryの保存済みprevious view stateだけを消すconfirmation付きResetを提供する
+- [ ] `trailbook.json`、GPX、Folder、FileHandle、geometry、cache / Queueへview stateを書かない
+- [ ] existing Queue concurrency 2、cache上限100、Waypoint初期OFF、Search / Folder bulk契約を維持する
+
+Future: sidebar width、Search query、Tree expanded paths / scroll / focus、stable Library alias。Mobile sidebar、shared view state、browser間同期はRelease 1.3対象外とする。
+
+### Store and Schema Plan
+
+Storage key: `trailbook.viewState`
+
+Schema version: 1（dedicated Store）。`trailbook.uiSettings` schema version 1と`trailbook.json` schema version 1は変更しないため、既存schema 1からのmigrationは実施しない。
+
+```json
+{
+  "schemaVersion": 1,
+  "libraries": {
+    "root-name:GPXLog": {
+      "map": { "lat": 35.0123, "lng": 135.6789, "zoom": 11 },
+      "visibleTracks": ["car/2026-07-01.gpx"],
+      "selectedTrack": "car/2026-07-01.gpx",
+      "sidebar": { "open": true }
+    }
+  }
+}
+```
+
+Validation gates:
+
+- [ ] malformed JSON / unknown schema / invalid top-level / oversize raw dataはStore全体をfail closed
+- [ ] recognized Library entryはMap、visibleTracks、selectedTrack、sidebarをfield単位でfallback
+- [ ] pathはroot-relative、`/`、case-sensitive。absolute、backslash、control、empty / `.` / `..` segment、dangerous keyを拒否
+- [ ] duplicate pathをstable dedupeし、stale pathはcurrent metadata解決時に無視する
+- [ ] Map finite / range / zoom、sidebar boolean、selected-is-visible-and-loadedを検証する
+- [ ] 806 pathをlossなく保存できるraw size / count capをUnit 2の実測後に固定する
+- [ ] invalid stored valueを暗黙修復・自動上書きせず、session fallbackでViewerを継続する
+
+### Library Identity Review
+
+| Candidate | Planning Result | Validation |
+| --- | --- | --- |
+| existing root-name ID | Adopt for Release 1.3 | same name collision、root renameで別ID、move後同名をtest |
+| FolderHandle-derived stable ID | Reject | `isSameEntry()`はhandle比較だけ。FileHandleを永続化しない |
+| root structure fingerprint | Reject | rename / move / file増減、scan cost、GPX内容hash禁止 |
+| user Library alias | Future | UIとshared metadataの別Decisionが必要 |
+
+Known limitation: 同名root Folderは同じdevice-local view stateを共有し得る。Reset UIを回復手段とし、未確認Libraryを対応済みと記載しない。
+
+### Save Timing Plan
+
+- [ ] Map `moveend`後だけ保存し、pan / zoom中と`zoomend`との二重writeを避ける
+- [ ] individual / Search checkbox、Folder / root bulk、Clearの完了後にchecked path snapshotを取る
+- [ ] selection / clearとsidebar toggleを同じdebounce queueへ集約する
+- [ ] 500〜1000ms候補からUnit 2 testでdelayを固定し、bulk一操作を一writeへcoalesceする
+- [ ] restore中はsave suspend、Library switch前はold Library pending snapshotをflushする
+- [ ] unloadだけへ依存せず、background interval、parse完了ごとのwrite、shared JSON writeを行わない
+- [ ] quota / SecurityErrorでsession memoryへfallbackし、Viewerを停止しない
+
+### Restore Order Plan
+
+1. Library選択、Folder scan、Tree metadata構築
+2. shared Folder colors投影とDisplayState file registration
+3. current Library view state読込、path解決、generation確認
+4. sidebar投影、layout確定、Map size再評価
+5. visible Trackを既存DisplayState / GPXDisplayQueueへ投入し、restore中のfitBoundsを抑止
+6. 全target terminal後、saved Mapをanimationなしで一回投影。missing / invalidならfitBounds / default
+7. visible、loaded、Layer存在のselected Trackだけをsystem restore
+8. Tree ancestorsだけをrevealし、focus、scroll、Map pan、Search変更なし
+9. UI projection後にsave suspension解除
+
+Map / selection / sidebarの利用者操作はrestore中のsaved投影より優先する。checkbox OFF / Clearは既存requestId invalidationを使用する。Library switchはgenerationでold restoreを無効化する。
+
+### Static Test Plan
+
+- [ ] dedicated schema valid / missing / malformed / unknown / oversize
+- [ ] existing DisplaySettingsStore schema 1を読み書きせず、migrationやkey衝突がない
+- [ ] partial invalid Map / selection / sidebarとfail-closed visible list
+- [ ] valid / invalid / duplicate / stale GPX path、dangerous key、prototype pollution対策
+- [ ] selected missing / invisible / loading / error / loaded
+- [ ] Library identity、same-name limitation、root rename、Library switch、stale generation
+- [ ] Map validation / single setView / restore-event save suppression
+- [ ] sidebar default / invalid / toggle / Map invalidateSize / focus
+- [ ] debounce、latest snapshot、bulk coalescing、old Library flush、storage failure / session fallback
+- [ ] existing Queue only、duplicate enqueue / parse / renderなし、request invalidation
+- [ ] Reset current Library only。Map mode、Folder colors、shared JSON、other Library不変
+- [ ] production module import、missing import、circular dependency、unused import
+- [ ] no GPX / shared JSON write、no FileHandle persistence、no IndexedDB
+
+### Browser Acceptance Plan
+
+Chrome / Edge:
+
+- [ ] first open without stateはcurrent behavior
+- [ ] second openでMap center / zoom、0 / 1 / mixed / all visible Track、selected Track、sidebarを復元
+- [ ] root all ON / OFF、individual / Folder / Search checkbox、Clear後のsnapshot
+- [ ] selected visible / invisible / missing / parse failure、ancestor reveal、focus / scroll / Map不変
+- [ ] restore中のpan / zoom、selection、sidebar、checkbox、Clear、Library switch
+- [ ] same-name Library limitationとReset recovery
+- [ ] Monochrome、shared Folder colors、Search、Waypoint OFF / ON、Map click / highlight regression
+- [ ] reload、storage unavailable / malformed、Console、keyboard、ARIA、body / sidebar scroll
+- [ ] GPX / `trailbook.json` content and timestamp不変
+
+Mobile Viewer UXは既存の非対応 / 未確認結果を維持し、Release 1.3でsidebar drawerやtouch UIを追加しない。
+
+### Performance Acceptance Plan
+
+| Visible targets | Save size | Enqueue / initial response | Restore complete | UI responsiveness | Result |
+| ---: | ---: | ---: | ---: | --- | --- |
+| 0 | | | | | Pending |
+| 1 | | | | | Pending |
+| 50 | | | | | Pending |
+| 200 | | | | | Pending |
+| 806 | | | | | Pending |
+
+- [ ] same PC / browser / origin / 806 GPX Library、Waypoint OFF、最低3回と中央値を可能な範囲で使用
+- [ ] browser freeze、操作可能になるまで、Queue active / queued、duplicate parse / render、localStorage write回数を確認
+- [ ] restore後pan / zoom、Track click / highlight、Map mode、Folder restyleを定性的評価
+- [ ] cache上限100のため806件すべてをwarmと記載しない
+- [ ] Waypoint ONの大量Marker既知制限をprevious view restore回帰と混同しない
+- [ ] 数値benchmark未実施時は定性的結果と明記し、20%比較を推測しない
+
+Initial policyは既存root bulk相当の一括enqueueである。806件で再現可能なUI blockまたは重大回帰がある場合だけ、既存Queueへのchunked enqueueとprogressを検討する。hard limit、200件confirmation、別RestoreQueueはUnit 1で採用しない。
+
+### Open Validation Before Unit 2
+
+- exact debounce delay
+- raw storage size / visibleTracks defensive cap
+- Toolbar sidebar toggleの最終labelと配置
+- restore terminal判定とStatusBar progressが806件で必要か
+- user Map操作があったrestoreでsaved Mapをskipするstatic / browser検証方法
+
+Unit 1は設計review待ちである。承認前にproduction JavaScript、CSS、HTML、Config versionを変更せず、Unit 2を開始しない。

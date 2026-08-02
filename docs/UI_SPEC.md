@@ -830,3 +830,52 @@ Folder color dialogのApplyは画面とsession / local fallbackへ反映して`U
 - Conflict / Invalidの詳細は必要時だけDialogまたはstatusへ表示し、通常閲覧で長いwarningを常時表示しない。
 - statusは文字と`aria-live="polite"`を維持し、更新時にfocusを奪わない。
 - Reload / Overwrite / Cancel、Escape、Cancel initial focus、focus trap、originへのfocus returnをChrome / Edgeで確認済みである。
+
+# 22. Release 1.3 UI — Previous View Restoration
+
+Status: Planning。Release 1.2の確定UIを維持し、production implementationはUnit 1では開始しない。
+
+## Restored State
+
+Release 1.3の初期ScopeはMap center / zoom、visible GPX path list、visibleかつloadedなselected Track、desktop sidebar open / closedとする。sidebar width、Search query、Tree expanded paths、Tree scroll / focusは復元しない。Map modeは既存global device-local設定を継続する。
+
+view stateがないLibraryでは、現在の起動挙動を維持する。Trackを自動表示せず、MapはConfig defaultまたは通常操作によるfitBounds、selectionなし、sidebar openとする。
+
+## Sidebar Toggle
+
+現行sidebarは常時openであり開閉APIを持たないため、Release 1.3でdesktop用の最小toggleを追加する。
+
+- toggleはLibrary未選択時とclosed時にも到達できるToolbar内へ置き、native button、`aria-controls`、`aria-expanded`、状態を表すaccessible nameを持つ。
+- open / closedでkeyboard focusを奪わず、sidebar内にfocusがある状態で閉じる場合はtoggle buttonへfocusを戻す。
+- closed後もMapとToolbarを操作でき、再open手段を常に残す。layout変更後はLeaflet Map sizeを再評価する。
+- width resize、drawer、bottom sheet、touch gesture、Mobile responsive layoutは追加しない。
+- saved stateがmissing / invalidまたはstorage failureの場合はopenをdefaultとする。
+
+## Restoration Feedback and Interaction
+
+- visible Track restoreは既存checkboxのchecked / loading / loaded / error表示とStatusBar件数を使用し、別の重複progress stateをTreeへ作らない。
+- 806 GPX等でrestoreが長時間続く場合に限り、Unit 3の性能結果から簡潔な`前回の表示を復元中`と件数表示を検討する。modalで操作をblockしない。
+- restore中もTree、Search、Map、Clear、Library切り替えを操作可能にし、利用者のMap / selection / sidebar / checkbox操作を後続のsaved投影で上書きしない。
+- selected Track restoreはTree ancestorだけを必要に応じて展開する。scrollIntoView、focus移動、Map refocus / pan、Search query変更を行わない。
+- selected Trackがmissing、invisible、load errorならselectionなしで継続し、error dialogを強制しない。
+
+## Reset UI
+
+current Libraryのdevice-local previous view stateだけを消す`前回の表示状態を消去`操作を提供する。
+
+- 実行前にcurrent Library名と削除範囲を文字で示してconfirmationする。
+- Cancelを安全なdefaultとし、keyboard / Escape、実行後のfocus returnを確認する。
+- Resetはcurrent runtime Map / Track / selection / sidebarを即時clearせず、次回open時のrestore候補だけを削除する。次の明示的なview変更までは直ちに同じsnapshotを再保存しない。
+- Map mode、Folder colors、`trailbook.json`、GPX、他Libraryのview stateは削除しない。
+- Library未選択、stateなし、storage unavailableではdisabled理由または`保存状態なし`を文字で示す。
+
+## Accessibility and Error Presentation
+
+- save / restore / storage failureは既存StatusBarまたはcompactなstate textで通知し、色だけに依存しない。raw localStorage、完全path、GPX内容、stackを利用者向け表示へ出さない。
+- malformed / unknown / oversize data、quota / security failureでもViewerとFolder選択を継続する。alertへの応答を通常利用の必須条件にしない。
+- duplicate / stale pathは画面上の架空項目を作らず無視する。invalid Map / sidebar / selectionは該当fieldだけdefaultへ戻す。
+- body scrollなし、sidebar内scroll、MapView固定、Tree / Search keyboard、roving tabindex、existing ARIAを維持する。
+
+## Release 1.3 Scope Boundary
+
+`trailbook.json`へのview state保存、browser間共有、Google Drive同期、FileHandle永続化、Search / Tree navigation復元、sidebar width、Mobile sidebar、GPX編集、Folder操作は実装しない。

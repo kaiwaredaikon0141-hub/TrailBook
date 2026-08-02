@@ -810,6 +810,143 @@ TrailBookは、ユーザーの明示的な保存操作なしにGPXやLibrary設�
 
 File System Access APIのpermissionとwrite lifecycleは[Chrome File System Access documentation](https://developer.chrome.com/docs/capabilities/web-apis/file-system-access)、[File System Access specification](https://wicg.github.io/file-system-access/)、[MDN `createWritable()`](https://developer.mozilla.org/en-US/docs/Web/API/FileSystemFileHandle/createWritable)を設計根拠とする。
 
+## Release 1.3 Proposed Architecture — Previous View Restoration
+
+Status: Planning。Current Releaseは1.2.0のままであり、以下はUnit 1の設計案である。production implementationは開始していない。
+
+### Data Boundary
+
+previous view stateはLibrary内容ではなく、同じbrowser origin上の端末ごとの作業状態である。`trailbook.json`、GPX、Folderへは書き込まず、専用storage key `trailbook.viewState`の`localStorage`へ保存する。
+
+| Data | Shared `trailbook.json` | `trailbook.uiSettings` | Proposed `trailbook.viewState` |
+| --- | --- | --- | --- |
+| Folder colors | 正本 | legacy fallback | 保存しない |
+| Color / Monochrome | 保存しない | global設定 | 保存しない |
+| Map center / zoom | 保存しない | 保存しない | Library単位 |
+| visible / selected Track | 保存しない | 保存しない | Library単位、relative path |
+| sidebar open / closed | 保存しない | 保存しない | Library単位 |
+| sidebar width、Search / Tree navigation | 保存しない | 保存しない | Release 1.3では保存しない |
+| Handle、GPX、geometry、cache / Queue | 保存しない | 保存しない | 保存しない |
+
+既存`DisplaySettingsStore` schema version 1をversion 2へ上げる案は採用しない。Map mode / legacy Folder colorとLibrary view lifecycleを同じdocumentへ結合し、既存schema migration、unknown-version failure範囲、test matrixを不要に広げるためである。専用Storeはschema version 1から開始するので、Release 1.3にschema 1からのdata migrationはない。既存key、schema、保存値をそのまま維持する。
+
+### Proposed Schema Version 1
+
+```json
+{
+  "schemaVersion": 1,
+  "libraries": {
+    "root-name:GPXLog": {
+      "map": {
+        "lat": 35.0123,
+        "lng": 135.6789,
+        "zoom": 11
+      },
+      "visibleTracks": [
+        "car/2026-07-01.gpx",
+        "crf/2026-07-12.gpx"
+      ],
+      "selectedTrack": "car/2026-07-01.gpx",
+      "sidebar": {
+        "open": true
+      }
+    }
+  }
+}
+```
+
+- top-levelは`schemaVersion`と`libraries`だけを受理し、plain object、prototype-free dictionary、dangerous key拒否を維持する。
+- unknown schema、malformed JSON、不正top-level、設定した最大serialized size超過はStore全体をfail closedとする。raw valueを自動修復・自動上書きせず、同一sessionではmemory fallbackを使う。
+- recognized schemaのLibrary entryはfield単位で検証する。invalid MapはMapだけ、invalid sidebarはsidebarだけ、invalid selected Trackはselectionだけをdefaultへ戻す。`visibleTracks`内に構文上invalidなpathが一つでもあればlist全体を採用しない。
+- root-relative GPX pathは`/`区切り、case-sensitive、非emptyとし、absolute path、backslash、control character、empty / `.` / `..` segment、dangerous keyを拒否する。duplicateは最初の出現を残して除去する。
+- current Tree metadataに存在しないstale pathはrestore時に無視する。保存documentは単なる候補であり、架空Tree nodeを作らない。利用者の次の明示的なview変更まで自動cleanupしない。
+- Mapはfinite number、latitude -90〜90、longitude -180〜180、zoomは整数かつcurrent Leaflet Mapのmin / max範囲で検証する。invalidまたはmissingなら既存default / fitBoundsを使う。
+- `selectedTrack`はvalid pathでもresolved visible targetに含まれなければ復元しない。
+- `sidebar.open`はbooleanだけを受理し、invalid / missingはopenをdefaultとする。widthはschemaへ含めない。
+- raw document sizeとraw `visibleTracks`件数にはconfigurable defensive capを設ける。exact値は806件snapshotの実測後にUnit 2で固定し、少なくとも同一806 GPX Libraryの全pathをlossなく保存できる値とする。current metadata解決後のtarget数はcurrent GPX件数を超えない。
+
+### Library Identity
+
+Release 1.3は既存`createLibraryId(rootFolderName)`の`root-name:<encoded root folder name>`を継続する。identity生成はpure helperへ集約し、`DisplaySettingsStore`と`ViewStateStore`が同じ規則を利用するが、Store同士は参照しない。
+
+比較結果:
+
+| Candidate | Result | Reason |
+| --- | --- | --- |
+| A. existing root-name | 採用 | scan追加なし、Library移動後も同名なら復元、既存運用と一致 |
+| B. FolderHandle由来ID | 不採用 | `isSameEntry()`はhandle同士を比較するAPIで、localStorage用の安定IDを返さない。handle永続化にはstructured-clone storageが必要 |
+| C. root構造fingerprint | 不採用 | rename / move / file増減で変わり、全内容hashは特に高コスト。GPX内容hashは行わない |
+| D. user alias | Future | 衝突回避には有効だが、UI、rename、shared metadataとの意味付けがRelease 1.3を越える |
+
+同名root Folderは衝突し、root名変更時は別Libraryになる。この制限をUI / test / known limitationへ明記し、current Libraryのview stateだけを消すResetを回復経路とする。FileHandleをlocalStorage、IndexedDB、`trailbook.json`へ保存しない。[File System Standard](https://fs.spec.whatwg.org/)が定義するhandle serializationと`isSameEntry()`は、安定した文字列identifierの提供とは別の契約である。
+
+### Responsibilities and Dependencies
+
+`ViewStateSchema`:
+
+- JSON shape、normalization、validation、duplicate除去を行うstate-free pure module
+- DOM、EventBus、App state、Leaflet、File System Access API、storageへ依存しない
+
+`ViewStateStore`:
+
+- `localStorage` read / write / current-Library delete、schema dispatch、session memory fallback
+- raw dataをConsoleへ出さず、storage failureを一度だけ診断可能にする
+- Library identityの利用者だが、FileHandleを保持または永続化しない
+
+`ViewStateCoordinator`:
+
+- EventBusとLibrary lifecycleを購読し、一つのdebounce timer / save queueでsnapshotをcoalesceする
+- restore generation、pending target、restore中のfield別user override、refocus抑止、restore完了を管理する
+- `DisplayState`、`SelectionState`、Map / Sidebar UIの正本を置き換えず、callbackとEventBusを通じて既存処理へ接続する
+
+`SidebarView`:
+
+- 現行TreeViewの`aside`を開閉するdesktop専用toggle、`aria-controls`、`aria-expanded`、focus維持を担当する
+- width、drawer、touch layoutを持たない。TreeView.jsは997行のためsidebar責務を追加しない
+- layout変更後にMapViewへsize再評価を要求する
+
+`MapView`:
+
+- `getViewState()`、validation済みstateをanimationなしで一回投影する`restoreViewState()`、sidebar layout後の`invalidateSize()`を提供する
+- Leaflet `moveend`後にcenter / zoom snapshot eventを発行し、既存`zoomend`のTrack style eventと責務を混ぜない
+
+`DisplayState`はchecked / loading / loaded / errorとLibrary generationのruntime source of truth、`SelectionState`は単一selectionのsource of truth、`GPXDisplayQueue`は最大2件並列の唯一のparse Queueを維持する。専用`RestoreQueue`は作らない。AppはCoordinator生成とLibrary lifecycle callbackの接続だけを行い、974行のAppへschema、debounce、restore順序を直接追加しない。
+
+依存方向は`App → ViewStateCoordinator → ViewStateStore / ViewStateSchema`、`App → MapView / SidebarView / DisplayState / SelectionState / GPXDisplayQueue`とする。Store / SchemaからApp、UI、runtime Stateへの逆参照を禁止する。
+
+### Save Timing
+
+- Mapは`moveend`でfinal center / zoomを取得し、pan / zoom中は書かない。`zoomend`と二重保存しない。
+- individual / Search checkbox、Folder / root bulk、Clearの既存処理完了後に`DisplayState.checked`のpath集合をsnapshotとする。bulk内部のpath件数だけwriteしない。
+- selection change / clearとsidebar toggleも同じdebounce queueへ送る。500〜1000msのexact delayはUnit 2 testで固定する。
+- 一つのLibraryに対するpending saveは常に最新full snapshot一件へ置換し、partial patchと複数timerを作らない。
+- restore投影中はsaveをsuspendし、完了直後のprogrammatic Map / selection / sidebar eventで保存値を書き戻さない。
+- Library switch前にold Libraryのpending snapshotを同期flushし、active identity変更後にold timerがnew Libraryへ書かないようgenerationを確認する。
+- unloadだけを保存契機にせず、background interval、GPX parse完了ごとのwrite、`trailbook.json` writeを行わない。
+
+### Restore Order and User Precedence
+
+1. userがLibraryを選択し、Folder scanとTree path metadataを構築する。
+2. shared settingsを既存順序で読み、Folder colorsを投影し、DisplayStateへ全fileをregisterする。
+3. dedicated Storeからcurrent Library候補を読み、current metadataに存在するGPX pathだけへ解決する。
+4. sidebar open / closedを投影してlayoutを確定し、Map sizeを再評価する。
+5. resolved visible Trackを既存display toggle / `DisplayState` / `GPXDisplayQueue`経路へ一回だけ投入する。restore中の自動`fitBounds` / refocusは抑止する。
+6. 全targetがloaded / error / cancelledへ確定した後、saved Mapをanimationなしで一回復元する。saved Mapがない場合はloaded Track bounds、TrackがなければConfig defaultを使用する。
+7. saved selected Trackがchecked、loaded、Map layer存在の条件を満たす時だけ`SelectionState.select(path, "system")`を行う。
+8. selected Tree ancestorはrevealしてよいが、focus、scrollIntoView、Map refocus / panを行わない。Search query / result focusは変更しない。
+9. restore suspensionを解除し、Tree / Search / Map highlight / ARIAを既存projectionで同期する。
+
+restore中にuserがMapを操作した場合は後続saved Map投影をskipし、selectionまたはsidebarを操作した場合も該当fieldのsaved投影をskipする。visible checkboxは開始時に全targetを既存Queueへ投入するため、その後のOFF / ClearがrequestId invalidationで優先される。Library切り替えはrestore generationをinvalidateし、old async resultを新Libraryへ適用しない。
+
+### Performance and Failure Boundary
+
+- 既存Queue concurrency 2、cache上限100、session parser、LayerManager path entryを変更しない。806件すべてをwarmとみなさない。
+- 0 / 1 / 50 / 200 / 806 visible Trackでsave document size、enqueue時間、操作可能になるまで、全restore完了、pan / zoomを確認する。Waypointは初期OFFを維持し、大量Markerの既知制限を別評価する。
+- 初期案は既存root bulk pipeline相当の一括enqueueである。UI blockまたは重大回帰が実測された場合だけ、20〜50件等の値を計測して既存Queueへのchunked enqueue / progressを採用する。別parse Queue、duplicate parse / render、Unit 1での恣意的200件limitは採用しない。
+- malformed / unknown / oversize store、quota / SecurityErrorではViewerを継続し、defaultまたはsession memoryを使用する。raw JSON、Library path、GPX内容をConsoleへ出さず、同じfailureを反復warningしない。
+- stale / invalid pathは無視し、Track load failureは既存error状態へ投影して他targetを継続する。failed / missing Trackをselectedにしない。
+- Resetはcurrent Library entryだけをconfirmation後に削除する。Map mode、Folder colors、shared JSON、GPX、他Library stateを削除せず、現在表示は維持する。Reset直後は次の明示的なview変更まで自動再保存を抑止する。
+
 ## Architecture Principles
 
 - Single Responsibility

@@ -7,7 +7,7 @@ TrailBookの開発を始める人とAIのための入口です。
 - Current Version: `1.2.0`
 - Current Release: Shared Library Settings
 - Completed: Release 0.1からRelease 1.2
-- Next Release: Not determined（`ROADMAP.md`のFuture Releasesを参照）
+- Next Release: Release 1.3 Previous View Restoration（Planning）
 - Branch: `main`
 
 Gitの状態は作業開始時に必ず再確認する。
@@ -27,13 +27,13 @@ GPXを独自形式へ取り込むのではなく、ユーザーのGPX資産を�
 3. `ARCHITECTURE.md` — 現在の責務分割とデータフロー
 4. `CODING_RULES.md` — 実装規約
 5. `ROADMAP.md` — 完了Releaseと将来候補
-6. `UI_SPEC.md` — Release 1.2までの確定UI仕様
+6. `UI_SPEC.md` — Release 1.2までの確定UI仕様とRelease 1.3 Planning
 7. `DECISIONS.md` — 採用済み設計判断と理由
 8. `AI_GUIDE.md` — AIとの開発手順
 9. `CONTRIBUTING.md` — 作業規約
 10. `GLOSSARY.md` — 用語
 11. リポジトリルートの`README.md`、`CHANGELOG.md` — 公開概要とリリース履歴
-12. `RELEASE_CHECKLIST.md` — Release 1.0〜1.2のbaseline、受け入れtest、完了記録
+12. `RELEASE_CHECKLIST.md` — Release 1.0〜1.2のbaseline / 完了記録とRelease 1.3 test plan
 
 ## Current Architecture
 
@@ -59,6 +59,8 @@ GPXを独自形式へ取り込むのではなく、ユーザーのGPX資産を�
 - `LibrarySettingsCoordinator`がload、explicit save、migration、manual Reload、Conflict recoveryを調停する。
 - `LibrarySettingsPanel`と`SettingsConflictDialog`がstatusとReload / Overwrite / Cancel操作を担当する。
 
+Release 1.3 Planningでは、Map center / zoom、visible / selected Track、desktop sidebar open / closedをLibrary単位のdevice-local stateとして復元する。専用`ViewStateStore`とCoordinatorを設計し、既存DisplaySettingsStore / shared settings schema、DisplayState、SelectionState、GPXDisplayQueueを正本として維持する。production implementationはまだ開始していない。
+
 ## Implemented Through Release 1.2
 
 Release 1.0 Stable Viewerは完了している。Release 0.9までのFolder Library、GPX Parser、複数GPX表示、Folder / root一括表示、Waypoint option、Searchを維持し、個人利用向けの起動・互換性UX、品質整理、文書、licenseと第三者表記を確定した。
@@ -78,7 +80,7 @@ Release 1.2 Shared Library SettingsはCompletedである。Library root直下の
 - Folder構造とGPXファイルをデータの正本とする。
 - SQLite、IndexedDBなどの独自DBを持たない。一時的なセッションcacheは独自DBに含めない。
 - 独自DBを持たない方針を変更する場合は、新しいDecisionを必要とする。
-- 現行Release 1.2ではMap表示modeとlegacy Folder色fallbackだけを`localStorage`へ保存する。Folder色はvalidなshared JSONがある場合に項目単位でlegacy値を混ぜない。GPX内容、解析結果、FileHandle、FolderHandle、cacheの永続化は禁止する。
+- 現行production 1.2ではMap表示modeとlegacy Folder色fallbackだけを`localStorage`へ保存する。Release 1.3は専用keyへ再生成可能なdevice-local view stateだけを追加するPlanningである。Folder色はvalidなshared JSONがある場合に項目単位でlegacy値を混ぜない。GPX内容、解析結果、FileHandle、FolderHandle、cacheの永続化は禁止する。
 - `trailbook.json`への書き込みはSave、migration、明示Overwriteだけに限定し、permissionの永続化を前提にしない。
 - Framework、TypeScript、Node.jsを追加しない。
 - UI同士を直接接続せず、EventBusとAppの調停を使用する。

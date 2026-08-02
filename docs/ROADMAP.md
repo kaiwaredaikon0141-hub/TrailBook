@@ -3,7 +3,7 @@
 Version: 1.2 Completed
 Status: Official
 Current Release: 1.2.0 Shared Library Settings
-Next Release: Not determined（see Future Releases）
+Next Release: Release 1.3 Previous View Restoration（Planning）
 
 ## Version Policy
 
@@ -369,6 +369,67 @@ Unit 1 Planning、Unit 2 read-only loader、Unit 3 explicit save、Unit 4 migrat
 
 正式な保存原則は「TrailBookは、ユーザーの明示的な保存操作なしにGPXやLibrary設定ファイルを変更、移動、削除しない。」とする。Release 1.2のproduction実装は、明示操作時の`trailbook.json`だけを書き込み対象とし、GPXは引き続きread-onlyである。
 
+## Next Release — Release 1.3 Previous View Restoration
+
+Status: Planning
+
+Goal: Libraryを再度開いた時に、端末ごとの前回表示状態を安全かつ軽量に復元し、日常利用の再開操作を減らす。Release 1.2のshared settings、GPX read-only、既存表示Queueとselection契約は変更しない。
+
+### Scope
+
+- Map center / zoom
+- checkbox上の表示意図を表すvisible GPX relative path list
+- visibleかつ正常に表示できたselected Track
+- desktop sidebarのopen / closed。現行UIには開閉状態がないため、Release 1.3でkeyboard操作可能な最小toggleを追加する
+- current Libraryだけの保存済み前回表示状態を消去するReset UI
+- Chrome / Edge、0 / 1 / 50 / 200 / 806 GPXでの復元、安全性、性能確認
+
+sidebar width、Search query、Tree expanded paths、Tree scroll、Tree focusはFuture Candidateとし、Release 1.3へ含めない。Map modeは既存のglobal device-local設定を継続し、新しいview stateへ重複保存しない。
+
+### Shared and Device-local Boundary
+
+`trailbook.json`はFolder colors等のLibrary共有設定の正本であり、previous view stateを保存しない。Map、visible / selected Track、sidebarはbrowser originと端末に限定した`localStorage`へ保存する。FileHandle、FolderHandle、GPX XML、TrackPoint、parsed geometry、cache、Queue状態は永続化しない。
+
+Release 1.3は専用storage keyとschema version 1を持つ`ViewStateStore`を採用する。既存`DisplaySettingsStore` schema version 1とshared settings schema version 1は変更せず、schema migrationやFolder color / Map modeとの結合を発生させない。
+
+### Library Identity
+
+Release 1.3は既存の`root-name:<encoded root folder name>`を継続する。`FileSystemHandle.isSameEntry()`は二つのhandle比較には使えるが、localStorageへ保存できる安定identifierを公開しない。handle自体の永続化にはstructured-clone storageが必要となり、TrailBookはIndexedDBを導入しない。Library全内容hash、GPX内容hash、構造fingerprintはscan負荷とrename / moveへの不安定さから採用しない。Library aliasまたは`trailbook.json`内の明示IDは将来候補とする。
+
+このため同名root Folderは同じdevice-local view stateを共有し得て、root名変更時は別Library扱いになる。FileHandleをlocalStorageへ保存せず、Reset UIを回復手段として提供する。
+
+### Save and Restore Boundary
+
+- Mapは操作終了後、display / selection / sidebarは既存Event契約の確定後に、単一のdebounce save queueへ集約する。bulk ON / OFFでもlocalStorage書き込みは一回へcoalesceする。
+- unloadだけへ依存せず、Library切り替え前はold Libraryのpending snapshotをflushする。storage failure時はsession memory fallbackとし、Viewerを停止しない。
+- restore中は自動refocusがsaved Mapを上書きしないよう抑止し、既存`DisplayState`と`GPXDisplayQueue`へvalid pathを投入する。専用の解析Queueと重複Layerを作らない。
+- 全restore対象がloaded / error / cancelledへ確定した後、Mapをanimationなしで一回復元する。saved Mapがない場合だけ既存fitBounds / defaultを使用する。
+- selected Trackはcurrent Libraryに存在し、checkedかつloadedの時だけ`SelectionState`へsystem restoreする。Treeは祖先をrevealできるがfocus、scroll、Map panを発生させない。
+- restore中の利用者操作は対象stateごとにsaved値より優先する。Library generationが変わった結果は破棄する。
+
+### Performance Policy
+
+既存Queueの並列数2、cache上限100、path identity、通常のbulk表示pipelineを再利用する。Unit 1では自動復元件数のhard limitや確認dialogを固定しない。0 / 1 / 50 / 200 / 806 Trackで、UI応答性、復元時間、Queue重複、localStorage size、Waypoint OFF / ONの既知制限を測定する。806件で操作不能または再現可能な重大回帰が確認された場合だけ、既存Queueへchunked enqueueとprogress表示を追加検討する。
+
+### Units
+
+1. Scope、Architecture、Decisions、schema、identity、save / restore order、performance / test plan
+2. `ViewStateStore` / pure schema、Map state、desktop sidebar open / closed、Reset基盤
+3. visible Track snapshot / restore、existing Queue統合、bulk coalescing、stale path / generation、806 GPX性能
+4. selected Track restore、Reset UI、error recovery、Library lifecycle統合
+5. Chrome / Edge統合受け入れ、0 / 1 / 50 / 200 / 806 GPX性能、文書、Release finalization
+
+Unit 1はPlanningであり、人間の設計承認前にUnit 2を開始しない。
+
+### Out of Scope
+
+- shared JSONへのview state保存、browser / device間共有、Google Drive同期
+- sidebar width、Search query、Tree expanded paths / scroll / focusの復元
+- FileHandle永続化、IndexedDB、account、server、独自database
+- GPX内容hash、Library全内容hash、構造fingerprint、automatic Library alias
+- automatic save / edit of GPXまたは`trailbook.json`
+- Date Tree、GPX編集、Folder rename / move、Track軽量化、Mobile Viewer UX、cloud API
+
 ## Future Design Boundaries
 
 以下はRelease 1.2までに含めない将来設計境界である。
@@ -430,7 +491,7 @@ Release 0.9では、車両情報の読み込み、保存、編集、色変更を
 
 ## Future Candidates
 
-Release 1.2 Shared Library SettingsはCompletedである。以下はRelease 1.2より後の候補であり、設計承認時にRelease番号を決定する。
+Release 1.2 Shared Library SettingsはCompletedであり、Release 1.3 Previous View RestorationはPlanningである。以下はRelease 1.3より後の候補であり、設計承認時にRelease番号を決定する。
 
 - GPX Metadata Index
 - Date-based Display
@@ -440,7 +501,9 @@ Release 1.2 Shared Library SettingsはCompletedである。以下はRelease 1.2�
 - Mobile Viewer UX
 - Waypoint Performance Optimization
 - Unit 2-equivalent Performance Remeasurement
-- Previous Display / Map Position Restoration
+- Stable Library Identity / Alias
+- Sidebar Width Restoration
+- Search / Tree Navigation Restoration
 - GPX Size Reduction
 - Replay
 - HeatMap

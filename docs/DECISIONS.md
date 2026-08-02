@@ -514,6 +514,42 @@ Reason: JSONとdevice-local値をmergeすると、別端末で削除した明示
 
 Consequences: JSONがない状態でlegacy colorがある場合は、非blockingな`現在の色設定をLibraryへ保存`を提示する。自動file作成と自動移行はせず、JSON既存時はmigrationを提案しない。成功後もRelease 1.2ではlocalStorage値をrecovery fallbackとして保持する。Color / Monochrome等の端末固有設定はDisplaySettingsStoreへ残す。Library open / reselection / page reloadと明示ReloadでJSONを読み、polling、File System Observer、cloud API、Import / Exportは初期scopeに含めない。
 
+## Decision 0036 — Previous View State Uses a Dedicated Device-local Store
+
+Date: 2026-08
+Status: Proposed
+Scope: Release 1.3 Planning
+
+Decision Proposal: Map center / zoom、visible Track relative paths、selected Track、desktop sidebar open / closedをLibrary単位のdevice-local previous view stateとし、専用`trailbook.viewState` keyとschema version 1を持つ`ViewStateStore`へ保存する。`trailbook.json`、GPX、既存`trailbook.uiSettings`には保存しない。Map modeは既存global設定、Folder colorsはshared JSON / legacy fallbackの既存契約を維持する。
+
+Reason: 作業状態は同じ端末とbrowser originの再開用であり、Libraryを同期する利用者全員へ共有すべき設定ではない。既存DisplaySettingsStore schemaをversion 2へ上げると、Map mode / legacy Folder colorとLibrary lifecycleを結合し、migrationとfailure範囲を広げる。専用Storeなら既存schema version 1を変更せず、削除・失敗を再生成可能なUI状態に限定できる。
+
+Consequences: FileHandle、FolderHandle、GPX XML、TrackPoint、geometry、cache、Queue状態を保存しない。malformed / unknown / oversize dataはfail closed、storage failureはsession fallbackとし、raw dataをConsoleへ出さない。current Library stateだけをconfirmation後に消すResetをRelease 1.3 Scopeへ含める。sidebar width、Search / Tree navigationはFuture Candidateとする。
+
+## Decision 0037 — Release 1.3 Retains Root-name Library Identity
+
+Date: 2026-08
+Status: Proposed
+Scope: Release 1.3 Planning
+
+Decision Proposal: previous view stateのLibrary keyは既存`root-name:<encoded root folder name>`を使用する。FileHandleをlocalStorage / IndexedDBへ保存せず、Library全内容hash、GPX内容hash、構造fingerprint、user aliasをRelease 1.3へ追加しない。
+
+Reason: File System APIの`isSameEntry()`は二つのhandleを比較できるが、localStorageへ保存する安定文字列IDを返さない。serializable handleの永続化はstructured-clone storageを必要とし、TrailBookの独自DBなし方針とRelease Scopeに反する。構造fingerprintはscan負荷が増え、rename / move / file増減で変わる。既存IDならLibrary移動後もroot名が同じ限り追加scanなしで再利用できる。
+
+Consequences: 同名root Folderは同じdevice-local view stateを共有し得て、root名変更時は別Libraryになる。制限をUI、test、known limitationsへ記載し、Resetを回復手段とする。将来のLibrary aliasまたはshared settings内の明示IDは別Decisionを必要とする。
+
+## Decision 0038 — Restoration Reuses Runtime State and the Existing Display Queue
+
+Date: 2026-08
+Status: Proposed
+Scope: Release 1.3 Planning
+
+Decision Proposal: `DisplayState`をvisibility、`SelectionState`をselection、`GPXDisplayQueue`をparse concurrencyの唯一の正本として維持する。restoreはvalid relative pathを既存display pipelineへ投入し、専用RestoreQueue、duplicate parser / layer、GPX内容hashを作らない。restore中の自動fitBoundsを抑止し、target確定後にsaved Mapを一回、visibleかつloadedなselected Trackをsystem sourceで一回投影する。
+
+Reason: Release 1.2までに806 GPXのroot一括表示、requestId、Library generation、Queue並列数2、cache上限100が検証済みである。別pipelineは表示状態、cancellation、error、performanceの契約を二重化する。Mapとselectionを最後に投影すれば、fitBoundsやselection refocusがsaved viewを上書きしない。
+
+Consequences: initial designでは件数hard limitとconfirmationを固定せず、0 / 1 / 50 / 200 / 806 GPXで測定する。UI blockまたは再現可能な重大回帰がある場合だけ既存Queueへのchunked enqueue / progressを追加する。restore中の利用者操作とLibrary generationをsaved stateより優先し、missing / error Trackをselectionへ復元しない。Waypoint初期OFFと大量Markerの既知制限を維持する。
+
 ## Decision Status
 
 - Accepted: 正式採用
