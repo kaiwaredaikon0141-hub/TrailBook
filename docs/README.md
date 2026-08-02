@@ -4,11 +4,11 @@
 
 ## Current Status
 
-- Current Release: `1.1.0` Track Selection & Styling
-- Completed: Release 0.1からRelease 1.1
-- Next Release: Release 1.2 Shared Library Settings（Unit 4 Completed、Unit 5 Not started）
+- Current Release: `1.2.0` Shared Library Settings
+- Completed: Release 0.1からRelease 1.2
+- Next Release: Not determined（Future Releasesを参照）
 
-Release 1.1は個人利用向けStable Viewerとして完了しています。Track selection、Folder color、zoom-based width、UI設定persistence、Monochrome Map Modeを実装済みです。Release 1.2 Shared Library Settingsは次Releaseとして進行中で、Unit 2 / 3 / 4はBrowser AcceptanceまでCompleted、Unit 5はNot startedです。
+Release 1.2 Shared Library SettingsはCompletedです。Library rootの`trailbook.json`によるFolder色共有、明示Save、legacy migration、manual Reload、Conflict / Invalid JSON recoveryを実装し、Chrome / Edge / Google Drive同期Folderの統合受け入れを完了しています。
 
 ## Read Order
 
@@ -24,7 +24,7 @@ Release 1.1は個人利用向けStable Viewerとして完了しています。Tr
 10. [CONTRIBUTING.md](CONTRIBUTING.md) — Gitと変更手順
 11. [GLOSSARY.md](GLOSSARY.md) — 用語
 
-Release 1.0のUnit 1〜8とRelease 1.1のUnit 1〜7は[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)に記録しています。
+Release 1.0のUnit 1〜8、Release 1.1のUnit 1〜7、Release 1.2のUnit 1〜5は[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)に記録しています。
 
 Release 1.1 Unit roles:
 
@@ -36,7 +36,15 @@ Release 1.1 Unit roles:
 6. Monochrome Map Mode
 7. Integrated acceptance、qualitative performance、documentation、Release finalization
 
-## Implemented Through Release 1.1
+Release 1.2 Unit roles:
+
+1. Planning、schema、permission / conflict policy
+2. `trailbook.json` read-only loader
+3. Explicit Save、write permission、conflict protection
+4. Migration、manual Reload、Conflict recovery
+5. Integrated acceptance、documentation、Release finalization
+
+## Implemented Through Release 1.2
 
 - Folder Libraryと再帰走査
 - GPX Parser
@@ -53,12 +61,17 @@ Release 1.1 Unit roles:
 - root / nested Folder color、nearest ancestor継承、Default / Auto
 - Folder色とglobal Map modeに限定したUI設定persistence
 - 背景OSM tileだけを対象とするColor / Monochrome表示
+- Library root直下のschema version 1 `trailbook.json` read / validation
+- Folder色のLibrary共有、明示Save、legacy migration
+- manual ReloadとReload / Overwrite / Cancel Conflict recovery
+- invalid shared JSONのfail-closed処理と明示Overwrite recovery
+- Google Drive等の同期Folderを通常fileとして利用する運用
 
 実装済み範囲の詳細は[CHANGELOG.md](../CHANGELOG.md)、Release順序は[ROADMAP.md](ROADMAP.md)を正本とします。
 
-## Future Features
+## Current Release and Future Features
 
-Release 1.2 Shared Library Settingsは、Library root直下の`trailbook.json`へFolder colorsを明示保存し、外部Folder同期を通じて共有する次Releaseです。明示migration、manual Reload、conflict / invalid JSONのReload / Overwrite / Cancel recoveryはBrowser AcceptanceまでCompletedです。Google Drive API同期は実装しません。
+Release 1.2 Shared Library SettingsはCompletedです。TrailBookはGoogle Drive APIや同期statusを使用せず、同期後のmanual ReloadまたはLibrary再選択を利用します。次Releaseは未確定です。
 
 Statistics、Replay、HeatMap、GPX Metadata Index、日付表示、vehicle metadata、GPX編集、GPX size reduction、Cloud Sync、Mobile Viewer UX、Waypoint性能最適化、数値性能再測定、Plugin、AI Searchなども未実装の将来候補です。
 

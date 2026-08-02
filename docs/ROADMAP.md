@@ -1,9 +1,9 @@
 # ROADMAP.md
 
-Version: 1.2 Planning
+Version: 1.2 Completed
 Status: Official
-Current Release: 1.1.0 Track Selection & Styling
-Next Release: 1.2 Shared Library Settings（In progress / Unit 4 Completed、Unit 5 Not started）
+Current Release: 1.2.0 Shared Library Settings
+Next Release: Not determined（see Future Releases）
 
 ## Version Policy
 
@@ -252,7 +252,7 @@ Completed内容:
 - README、LICENSE、third-party notices
 - Windows Chrome / Edge統合受け入れ
 
-## Current Release
+## Completed Release
 
 ### Release 1.1 — Track Selection & Styling
 
@@ -316,9 +316,9 @@ Completed内容:
 - Chrome統合受け入れとUnit 2〜6のEdge受け入れ
 - 806 GPX Libraryの定性的性能評価Acceptable、明確な性能回帰なし
 
-## Next Release — Release 1.2 Shared Library Settings
+## Current Release — Release 1.2 Shared Library Settings
 
-Status: In progress / Unit 4 Completed、Unit 5 Not started
+Status: Completed
 
 Goal: Folder colorをLibrary root直下の`trailbook.json`へ保存し、同じFolderを開くChrome、Edge、別PC、将来の対応端末でLibrary固有設定を共有できる基盤を作る。TrailBookはGoogle Drive / OneDrive APIや独自cloud syncを実装せず、通常ファイルの同期は外部Folder同期へ委ねる。
 
@@ -350,13 +350,13 @@ Color / Monochrome、Map center / zoom、前回表示Track、selected Track、si
 
 ### Units
 
-1. Scope、Architecture、Decisions、schema、permission / conflict policy、test plan
-2. read-only loader、schema validation、Library open時の読込、localStorage fallback
+1. Scope、Architecture、Decisions、schema、permission / conflict policy、test plan（Completed）
+2. read-only loader、schema validation、Library open時の読込、localStorage fallback（Completed）
 3. readwrite permission、safe writer、明示保存、failure handling（Completed）
 4. localStorage migration、status UI、manual reload、conflict handling（Completed）
-5. Chrome / Edge、Google Drive Folder、統合受け入れ、文書、Release finalization
+5. Chrome / Edge、Google Drive Folder、統合受け入れ、文書、Release finalization（Completed）
 
-Unit 1 Planning、Unit 2 read-only loader、Unit 3 explicit save、Unit 4 migration / Reload / conflict recoveryはBrowser AcceptanceまでCompleted。Unit 5は開始していない。
+Unit 1 Planning、Unit 2 read-only loader、Unit 3 explicit save、Unit 4 migration / Reload / conflict recovery、Unit 5 integrated acceptance / finalizationはCompletedである。
 
 ### Out of Scope
 
@@ -367,11 +367,11 @@ Unit 1 Planning、Unit 2 read-only loader、Unit 3 explicit save、Unit 4 migrat
 - Mobile Viewer UX、Date Tree、vehicle metadata本体、previous display state restoration
 - Import / Export UI、backup / temporary file管理、GPX編集保存基盤の実装
 
-正式な保存原則は「TrailBookは、ユーザーの明示的な保存操作なしにGPXやLibrary設定ファイルを変更、移動、削除しない。」とする。Release 1.1はread-onlyである。Release 1.2 Unit 4のproduction実装は、明示操作時の`trailbook.json`だけを書き込み対象とし、GPXは引き続きread-onlyである。
+正式な保存原則は「TrailBookは、ユーザーの明示的な保存操作なしにGPXやLibrary設定ファイルを変更、移動、削除しない。」とする。Release 1.2のproduction実装は、明示操作時の`trailbook.json`だけを書き込み対象とし、GPXは引き続きread-onlyである。
 
 ## Future Design Boundaries
 
-以下はRelease 1.1には含めない将来設計境界である。
+以下はRelease 1.2までに含めない将来設計境界である。
 
 ### GPX Internal Date and Date-based Display
 
@@ -430,7 +430,7 @@ Release 0.9では、車両情報の読み込み、保存、編集、色変更を
 
 ## Future Candidates
 
-Release 1.2 Shared Library Settingsは上記のNext ReleaseとしてPlanning中である。以下はRelease 1.2より後の候補であり、設計承認時にRelease番号を決定する。
+Release 1.2 Shared Library SettingsはCompletedである。以下はRelease 1.2より後の候補であり、設計承認時にRelease番号を決定する。
 
 - GPX Metadata Index
 - Date-based Display

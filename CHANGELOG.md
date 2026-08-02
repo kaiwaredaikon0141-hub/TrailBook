@@ -1,5 +1,52 @@
 # Changelog
 
+## v1.2.0
+
+Date: 2026-08-02
+Status: Ready for final commit and tag
+
+### Added
+
+- Shared Library Settings using Library-root `trailbook.json`
+- Read-only shared settings loader with fail-closed schema validation
+- Library-scoped Folder color sharing
+- Explicit Save with readwrite permission requested only from user actions
+- Explicit migration from legacy localStorage Folder colors
+- Manual Reload for externally synchronized settings
+- Reload / Overwrite / Cancel conflict recovery
+- Explicit recovery from invalid JSON
+- Google Drive synchronized Folder operation without a cloud API
+
+### Changed
+
+- Folder colors can use validated Library-scoped shared JSON as their source of truth
+- Clarified that TrailBook does not modify GPX or Library settings without an explicit user save action
+- Retained localStorage for device-local Map mode and legacy Folder color fallback
+- Prevented entry-by-entry mixing of valid shared JSON with legacy Folder colors
+
+### Data Protection
+
+- GPX files remain read-only and are never written, moved, deleted, or saved
+- Only `trailbook.json` can be written, and only after explicit Save, Migration, or Overwrite actions
+- Added fingerprint conflict detection and post-write verification
+- Invalid or unsupported shared JSON fails closed and is not automatically repaired
+- No automatic save, polling, background sync, automatic merge, cloud API, account, server, or database was added
+
+### Known Limitations
+
+- Automatic merge, polling, and background synchronization are not implemented
+- TrailBook cannot inspect Google Drive synchronization status
+- External changes may require Manual Reload or Library reselection
+- The write race between fingerprint verification and writer close cannot be fully eliminated; post-write verification detects mismatches
+- Import / Export, Mobile Viewer UX, Folder rename / move, and GPX editing are not implemented
+- File System Access permission persistence is not assumed
+
+### Performance
+
+- Passed qualitative acceptance with the existing 806 GPX Library and Shared Library Settings operations
+- No UI-freezing operation or clear Viewer regression was observed
+- Numerical benchmarking and a 20% comparison were not performed
+
 ## v1.1.0
 
 Date: 2026-08-01

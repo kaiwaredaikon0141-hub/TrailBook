@@ -4,10 +4,10 @@ TrailBookの開発を始める人とAIのための入口です。
 
 ## Current Status
 
-- Current Version: `1.1.0`
-- Current Release: Track Selection & Styling
-- Completed: Release 0.1からRelease 1.1
-- Next Release: Release 1.2 Shared Library Settings（Unit 4 Completed、Unit 5 Not started）
+- Current Version: `1.2.0`
+- Current Release: Shared Library Settings
+- Completed: Release 0.1からRelease 1.2
+- Next Release: Not determined（`ROADMAP.md`のFuture Releasesを参照）
 - Branch: `main`
 
 Gitの状態は作業開始時に必ず再確認する。
@@ -27,13 +27,13 @@ GPXを独自形式へ取り込むのではなく、ユーザーのGPX資産を�
 3. `ARCHITECTURE.md` — 現在の責務分割とデータフロー
 4. `CODING_RULES.md` — 実装規約
 5. `ROADMAP.md` — 完了Releaseと将来候補
-6. `UI_SPEC.md` — Release 1.1までの確定UI仕様
+6. `UI_SPEC.md` — Release 1.2までの確定UI仕様
 7. `DECISIONS.md` — 採用済み設計判断と理由
 8. `AI_GUIDE.md` — AIとの開発手順
 9. `CONTRIBUTING.md` — 作業規約
 10. `GLOSSARY.md` — 用語
 11. リポジトリルートの`README.md`、`CHANGELOG.md` — 公開概要とリリース履歴
-12. `RELEASE_CHECKLIST.md` — Release 1.0 / 1.1のbaseline、受け入れtest、完了記録
+12. `RELEASE_CHECKLIST.md` — Release 1.0〜1.2のbaseline、受け入れtest、完了記録
 
 ## Current Architecture
 
@@ -52,10 +52,14 @@ GPXを独自形式へ取り込むのではなく、ユーザーのGPX資産を�
 - `SelectionState`がMap / TreeView / Searchで共有する単一GPX pathを管理する。
 - `TrackStyleService`がzoom bucket、normal、selected main、outlineのstyleを副作用なしで計算する。
 - `FolderColorState`がrootを含むFolder明示色とnearest ancestor継承を解決する。
-- `DisplaySettingsStore`はFolder色とglobal Map modeだけをschema version 1の`localStorage`へ保存する。
+- `DisplaySettingsStore`はlegacy Folder色fallbackとglobal Map modeだけをschema version 1の`localStorage`へ保存する。
 - Monochrome Map Modeは背景OSM tileだけへCSS filterを適用する。
+- `LibrarySettingsRepository`がLibrary root直下の`trailbook.json`だけを読込・検証し、明示保存時だけ書き込む。
+- `LibrarySettingsState`がshared snapshot、source、dirty、saving、conflictを保持する。
+- `LibrarySettingsCoordinator`がload、explicit save、migration、manual Reload、Conflict recoveryを調停する。
+- `LibrarySettingsPanel`と`SettingsConflictDialog`がstatusとReload / Overwrite / Cancel操作を担当する。
 
-## Implemented Through Release 1.1
+## Implemented Through Release 1.2
 
 Release 1.0 Stable Viewerは完了している。Release 0.9までのFolder Library、GPX Parser、複数GPX表示、Folder / root一括表示、Waypoint option、Searchを維持し、個人利用向けの起動・互換性UX、品質整理、文書、licenseと第三者表記を確定した。
 
@@ -65,7 +69,7 @@ GPXファイル名、Folder名、相対パスをmetadataから検索する。検
 
 Release 1.1 Track Selection & Stylingは完了している。zoom連動Track線幅、Map / TreeView / Searchの単一選択同期、selected highlight / outline、Folder色と継承、UI設定限定の`localStorage`、Color / Monochrome背景地図表示を実装した。806 GPX Libraryの人間による定性的性能評価はAcceptableで、明確な回帰やUIが固まる操作は確認されていない。数値benchmarkと20%比較は実施していない。
 
-Release 1.2 Shared Library Settingsは次Releaseとして進行中である。Unit 2 read-only loader、Unit 3 explicit save、Unit 4 migration / manual Reload / conflict recoveryはBrowser AcceptanceまでCompletedである。Unit 5は開始していない。GPX書き込みとGoogle Drive API連携は行わない。Mobile Viewer UX、Waypoint性能最適化、数値性能再測定、日付表示、vehicle metadata、GPX Editing Foundation、TrackPoint Editing、GPX size reductionなどは`ROADMAP.md`のFuture Candidatesとして扱う。
+Release 1.2 Shared Library SettingsはCompletedである。Library root直下のschema version 1 `trailbook.json`からFolder色を読み、明示Save / migration / Overwrite時だけ書き込む。valid shared JSON、legacy localStorage、Autoの優先順位を固定し、manual ReloadとReload / Overwrite / CancelによるConflict recoveryを提供する。Chrome / Edge / Google Drive同期Folderで統合受け入れを完了した。Google Drive API、sync status取得、自動merge、polling、background sync、Import / Export、GPX編集は実装していない。
 
 ## Non-Negotiable Rules
 
@@ -74,7 +78,8 @@ Release 1.2 Shared Library Settingsは次Releaseとして進行中である。Un
 - Folder構造とGPXファイルをデータの正本とする。
 - SQLite、IndexedDBなどの独自DBを持たない。一時的なセッションcacheは独自DBに含めない。
 - 独自DBを持たない方針を変更する場合は、新しいDecisionを必要とする。
-- 現行Release 1.1では再生成可能なFolder色とMap表示modeだけを`localStorage`へ保存できる。Release 1.2 Unit 3では、明示操作時だけFolder色をshared fileへ保存する実装とBrowser Acceptanceが完了している。GPX内容、解析結果、FileHandle、FolderHandle、cacheの永続化は禁止する。
+- 現行Release 1.2ではMap表示modeとlegacy Folder色fallbackだけを`localStorage`へ保存する。Folder色はvalidなshared JSONがある場合に項目単位でlegacy値を混ぜない。GPX内容、解析結果、FileHandle、FolderHandle、cacheの永続化は禁止する。
+- `trailbook.json`への書き込みはSave、migration、明示Overwriteだけに限定し、permissionの永続化を前提にしない。
 - Framework、TypeScript、Node.jsを追加しない。
 - UI同士を直接接続せず、EventBusとAppの調停を使用する。
 - ModelへUI状態を保存しない。

@@ -4,10 +4,10 @@ TrailBookは、GPXを含むFolderをLibraryとして閲覧する、個人利用�
 
 ## Current Status
 
-- Current Release: `1.1.0` Track Selection & Styling
-- Release 1.1 Track Selection & Styling: Completed
+- Current Release: `1.2.0` Shared Library Settings
+- Release 1.2 Shared Library Settings: Completed
 
-Release 1.1は個人利用向けStable Viewerを維持しながら、Track選択、表示style、Folder色、背景地図表示設定を追加した完成Releaseです。一般公開版や配布artifactではありません。
+Release 1.2は個人利用向けStable Viewerを維持しながら、Folder色をLibrary rootの`trailbook.json`へ明示保存し、通常fileとして共有できるようにした完成Releaseです。一般公開版や配布artifactではありません。
 
 ## Implemented Features
 
@@ -25,16 +25,21 @@ Release 1.1は個人利用向けStable Viewerを維持しながら、Track選択
 - rootとnested Folderの明示色、最も近い祖先色の継承、Default / Auto
 - Color / Monochrome背景地図表示（初期Color）
 - Folder色とMap表示modeに限定したUI設定の`localStorage`保存
+- Library root直下の`trailbook.json`によるFolder色共有
+- shared settingsの明示Save、legacy色migration、manual Reload
+- 外部変更を保護するReload / Overwrite / Cancel conflict recovery
 - ローカル同梱したLeaflet 1.9.4による地図表示
 
 SearchはGPX内容を解析せず、検索入力だけでGPX表示、Queue、cache、Mapを変更しません。
 
 ## Data Principles
 
-- GPXは読み取り専用で扱います。
+- Release 1.2ではGPXは読み取り専用で扱います。
 - GPXを変更、移動、削除、保存しません。
+- `trailbook.json`への書き込みはSave、Migration、明示Overwriteの利用者操作時だけ行います。
 - SQLite、IndexedDBなどの独自DBを使用しません。
-- `localStorage`はFolder色とMap表示modeだけに使用し、GPXや解析結果を保存しません。
+- `localStorage`はdevice-local Map modeとlegacy Folder色fallbackに使用し、GPXや解析結果を保存しません。
+- validなshared JSONがある場合、Folder色へlegacy localStorage値を項目単位で混ぜません。
 - Folder構造とGPXファイルが唯一の正本です。
 - FileHandleと解析cacheは現在のbrowser sessionだけで保持し、Library切り替えで破棄します。
 
@@ -60,7 +65,7 @@ File System Access API、secure context、対応originが必要です。対応or
 
 ### Mobile
 
-iPhone Chromeでは、HTTPSでの起動、Google Drive上のFolder選択、Folder走査、Tree表示までは成功しました。一方、GPX checkbox、Track表示、touch UIは動作しなかったため、Release 1.1では非対応です。原因分類はAPI不足ではなくMobile UI / touch操作未対応です。
+iPhone Chromeでは、HTTPSでの起動、Google Drive上のFolder選択、Folder走査、Tree表示までは成功しました。一方、GPX checkbox、Track表示、touch UIは動作しなかったため、Release 1.2では非対応です。原因分類はAPI不足ではなくMobile UI / touch操作未対応です。
 
 Android ChromeとiPad Chromeは未確認です。将来候補`Mobile Viewer UX`でresponsive layout、touch操作、gesture分離などを検討します。
 
@@ -99,7 +104,17 @@ http://localhost:8000/src/index.html
 2. GPXを含むFolderを選択します。
 3. browserのpermission確認を許可します。
 
-Folder pickerは`showDirectoryPicker({ mode: "read" })`で開きます。Cancelしても既存Libraryは維持されます。
+Folder pickerは`showDirectoryPicker({ mode: "read" })`で開きます。Cancelしても既存Libraryは維持されます。Folder色を共有fileへ保存する場合だけ、別の明示操作でreadwrite permissionを確認します。
+
+### Shared Library Settings
+
+- `trailbook.json`は選択したLibrary root直下だけから読みます。
+- validなJSONのFolder色はdevice-localなlegacy色より優先されます。
+- Folder color Apply / Defaultだけではfileへ書き込みません。
+- `Libraryへ保存`、明示Migration、Conflict dialogの明示OverwriteだけがJSONを書き込みます。
+- `設定を再読み込み`で外部変更を反映できます。未保存変更がある場合は破棄確認を表示します。
+- Google Drive等の同期Folderも通常fileとして扱います。TrailBookはGoogle Drive API、同期status、provider metadataを使用しません。
+- 外部同期完了をTrailBookは検出・保証しないため、同期後にmanual ReloadまたはLibrary再選択が必要な場合があります。
 
 ## Offline Scope and External Communication
 
@@ -118,13 +133,13 @@ TrailBookはGPXファイルやGPX内容を外部serverへアップロードし�
 ## Data Protection
 
 - File System AccessはユーザーがFolder pickerを操作したときだけ開始します。
-- pickerはread-only modeを指定し、`createWritable`を使用しません。
+- pickerはread-only modeを指定します。`createWritable`は明示保存時の`trailbook.json`だけに使用します。
 - GPXを変更、移動、削除、保存しません。
 - FileHandleと解析cacheはsession限定で、Library切り替え時に破棄します。
 - SQLiteとIndexedDBを使用しません。
-- `localStorage`にはFolder色とColor / Monochrome modeだけを保存します。
+- `localStorage`にはdevice-local Map modeとlegacy Folder色fallbackだけを保存します。
 - FileHandle、FolderHandle、GPX XML、TrackPoint、解析geometryを永続化しません。
-- 自動同期や外部serverへのGPX送信を行いません。
+- 自動保存、polling、background sync、automatic merge、外部serverへのGPX送信を行いません。
 
 ## Known Limitations
 
@@ -134,9 +149,12 @@ TrailBookはGPXファイルやGPX内容を外部serverへアップロードし�
 - 大量GPX表示中にWaypointをONにすると、多数のMarker描画により操作が重くなります。大量LibraryではWaypoint OFFを推奨します。
 - Waypointは初期OFFです。
 - OpenStreetMap背景tileはオンライン依存で、offline地図保存はありません。
-- GPX編集、GPX書き込み、Undo / Redo、保存、別名保存はありません。
-- 自動同期はありません。
-- Google DriveはFolder選択時点でbrowserから参照できる内容を読むだけです。Drive側の更新後はLibraryを再読込してください。
+- GPX編集、GPX書き込み、Undo / Redo、保存、別名保存は未実装です。
+- Folder rename / moveとImport / Exportは未実装です。
+- automatic merge、polling、background sync、cloud APIはありません。
+- Google Driveの同期statusは取得しません。Drive側の更新後はmanual ReloadまたはLibrary再選択が必要な場合があります。
+- fingerprint確認後からwriter closeまでの競合raceは完全には排除できず、post-write verificationで不一致を検出します。
+- File System Accessのpermissionがbrowser sessionを越えて保持されることを前提にしません。
 - File System Access API対応browserと対応originが必要です。
 - `file://`では起動できません。
 - overlapping Trackをclickした場合は、最前面の1件を選択します。

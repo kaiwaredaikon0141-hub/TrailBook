@@ -1,8 +1,8 @@
 # TrailBook Release Checklist
 
-Version: 1.0.0 release record / 1.1.0 ready for final commit and tag
-Status: Release 1.0 Completed / Release 1.1 Ready for final commit and tag
-Baseline: v0.9.0
+Version: 1.0.0 / 1.1.0 release records / 1.2.0 ready for final commit and tag
+Status: Release 1.0 / 1.1 Completed / Release 1.2 Ready for final commit and tag
+Baseline: v1.1.0 for Release 1.2
 
 ## Purpose
 
@@ -598,7 +598,7 @@ Unit 1 / Unit 2ではRelease Procedureを実行しない。
 
 ## Release 1.1 Track Selection & Styling
 
-Release 1.1 Status: Ready for final commit and tag
+Release 1.1 Status: Completed
 Unit 1 Status: Completed
 Architecture Status: Completed
 Decision Status: Completed
@@ -1133,7 +1133,7 @@ Unit 7 Documentation Status: Completed
 Unit 7 Version Status: Completed
 Unit 7 Status: Completed
 
-Release 1.1 Completion Status: Ready for final commit and tag
+Release 1.1 Completion Status: Completed
 
 #### Chrome Integrated Acceptance
 
@@ -1228,9 +1228,9 @@ Folder identity: current Library内のrelative path。rootは空文字。
 
 ## Release 1.2 Shared Library Settings
 
-Release 1.2 Status: In progress
-Current Release: `1.1.0`
-Production Implementation Status: In progress（Unit 4 implementation / static test completed、Browser Acceptance pending）
+Release 1.2 Status: Ready for final commit and tag
+Current Release: `1.2.0`
+Production Implementation Status: Completed
 
 ### Unit Status
 
@@ -1240,10 +1240,11 @@ Production Implementation Status: In progress（Unit 4 implementation / static t
 | 2 | read-only loader、schema validation、Library open時の読込、localStorage fallback | Completed | Unit 1 |
 | 3 | readwrite permission、safe writer、explicit save、failure handling | Completed | Unit 2 |
 | 4 | localStorage migration、manual reload、conflict resolution UI | Completed | Unit 2、3 |
-| 5 | Google Drive Folder、Chrome / Edge、integrated acceptance、documentation、Release finalization | Not started | Unit 2〜4 |
+| 5 | Google Drive Folder、Chrome / Edge、integrated acceptance、documentation、Release finalization | Completed | Unit 2〜4 |
 
 Unit 1 Planning Status: Completed
-Unit 1 Production Implementation Status: Not started
+Unit 1 Production Implementation Status: Not applicable（planning unit）
+Unit 1 Status: Completed
 
 ### Scope and Data Boundary
 
@@ -1303,41 +1304,41 @@ Unit 1 Production Implementation Status: Not started
 
 ### Static Test Plan
 
-- [ ] valid `trailbook.json`
-- [ ] missing file
-- [ ] empty file
-- [ ] malformed JSON
-- [ ] unknown schema
-- [ ] unknown structural field
-- [ ] partial invalid Folder colors
-- [ ] dangerous keys / prototype pollution
-- [ ] array / `null`
-- [ ] Japanese path
-- [ ] root path `""`
-- [ ] nested Folder and orphan path
-- [ ] stable serialization、UTF-8、LF、final newline
-- [ ] JSON precedence、empty JSON、localStorage fallback
-- [ ] permission granted / denied / revoked
-- [ ] write / close / quota failure
-- [ ] read fingerprint、external change、missing-to-created conflict
-- [ ] migration、existing JSON no-overwrite
-- [ ] no GPX / FileHandle / geometry persistence and no GPX write
-- [ ] production module import and circular dependency
+- [x] valid `trailbook.json`
+- [x] missing file
+- [x] empty file
+- [x] malformed JSON
+- [x] unknown schema
+- [x] unknown structural field
+- [x] partial invalid Folder colors
+- [x] dangerous keys / prototype pollution
+- [x] array / `null`
+- [x] Japanese path
+- [x] root path `""`
+- [x] nested Folder and orphan path
+- [x] stable serialization、UTF-8、LF、final newline
+- [x] JSON precedence、empty JSON、localStorage fallback
+- [x] permission granted / denied / revoked
+- [x] write / close / quota failure
+- [x] read fingerprint、external change、missing-to-created conflict
+- [x] migration、existing JSON no-overwrite
+- [x] no GPX / FileHandle / geometry persistence and no GPX write
+- [x] production module import and circular dependency
 
 ### Browser and Integration Test Plan
 
-- [ ] Chrome / Edge: Library without JSON and with valid JSON
-- [ ] Folder colors load、root / nested / Japanese path、inheritance / Auto
-- [ ] same JSONをChrome / Edgeで再現
-- [ ] localStorage migration preview、accept、deny、retry
-- [ ] explicit save、reload、Library switch、dirty confirmation
-- [ ] external file change、conflict Reload / Overwrite / Cancel
-- [ ] malformed / unsupported JSONでもViewer継続
-- [ ] Google Drive同期Folder read / write / resync / manual Reload
-- [ ] offline時の最新同期済みcopy
-- [ ] existing Viewer、Search、selection、Folder bulk、Waypoint、Monochrome regression
-- [ ] Console、keyboard、ARIA、focus
-- [ ] GPX content / timestamp unchanged、GPXへ`createWritable`なし
+- [x] Chrome / Edge: Library without JSON and with valid JSON
+- [x] Folder colors load、root / nested / Japanese path、inheritance / Auto
+- [x] same JSONをChrome / Edgeで再現
+- [x] localStorage migration preview、accept、deny、retry
+- [x] explicit save、reload、Library switch、dirty confirmation
+- [x] external file change、conflict Reload / Overwrite / Cancel
+- [x] malformed / unsupported JSONでもViewer継続
+- [x] Google Drive同期Folder read / write / resync / manual Reload
+- [x] offline時の最新同期済みcopy
+- [x] existing Viewer、Search、selection、Folder bulk、Waypoint、Monochrome regression
+- [x] Console、keyboard、ARIA、focus
+- [x] GPX content / timestamp unchanged、GPXへ`createWritable`なし
 
 ### Known Limits and Open Validation
 
@@ -1346,7 +1347,7 @@ Unit 1 Production Implementation Status: Not started
 - Google Drive等の同期完了、offline freshness、conflict解消をTrailBookは保証しない。
 - orphan pathは自動追従しない。automatic mergeとfield-level mergeは未実装とする。
 - Import / Export、backup、exclusive writer、File System ObserverはFuture Candidateとする。
-- Unit 2、Unit 3、Unit 4のChrome / Edge / Google Drive実機testはCompleted。Unit 5は未開始である。
+- Unit 1〜5はCompletedである。Release 1.2はfinal commit / tag待ちである。
 
 ### Unit 2 Read-only Loader
 
@@ -1556,7 +1557,7 @@ Unit 4 Implementation Status: Completed
 Unit 4 Static Test Status: Completed
 Unit 4 Browser Acceptance Status: Completed
 Unit 4 Status: Completed
-Unit 5 Status: Not started
+Unit 5 Status at Unit 4 completion: Not started
 
 #### Implemented Boundary
 
@@ -1660,3 +1661,82 @@ Unit 5 Status: Not started
 - Appは974行、TreeViewは997行である。今後も責務追加はhelper / coordinator / dedicated UIへ分離する。
 
 Chrome / Edge / Google DriveのBrowser Acceptanceが完了したため、Unit 4をCompletedとする。Unit 5は開始していない。
+
+### Unit 5 Integrated Acceptance and Release Finalization
+
+Unit 5 Implementation Status: Completed
+Unit 5 Static Test Status: Completed
+Unit 5 Browser Acceptance Status: Completed
+Unit 5 Status: Completed
+
+Release 1.2 Unit 1〜5 Status: Completed
+Release 1.2 Status: Ready for final commit and tag
+Final commit / tag / push: Pending
+
+#### Integrated Browser Acceptance
+
+| Environment | Result | Confirmed behavior |
+| --- | --- | --- |
+| Windows Chrome | Pass | valid / invalid JSON、legacy fallback、explicit save、permission deny、conflict detection、migration、manual / dirty Reload、Reload / Overwrite / Cancel、invalid JSON recovery、keyboard / ARIA / focus、Viewer regression |
+| Windows Edge | Pass | shared JSON load、explicit save、migration、manual Reload、conflict / invalid JSON recovery、keyboard / focus、Viewer regression |
+| Google Drive Folder | Pass | shared JSON load、create / update、別browser共有、offline copy、manual Reload、conflict Reload / Overwrite、permission deny、close verification |
+
+統合結果はUnit 2〜4で実施した人間による定性的受け入れを使用する。806 GPX Libraryで既存ViewerとShared Library Settings操作に明確な回帰やUI停止は確認されていない。数値benchmarkと20%比較は実施していない。
+
+#### Final UI Review
+
+- [x] 通常時はcompactなshared status、`Libraryへ保存`、`設定を再読み込み`を中心に表示
+- [x] migration、Unsaved、Conflict、Invalid、Permission denied、Save failedは条件付き表示
+- [x] 同じ意味のsave buttonを重複表示しない
+- [x] 通常状態で長いwarningを常時表示しない
+- [x] statusとbuttonを文字で識別でき、iconだけに依存しない
+- [x] native keyboard操作、`aria-live`、dialog focus、status更新時のfocus維持
+- [x] toolbarを変更せず、Library sidebar内のpanelとして表示
+
+#### Release 1.2 Data Protection
+
+- [x] Folder color Apply / DefaultだけではJSONを書き込まずdirty化だけを行う
+- [x] manual Reloadではfileを書き込まない
+- [x] explicit Save / Migration / Overwrite時だけ`trailbook.json`を書き込む
+- [x] GPX内容 / timestamp、Folder、`trailbook.json`以外のLibrary fileを変更しない
+- [x] GPX移動 / 削除 / 保存、Folder作成を行わない
+- [x] automatic / debounce / unload / background saveを行わない
+- [x] polling、background sync、automatic merge、cloud APIを追加しない
+- [x] FileHandle、FolderHandle、GPX XML、TrackPoint、geometryを永続化しない
+
+正式原則は「TrailBookは、ユーザーの明示的な保存操作なしにGPXやLibrary設定ファイルを変更、移動、削除しない。」である。Release 1.2ではGPX editingとGPX保存を実装しない。
+
+#### Final Static Validation
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| Unit 2 tests | Pass | 121 assertions |
+| Unit 3 tests | Pass | 136 assertions |
+| Unit 4 tests | Pass | 103 assertions |
+| Production module import | Pass | 40 / 40 |
+| Missing import target | Pass | 0 |
+| Circular dependency | Pass | 0 |
+| Unused import | Pass | 0 across 40 production modules |
+| App size | Pass | 974 lines |
+| TreeView size | Pass | 997 lines |
+| Config version | Pass | `1.2.0` |
+| DisplaySettingsStore schema | Pass | version 1 unchanged |
+| Shared settings schema | Pass | version 1 unchanged |
+| Write boundary | Pass | `createWritable` / readwrite permissionはLibrarySettingsRepositoryだけ |
+| GPX writer | Pass | none |
+| Automatic mechanisms | Pass | automatic save / polling / background sync / automatic mergeなし |
+| Markdown | Pass | local links、heading、code fence、tableを確認 |
+| Decision IDs | Pass | duplicate 0、0033〜0035 Acceptedを維持 |
+| License files | Pass | `LICENSE` / `THIRD_PARTY_NOTICES.md`差分なし |
+
+#### Current Limitations
+
+- GPX editing、GPX保存、Folder rename / move、Import / Exportは未実装
+- automatic merge、polling、background sync、cloud APIは未実装
+- Google Driveのsync statusを取得できず、外部変更後にmanual Reloadが必要な場合がある
+- fingerprint確認後からwriter closeまでの競合raceは完全には排除できず、post-write verificationで不一致を検出する
+- Mobile Viewer UXは未対応
+- File System Access API対応browser / originを必要とし、permission persistenceを前提にしない
+- 大量GPX表示中のWaypoint ONは引き続き性能上の既知制限
+
+Release 1.2はfinal commitとtagを作成できる状態である。commit、tag、pushはこのUnitでは実行しない。

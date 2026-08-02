@@ -1,9 +1,9 @@
 # ARCHITECTURE.md
 
-Version: 1.2 Planning
+Version: 1.2 Completed
 Status: Official
-Baseline: Release 1.1.0
-Current: Release 1.1 Completed / Release 1.2 Planning
+Baseline: Release 1.2.0
+Current: Release 1.2 Shared Library Settings Completed
 Depends: PROJECT.md, ROADMAP.md, DECISIONS.md
 
 ## Architecture Overview
@@ -442,9 +442,9 @@ Release 1.0はRelease 0.9までのViewer機能を個人利用環境で安定さ�
 - Mobile検証のためにFolder LibraryのFile System Access API設計を変更せず、`showDirectoryPicker`が利用できない端末向けfallbackはRelease 1.0へ追加しない。
 - LeafletとOpenStreetMapは第三者のlicenseおよび利用条件としてTrailBook本体と分離する。
 
-## Release 1.1 Planned Architecture
+## Release 1.1 Architecture
 
-Release 1.1 Track Selection & Stylingは、既存のpath identity、App mediation、read-only GPX、bounded Queue / cacheを維持したまま、Selection、Track style、Folder color、UI設定storageを追加する。Unit 1で確定したcontractに従い、完了したUnitの実装事実を順次記録する。
+Release 1.1 Track Selection & StylingはCompletedである。既存のpath identity、App mediation、read-only GPX、bounded Queue / cacheを維持したまま、Selection、Track style、Folder color、UI設定storageを追加した。
 
 ### SelectionState — Selection Source of Truth
 
@@ -633,9 +633,9 @@ root Folder名を変更すると新Libraryとして扱いDefault色へ戻る。�
 - style変更ではGPX Parser、GPXDisplayQueue、100件cache、Track Bounds、Waypoint LayerGroup、refocusを変更しない。
 - SVG維持案と透明hit layer案はfallbackとし、採用時は806 GPXでlayer数、click、pan / zoomを再評価する。
 
-## Release 1.2 Planned Architecture — Shared Library Settings
+## Release 1.2 Architecture — Shared Library Settings
 
-Release 1.2はLibrary root直下の`trailbook.json`をLibrary固有設定の共有先とする。現在のReleaseは1.1.0のままである。Unit 2 / 3 / 4はBrowser AcceptanceまでCompletedで、Unit 5は開始していない。
+Release 1.2はLibrary root直下の`trailbook.json`をLibrary固有設定の共有先とする。Current Releaseは1.2.0であり、Unit 1〜5はCompletedである。
 
 ### File Placement and Identity
 
@@ -798,6 +798,15 @@ Release 1.2の必須scopeはsupported Chrome / EdgeでのLibrary file read / exp
 ### Data Protection Principle
 
 TrailBookは、ユーザーの明示的な保存操作なしにGPXやLibrary設定ファイルを変更、移動、削除しない。Release 1.2のwrite boundaryはLibrary rootの`trailbook.json`だけであり、GPXへ`createWritable`を使わない。将来のGPX編集も通常閲覧から分離し、明示保存、競合確認、保存失敗処理を備えるまで実装しない。
+
+### Release 1.2 Completion Boundary
+
+- Repository → State → Coordinator → Panel / Dialogの責務と依存方向をCurrent Architectureとして維持する。
+- Library openとmanual Reloadはread-onlyで、明示Save / Migration / OverwriteだけがRepositoryのwrite flowへ到達する。
+- `DisplaySettingsStore` schema version 1はdevice-local Map modeとlegacy Folder color fallbackを保持し、valid shared JSONへ項目単位で混ぜない。
+- shared settings schema version 1が保存するLibrary設定はFolder colorsだけである。
+- Google Drive等は通常の同期Folderとして扱い、cloud API、provider metadata、sync status、polling、background syncを扱わない。
+- Release 1.2ではGPX writer / editor、Folder rename / move、Import / Export、automatic mergeを実装しない。
 
 File System Access APIのpermissionとwrite lifecycleは[Chrome File System Access documentation](https://developer.chrome.com/docs/capabilities/web-apis/file-system-access)、[File System Access specification](https://wicg.github.io/file-system-access/)、[MDN `createWritable()`](https://developer.mozilla.org/en-US/docs/Web/API/FileSystemFileHandle/createWritable)を設計根拠とする。
 

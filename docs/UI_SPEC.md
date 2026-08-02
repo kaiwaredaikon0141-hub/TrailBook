@@ -1,7 +1,7 @@
 # TrailBook UI Specification
 
 Version : 1.2
-Status  : Implemented through Release 1.1 Completed / Release 1.2 Planning
+Status  : Implemented through Release 1.2 Completed
 Depends : PROJECT.md, ARCHITECTURE.md, ROADMAP.md
 
 Release 0.5からRelease 0.9までの追加仕様は本書末尾に追記する。
@@ -647,7 +647,7 @@ Mobileでもsecure context、対応origin、`showDirectoryPicker`を満たす場
 
 # 21. Release 1.1 Track Selection & Styling
 
-Release 1.1は実装進行中であり、次の確定UI contractと完了Unitの実装事実を記録する。
+Release 1.1はCompletedであり、次の確定UI contractと実装事実を記録する。
 
 ## Track selection
 
@@ -768,11 +768,11 @@ Unit 5ではTreeView本体を増やさず、独立したFolder color controlがl
 - Mobile Viewer UXとWaypoint clusteringを追加しない
 - GPXまたはFolder構造へ色を保存しない
 
-## Release 1.2 Planned UI — Shared Library Settings
+## Release 1.2 UI — Shared Library Settings
 
-Status: In progress / Unit 4 Completed、Unit 5 Not started
+Status: Completed
 
-Unit 2 / 3 / 4 Status: Completed。Unit 5 Status: Not started。shared JSON、legacy localStorage、Autoのどれを採用した場合も既存Folder color swatch、Track color、selection highlightへ同じFolderColorState projectionを使用する。invalid JSONはlegacy色を混ぜずAuto表示とし、Viewer操作を継続する。
+Unit 1〜5 Status: Completed。shared JSON、legacy localStorage、Autoのどれを採用した場合も既存Folder color swatch、Track color、selection highlightへ同じFolderColorState projectionを使用する。invalid JSONはlegacy色を混ぜずAuto表示とし、Viewer操作を継続する。
 
 通常閲覧とFolder color操作はRelease 1.1のまま維持する。Libraryを開いただけではwrite permissionを要求せず、`trailbook.json`を作成または変更しない。
 
@@ -821,3 +821,12 @@ Folder color dialogのApplyは画面とsession / local fallbackへ反映して`U
 - dialog open時のinitial focus、EscapeでCancel、close後のfocus returnを維持する
 - disabled buttonには常時確認できる理由を関連付ける
 - Mobile最適化、Import / Export、Folder操作、GPX編集、previous display restorationはRelease 1.2の対象外とする
+
+### Unit 5 Final UI State
+
+- 通常状態ではshared settings status、`Libraryへ保存`、`設定を再読み込み`をcompactに表示する。
+- JSON missing + legacy colors時のmigration、Unsaved、Conflict、Invalid、Permission denied、Save failedは該当時だけ表示する。
+- migration buttonと通常Save buttonを同時表示せず、同じ意味の操作を重複させない。
+- Conflict / Invalidの詳細は必要時だけDialogまたはstatusへ表示し、通常閲覧で長いwarningを常時表示しない。
+- statusは文字と`aria-live="polite"`を維持し、更新時にfocusを奪わない。
+- Reload / Overwrite / Cancel、Escape、Cancel initial focus、focus trap、originへのfocus returnをChrome / Edgeで確認済みである。
