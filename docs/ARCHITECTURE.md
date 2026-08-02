@@ -635,7 +635,7 @@ root Folder名を変更すると新Libraryとして扱いDefault色へ戻る。�
 
 ## Release 1.2 Planned Architecture — Shared Library Settings
 
-Release 1.2はLibrary root直下の`trailbook.json`をLibrary固有設定の共有先とする。現在のReleaseは1.1.0のままである。Unit 1のPlanning contractに基づき、Unit 2のread-only loaderとUnit 3のexplicit saveはBrowser AcceptanceまでCompletedである。
+Release 1.2はLibrary root直下の`trailbook.json`をLibrary固有設定の共有先とする。現在のReleaseは1.1.0のままである。Unit 2 / 3 / 4はBrowser AcceptanceまでCompletedで、Unit 5は開始していない。
 
 ### File Placement and Identity
 
@@ -716,6 +716,22 @@ Unit 3は`LibrarySettingsCoordinator`へLibrary settingsのload / save調停、d
 - snapshot更新時はcurrent Treeに存在するexplicit colorsを置き換え、既存snapshotのorphan pathを保持する。inherited / Auto resolved color、端末固有Map mode、FileHandle、GPX、geometry、cacheは保存しない。
 - fingerprint確認後から`close()`までのexternal write raceは完全には排除できない。post-save verificationで不一致をfailureにできるが、exclusive writer、merge、Overwrite UIはUnit 3の範囲外である。
 
+### Unit 4 Migration, Reload, and Conflict Recovery Implementation
+
+Unit 4はmigration、manual Reload、conflict / invalid JSON recoveryを`LibrarySettingsCoordinator`へ集約し、AppはEventBus bindingと既存Folder色restyle callbackだけを提供する。App、Repository、State、Panel、Dialogの依存方向はUnit 3から変更しない。
+
+- `LibrarySettingsState`は既存source / status / dirty / saveStatusを正本とし、`reloading`、save operation、derivedな`migrationAvailable`を追加する。別の重複Stateは作らない。
+- JSON missing、legacy explicit Folder colorsあり、dirty / saving / reloading / conflictでない場合だけmigrationを提示する。migrationはUnit 3のrequire-match saveを再利用し、自動file作成とLibrary open時permission要求を行わない。
+- manual ReloadはRepositoryの`load()`を再利用する。dirty時は破棄確認を必要とし、CancelではState、色、fileを変えない。実行時はload resultとlegacy fallback規則をStateへ適用し、dirty / conflict / save errorを解除する。
+- Reload projectionはFolderColorStateのold / new explicit path集合だけを既存限定restyleへ渡す。visible Track、selected main / outline、root / inherited / child / Auto色を更新するが、GPX parse、Tree / Search再構築、Map refocus、selection / visibility / Waypoint / Map mode変更を行わない。
+- `SettingsConflictDialog`はReload、明示Overwrite、Cancelを提供するnative modal dialogである。Cancelをdefault focusとし、EscapeをCancelとして扱い、close後は接続済みoriginへfocusを戻す。
+- 通常saveは`conflictPolicy: "require-match"`を維持する。Dialogの明示Overwriteだけが`"explicit-overwrite"`を使用し、保存直前current fileがloaded / missing / invalidであることを確認してからfull write、close、reload verificationを行う。read failureではOverwriteを停止する。
+- invalid / unknown schema fileは通常saveで置き換えない。Folder色編集後にDialogから明示Overwriteした場合だけvalid schemaで置換できる。
+- Overwriteのpermission / write / close / verification failure後もdirtyとconflictを維持し、通常saveの再試行でconflict checkを迂回しない。
+- valid JSONに含まれるorphan path、またはlegacy snapshot内のorphan pathはStateとsave snapshotへ保持し、Treeへ架空Folderを作らず、自動削除しない。
+- 保存・migration・Reload中はLibrary pickerをdisableし、Conflict dialog表示中もLibrary切り替えを停止する。generation mismatchのresultは新Libraryへ適用しない。
+- polling、`visibilitychange`、File System Observer、background sync、automatic merge、Import / Exportは実装しない。Google Drive等の同期後は利用者がmanual Reload、Library再選択、page reloadを行う。
+
 ### Responsibilities and Dependencies
 
 ```text
@@ -739,8 +755,8 @@ Library root FileSystemDirectoryHandle / trailbook.json
 - `LibrarySettingsState`はcurrent Libraryのvalidated snapshot、source、load fingerprint、dirty data、`loaded` / `local-only` / `unsaved` / `read-only` / `invalid` / `conflict` / `save-failed` statusを保持する。File System APIとUIを参照しない。
 - `FolderColorState`はrelative pathによるcolor resolutionとsession projectionを維持し、RepositoryやFile System APIの詳細を知らない。
 - `DisplaySettingsStore`はglobal Map modeなど端末固有設定と、Release 1.2移行期間のlegacy Folder color fallbackだけを扱う。shared settingsの正本にならない。
-- `LibrarySettingsCoordinator`がLibrary load、fallback選択、explicit save、State更新、FolderColorStateへのprojection、stale guardを調停する。Unit 4予定のreload、migration、conflict解消は未実装である。
-- `LibrarySettingsPanel`は状態表示とexplicit save requestだけを担当し、fileを直接操作しない。`SettingsConflictDialog`はUnit 4予定であり未実装である。
+- `LibrarySettingsCoordinator`がLibrary load、fallback選択、explicit save / migration / Reload / Overwrite、State更新、FolderColorStateへのprojection、stale guardを調停する。
+- `LibrarySettingsPanel`は状態とsave / migration / Reload requestを表示し、fileを直接操作しない。`SettingsConflictDialog`はReload / Overwrite / Cancel requestとfocus lifecycleだけを担当する。
 - 依存方向はAppから各Service / State / UIへ、Repositoryからpure schema helperへ向ける。RepositoryからApp / UI / FolderColorStateへの逆参照と循環参照を禁止する。
 
 ### Read, Permission, and Explicit Save Flow

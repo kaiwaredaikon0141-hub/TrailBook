@@ -3,7 +3,7 @@
 Version: 1.2 Planning
 Status: Official
 Current Release: 1.1.0 Track Selection & Styling
-Next Release: 1.2 Shared Library Settings（In progress / Unit 3 Completed）
+Next Release: 1.2 Shared Library Settings（In progress / Unit 4 Completed、Unit 5 Not started）
 
 ## Version Policy
 
@@ -318,7 +318,7 @@ Completed内容:
 
 ## Next Release — Release 1.2 Shared Library Settings
 
-Status: In progress / Unit 3 Completed
+Status: In progress / Unit 4 Completed、Unit 5 Not started
 
 Goal: Folder colorをLibrary root直下の`trailbook.json`へ保存し、同じFolderを開くChrome、Edge、別PC、将来の対応端末でLibrary固有設定を共有できる基盤を作る。TrailBookはGoogle Drive / OneDrive APIや独自cloud syncを実装せず、通常ファイルの同期は外部Folder同期へ委ねる。
 
@@ -353,10 +353,10 @@ Color / Monochrome、Map center / zoom、前回表示Track、selected Track、si
 1. Scope、Architecture、Decisions、schema、permission / conflict policy、test plan
 2. read-only loader、schema validation、Library open時の読込、localStorage fallback
 3. readwrite permission、safe writer、明示保存、failure handling（Completed）
-4. localStorage migration、status UI、manual reload、conflict handling
+4. localStorage migration、status UI、manual reload、conflict handling（Completed）
 5. Chrome / Edge、Google Drive Folder、統合受け入れ、文書、Release finalization
 
-Unit 1 Planning、Unit 2 read-only loader、Unit 3 explicit saveはCompleted。Unit 3はChrome / Edge / Google DriveのBrowser Acceptanceまで完了した。Unit 4以降は開始していない。
+Unit 1 Planning、Unit 2 read-only loader、Unit 3 explicit save、Unit 4 migration / Reload / conflict recoveryはBrowser AcceptanceまでCompleted。Unit 5は開始していない。
 
 ### Out of Scope
 
@@ -367,7 +367,7 @@ Unit 1 Planning、Unit 2 read-only loader、Unit 3 explicit saveはCompleted。U
 - Mobile Viewer UX、Date Tree、vehicle metadata本体、previous display state restoration
 - Import / Export UI、backup / temporary file管理、GPX編集保存基盤の実装
 
-正式な保存原則は「TrailBookは、ユーザーの明示的な保存操作なしにGPXやLibrary設定ファイルを変更、移動、削除しない。」とする。Release 1.1の実装は引き続きread-onlyで、Release 1.2のproduction codeは未実装である。
+正式な保存原則は「TrailBookは、ユーザーの明示的な保存操作なしにGPXやLibrary設定ファイルを変更、移動、削除しない。」とする。Release 1.1はread-onlyである。Release 1.2 Unit 4のproduction実装は、明示操作時の`trailbook.json`だけを書き込み対象とし、GPXは引き続きread-onlyである。
 
 ## Future Design Boundaries
 

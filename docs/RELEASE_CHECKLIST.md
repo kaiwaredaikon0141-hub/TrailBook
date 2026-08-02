@@ -1228,9 +1228,9 @@ Folder identity: current Library内のrelative path。rootは空文字。
 
 ## Release 1.2 Shared Library Settings
 
-Release 1.2 Status: Planning
+Release 1.2 Status: In progress
 Current Release: `1.1.0`
-Production Implementation Status: In progress（Unit 3 Completed）
+Production Implementation Status: In progress（Unit 4 implementation / static test completed、Browser Acceptance pending）
 
 ### Unit Status
 
@@ -1239,7 +1239,7 @@ Production Implementation Status: In progress（Unit 3 Completed）
 | 1 | Scope、Architecture、Decisions、schema、permission / conflict policy、test plan | Completed | Release 1.1 completed baseline |
 | 2 | read-only loader、schema validation、Library open時の読込、localStorage fallback | Completed | Unit 1 |
 | 3 | readwrite permission、safe writer、explicit save、failure handling | Completed | Unit 2 |
-| 4 | localStorage migration、manual reload、conflict resolution UI | Not started | Unit 2、3 |
+| 4 | localStorage migration、manual reload、conflict resolution UI | Completed | Unit 2、3 |
 | 5 | Google Drive Folder、Chrome / Edge、integrated acceptance、documentation、Release finalization | Not started | Unit 2〜4 |
 
 Unit 1 Planning Status: Completed
@@ -1346,7 +1346,7 @@ Unit 1 Production Implementation Status: Not started
 - Google Drive等の同期完了、offline freshness、conflict解消をTrailBookは保証しない。
 - orphan pathは自動追従しない。automatic mergeとfield-level mergeは未実装とする。
 - Import / Export、backup、exclusive writer、File System ObserverはFuture Candidateとする。
-- Unit 2とUnit 3のChrome / Edge / Google Drive実機testはCompleted。Unit 4以降は未開始である。
+- Unit 2、Unit 3、Unit 4のChrome / Edge / Google Drive実機testはCompleted。Unit 5は未開始である。
 
 ### Unit 2 Read-only Loader
 
@@ -1447,7 +1447,7 @@ Unit 3 Implementation Status: Completed
 Unit 3 Static Test Status: Completed
 Unit 3 Browser Acceptance Status: Completed
 Unit 3 Status: Completed
-Unit 4 Status: Not started
+Unit 4 Status: Completed
 
 #### Implemented Boundary
 
@@ -1548,4 +1548,115 @@ Unit 4 Status: Not started
 - fingerprint確認後から`close()`までのraceは完全には排除できず、post-write verificationで不一致を検出する。
 - Appは975行である。今後のLibrary settings責務をAppへ直接追加せず、helper / coordinator抽出を維持する。
 
-Chrome / Edge / Google DriveのBrowser Acceptanceが完了したため、Unit 3をCompletedとする。Unit 4は開始していない。
+Chrome / Edge / Google DriveのBrowser Acceptanceが完了したため、Unit 3とUnit 4はCompletedである。Unit 5は開始していない。
+
+### Unit 4 Migration, Reload, and Conflict Recovery
+
+Unit 4 Implementation Status: Completed
+Unit 4 Static Test Status: Completed
+Unit 4 Browser Acceptance Status: Completed
+Unit 4 Status: Completed
+Unit 5 Status: Not started
+
+#### Implemented Boundary
+
+- [x] missing JSON + legacy explicit Folder colorsの場合だけ非blockingな明示migrationを提示
+- [x] migration click前にfile作成とreadwrite permission要求を行わない
+- [x] migrationはUnit 3 require-match saveを再利用し、途中でfileが出現した場合はconflictで停止
+- [x] migration成功後はshared-json / loaded / dirty falseとし、legacy localStorageを削除しない
+- [x] `設定を再読み込み`でRepository load、schema validation、fingerprint、source / statusを更新
+- [x] dirty Reloadはnative confirmで破棄 / Cancelを選択し、自動保存しない
+- [x] Reload後はold / new explicit Folder pathだけを既存限定restyleへ投影し、GPX再parse、Tree / Search再構築、Map refocusを行わない
+- [x] conflict / invalid JSONからReload / 明示Overwrite / Cancelを選ぶ`SettingsConflictDialog`を追加
+- [x] 通常saveは`require-match`を維持し、Dialogの明示操作だけ`explicit-overwrite`を使用
+- [x] explicit Overwriteでもpermission再確認、current file再読込、full write、close、post-write verificationを実施
+- [x] current read failureではOverwriteを停止し、invalid / unknown schemaは明示Overwrite時だけvalid schemaで置換可能
+- [x] Overwrite失敗後もdirty / conflictを維持し、通常saveでconflict checkを迂回しない
+- [x] conflict後のFolder色編集を許可し、dirty / conflictを維持
+- [x] orphan pathをsnapshotとsaveへ保持し、Treeへ架空Folderを作らず、自動削除しない
+- [x] saving / migration / reloading中とConflict dialog表示中はLibrary切り替えを停止
+- [x] polling、background sync、automatic merge、File System Observer、visibility auto Reload、Import / Exportを追加しない
+
+#### Coordinator / Repository / State API
+
+- Coordinator: `bindEvents()`、`migrate()`、`reload()`、`overwrite()`を追加。既存`load()`、`applyLoad()`、`markDirty()`、`save()`、`canSwitchLibrary()`を維持する。
+- Repository: `save()`へ`conflictPolicy: "require-match" | "explicit-overwrite"`を追加。既定は`require-match`である。
+- State: `beginReload()`、`applyReload()`、`cancelReload()`、`beginMigration()`、`beginOverwrite()`、`canMigrate()`を追加。source / status / dirty / saveStatusを正本として維持する。
+- Panel: status、save、manual Reload、条件付きmigrationを表示する。RepositoryとStateへ直接依存しない。
+- Dialog: Reload / Overwrite / Cancel requestとfocus lifecycleだけを担当する。
+
+#### Recovery and Data Protection
+
+- Reloadはfileへ書き込まず、missing時はlegacy-localまたはAutoへ戻る。invalid / read-failedもViewerを停止しない。
+- Reloadでroot / inherited / child override / Auto / selected Track色を再投影するが、selection、visibility、Map center / zoom、Monochrome、Waypointを変更しない。
+- CancelはState、Folder色、fileを変更しない。Conflict dialogはCancelをdefault focusとし、EscapeをCancelとして扱う。
+- Overwrite対象はLibrary rootの`trailbook.json`だけで、GPXと他fileへ`createWritable()`を使用しない。
+- fingerprint確認後から`close()`までのraceは完全には排除できず、post-write verification不一致をfailureとする。
+- Google Drive / OneDriveの同期完了を検出・保証せず、同期後はmanual Reload、Library再選択、page reloadを利用する。
+
+#### Static Results
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| Unit 2 read-only regression | Pass | 121 assertions |
+| Unit 3 save regression | Pass | 136 assertions |
+| Unit 4 migration / reload / recovery | Pass | 103 assertions |
+| Production module import | Pass | 40 / 40 |
+| Missing import target | Pass | 0 |
+| Circular dependency | Pass | 0 |
+| Config version | Pass | `1.1.0` |
+| DisplaySettingsStore schema | Pass | version 1 unchanged |
+| TreeView size | Pass | 997 lines |
+| App size | Pass | 974 lines |
+| GPX write | Pass | `createWritable`はLibrary settings Repositoryの`trailbook.json`だけ |
+
+#### Windows Chrome Browser Acceptance
+
+| Area | Result | Confirmed behavior |
+| --- | --- | --- |
+| Migration | Pass | missing JSON + legacy colorsだけで操作を提示し、open時はfile作成・permission要求なし。click時だけ権限を求め、保存・再読込・legacy保持を確認。途中で外部JSONが出現した場合は上書きせずconflictで停止 |
+| Manual Reload | Pass | external editorのroot / nested / child overrideを反映。selection、visibility、Map center / zoom、Monochromeを維持し、GPX parse、Tree全再構築、Search index再構築、file作成、permission要求なし |
+| Dirty Reload | Pass | dirty時に確認し、CancelではState / 色 / file不変。明示破棄ではfile側を採用し、dirty / conflict / save errorを解除。legacy localStorageは保持 |
+| Conflict dialog | Pass | 通常Saveの外部変更検出後に表示。Reload / Overwrite / Cancel / Escape、Cancel初期focus、focus trap、元buttonへのfocus復帰を確認。Overwrite時だけ権限を再確認して保存・verificationを実施 |
+| Invalid JSON recovery | Pass | malformed JSONでもViewer継続、legacy色を混ぜずInvalid表示。Reloadと通常Saveはfileを修正せず、明示Overwrite時だけvalid JSONへ置換 |
+| Orphan settings | Pass | snapshot、Reload、保存で保持し、架空Tree項目を作らず自動削除しない |
+| Accessibility | Pass | keyboard、Enter / Space、aria-live、文字status、focus維持を確認 |
+| Viewer regression | Pass | zoom width、Track click、highlight / outline、Folder color、Monochrome、Search、bulk、Waypoint、Library switch |
+| Console | Pass | application error、不要なwarning / logなし |
+
+#### Windows Edge Browser Acceptance
+
+- [x] Migrationとmanual Reload
+- [x] dirty ReloadのCancel / 明示破棄
+- [x] Conflict Reload / Overwrite / Cancel
+- [x] invalid JSONの明示Overwrite recovery
+- [x] keyboard、Escape、focus復帰
+- [x] Track selection / highlight、Monochrome、Searchの回帰なし
+- [x] Console errorなし
+
+#### Google Drive Folder Acceptance
+
+- [x] 別browser変更とDrive同期後のmanual Reloadで色を反映
+- [x] conflict Reload / Overwrite
+- [x] offline synced copyでReload / 保存
+- [x] permission deny後もViewerを継続
+- [x] `close()`後のverification
+- [x] Console errorなし
+
+#### Unit 4 Data Protection Acceptance
+
+- [x] migration click前とmanual Reloadではfileを書き込まない
+- [x] 明示Overwrite時だけexisting `trailbook.json`を置換する
+- [x] GPX内容 / timestamp不変
+- [x] `trailbook.json`以外のfile不変
+- [x] Folder作成、GPX移動 / 削除なし
+- [x] automatic save、polling、background sync、automatic mergeなし
+
+#### Unit 4 Known Limits
+
+- automatic merge、polling、background sync、File System Observer、visibility auto Reloadは実装しない。
+- Google Drive等のprovider同期完了とoffline freshnessはTrailBookが保証しない。
+- fingerprint確認後から`close()`までのexternal raceを完全には排除できない。
+- Appは974行、TreeViewは997行である。今後も責務追加はhelper / coordinator / dedicated UIへ分離する。
+
+Chrome / Edge / Google DriveのBrowser Acceptanceが完了したため、Unit 4をCompletedとする。Unit 5は開始していない。

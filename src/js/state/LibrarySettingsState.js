@@ -41,6 +41,7 @@ export default class LibrarySettingsState {
         this.schemaVersion = schemaVersion;
         this.requestId = 0;
         this.saveRequestId = 0;
+        this.reloadRequestId = 0;
         this.reset();
     }
 
@@ -48,10 +49,13 @@ export default class LibrarySettingsState {
 
         this.requestId += 1;
         this.saveRequestId += 1;
+        this.reloadRequestId += 1;
         this.source = "auto";
         this.status = "idle";
         this.dirty = false;
         this.saving = false;
+        this.reloading = false;
+        this.saveOperation = null;
         this.saveStatus = "idle";
         this.saveErrorCode = null;
         this.fileExists = false;
@@ -90,6 +94,62 @@ export default class LibrarySettingsState {
             return false;
         }
 
+        return this.#applyResult(result, legacyFolderColors);
+    }
+
+    beginReload() {
+
+        if (this.saving || this.reloading) {
+            return null;
+        }
+
+        this.reloadRequestId += 1;
+        this.reloading = true;
+
+        return this.reloadRequestId;
+    }
+
+    isCurrentReload(reloadRequestId) {
+
+        return reloadRequestId === this.reloadRequestId;
+    }
+
+    applyReload(reloadRequestId, result, legacyFolderColors = {}) {
+
+        if (
+            !this.isCurrentReload(reloadRequestId) ||
+            !this.#applyResult(result, legacyFolderColors)
+        ) {
+            return false;
+        }
+
+        this.reloading = false;
+
+        return true;
+    }
+
+    cancelReload(reloadRequestId) {
+
+        if (!this.isCurrentReload(reloadRequestId)) {
+            return false;
+        }
+
+        this.reloading = false;
+
+        return true;
+    }
+
+    #applyResult(result, legacyFolderColors) {
+
+        if (
+            !STATUSES.has(result?.status) ||
+            result.status === "idle" ||
+            result.status === "loading" ||
+            (result.status === "loaded" && !result.snapshot)
+        ) {
+            return false;
+        }
+
         const hasLegacyColors = Object.keys(legacyFolderColors).length > 0;
         let source = "auto";
         let snapshot = createEmptySharedSettingsSnapshot(this.schemaVersion);
@@ -112,6 +172,10 @@ export default class LibrarySettingsState {
         this.source = source;
         this.status = result.status;
         this.dirty = false;
+        this.saving = false;
+        this.saveOperation = null;
+        this.saveStatus = "idle";
+        this.saveErrorCode = null;
         this.fileExists = result.fileExists;
         this.snapshot = snapshot;
         this.fingerprint = result.fingerprint ?? null;
@@ -142,20 +206,59 @@ export default class LibrarySettingsState {
             folderColors
         };
         this.dirty = true;
-        this.saveStatus = "unsaved";
-        this.saveErrorCode = null;
+
+        if (this.saveStatus !== "conflict") {
+            this.saveStatus = "unsaved";
+            this.saveErrorCode = null;
+        }
 
         return true;
     }
 
     beginSave() {
 
-        if (!this.dirty || this.saving) {
+        return this.#beginSave("save", this.dirty);
+    }
+
+    beginMigration() {
+
+        return this.#beginSave("migration", this.canMigrate());
+    }
+
+    beginOverwrite() {
+
+        return this.#beginSave(
+            "overwrite",
+            (
+                this.saveStatus === "conflict" &&
+                (this.dirty || this.source === "legacy-local")
+            ) || (
+                this.status === "invalid" && this.dirty
+            )
+        );
+    }
+
+    canMigrate() {
+
+        return !this.dirty &&
+            !this.saving &&
+            !this.reloading &&
+            this.saveStatus !== "conflict" &&
+            this.fileExists === false &&
+            this.status === "missing" &&
+            this.source === "legacy-local" &&
+            Object.keys(this.snapshot.folderColors).length > 0;
+    }
+
+    #beginSave(operation, allowed) {
+
+        if (!allowed || this.saving || this.reloading) {
             return null;
         }
 
         this.saveRequestId += 1;
         this.saving = true;
+        this.saveOperation = operation;
         this.saveStatus = "saving";
         this.saveErrorCode = null;
 
@@ -181,6 +284,7 @@ export default class LibrarySettingsState {
         this.status = "loaded";
         this.dirty = false;
         this.saving = false;
+        this.saveOperation = null;
         this.saveStatus = "saved";
         this.saveErrorCode = null;
         this.fileExists = true;
@@ -199,10 +303,15 @@ export default class LibrarySettingsState {
             return false;
         }
 
+        const preserveConflict = this.saveOperation === "overwrite";
+
         this.saving = false;
-        this.saveStatus = errorCode === "write-permission-denied"
-            ? "permission-denied"
-            : "failed";
+        this.saveOperation = null;
+        this.saveStatus = preserveConflict
+            ? "conflict"
+            : errorCode === "write-permission-denied"
+                ? "permission-denied"
+                : "failed";
         this.saveErrorCode = errorCode || "write-failed";
 
         return true;
@@ -231,13 +340,16 @@ export default class LibrarySettingsState {
             status: this.status,
             dirty: this.dirty,
             saving: this.saving,
+            reloading: this.reloading,
+            saveOperation: this.saveOperation,
             saveStatus: this.saveStatus,
             saveErrorCode: this.saveErrorCode,
             fileExists: this.fileExists,
             fingerprint: this.fingerprint,
             lastModified: this.lastModified,
             size: this.size,
-            errorCode: this.errorCode
+            errorCode: this.errorCode,
+            migrationAvailable: this.canMigrate()
         };
     }
 }

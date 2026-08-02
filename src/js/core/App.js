@@ -72,7 +72,8 @@ export default class App {
             config: this.config.sharedLibrarySettings,
             displaySettingsStore: this.displaySettingsStore,
             folderColorState: this.folderColorState,
-            setSaveInteraction: busy => this.toolbar?.setFolderPickerBusy(busy)
+            setSaveInteraction: busy => this.toolbar?.setFolderPickerBusy(busy),
+            applyFolderColorChange: path => this.applyFolderColorChange(path)
         });
         this.displayState = new DisplayState();
         this.selectionState = new SelectionState();
@@ -216,9 +217,7 @@ export default class App {
             this.handleFolderColorDefaultRequested(data);
         });
 
-        this.eventBus.on("library-settings:save-requested", () => {
-            void this.librarySettingsCoordinator.save();
-        });
+        this.librarySettingsCoordinator.bindEvents(this.eventBus);
 
         this.eventBus.on("search:query-changed", ({ query }) => {
             this.handleSearchQuery(query);

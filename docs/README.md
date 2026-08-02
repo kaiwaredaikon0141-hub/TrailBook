@@ -6,9 +6,9 @@
 
 - Current Release: `1.1.0` Track Selection & Styling
 - Completed: Release 0.1からRelease 1.1
-- Next Release: Release 1.2 Shared Library Settings（Unit 3 Completed）
+- Next Release: Release 1.2 Shared Library Settings（Unit 4 Completed、Unit 5 Not started）
 
-Release 1.1は個人利用向けStable Viewerとして完了しています。Track selection、Folder color、zoom-based width、UI設定persistence、Monochrome Map Modeを実装済みです。Release 1.2 Shared Library Settingsは次Releaseとして進行中で、Unit 2 read-only loaderとUnit 3 explicit saveはBrowser AcceptanceまでCompletedです。
+Release 1.1は個人利用向けStable Viewerとして完了しています。Track selection、Folder color、zoom-based width、UI設定persistence、Monochrome Map Modeを実装済みです。Release 1.2 Shared Library Settingsは次Releaseとして進行中で、Unit 2 / 3 / 4はBrowser AcceptanceまでCompleted、Unit 5はNot startedです。
 
 ## Read Order
 
@@ -58,7 +58,7 @@ Release 1.1 Unit roles:
 
 ## Future Features
 
-Release 1.2 Shared Library Settingsは、Library root直下の`trailbook.json`へFolder colorsを明示保存し、外部Folder同期を通じて共有する次Releaseです。Unit 3では明示保存、保存時permission、競合防止、保存後検証、dirty state、最小保存UIまでBrowser Acceptance済みです。migration、manual reload、conflict解消UIはUnit 4以降で、Google Drive API同期は実装しません。
+Release 1.2 Shared Library Settingsは、Library root直下の`trailbook.json`へFolder colorsを明示保存し、外部Folder同期を通じて共有する次Releaseです。明示migration、manual Reload、conflict / invalid JSONのReload / Overwrite / Cancel recoveryはBrowser AcceptanceまでCompletedです。Google Drive API同期は実装しません。
 
 Statistics、Replay、HeatMap、GPX Metadata Index、日付表示、vehicle metadata、GPX編集、GPX size reduction、Cloud Sync、Mobile Viewer UX、Waypoint性能最適化、数値性能再測定、Plugin、AI Searchなども未実装の将来候補です。
 

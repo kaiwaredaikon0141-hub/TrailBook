@@ -9,7 +9,7 @@ const CONFLICT_ERRORS = new Set([
 ]);
 
 /**
- * Coordinates shared settings state, persistence, projection, and status UI.
+ * Coordinates shared settings load, recovery, persistence, and projection.
  */
 export default class LibrarySettingsCoordinator {
 
@@ -19,6 +19,7 @@ export default class LibrarySettingsCoordinator {
         folderColorState,
         confirmDiscard = message => globalThis.confirm?.(message) === true,
         setSaveInteraction = () => {},
+        applyFolderColorChange = () => {},
         repository = new LibrarySettingsRepository(config),
         state = new LibrarySettingsState({
             schemaVersion: config.schemaVersion
@@ -31,10 +32,32 @@ export default class LibrarySettingsCoordinator {
         this.folderColorState = folderColorState;
         this.confirmDiscard = confirmDiscard;
         this.setSaveInteraction = setSaveInteraction;
+        this.applyFolderColorChange = applyFolderColorChange;
         this.panel = null;
         this.rootHandle = null;
+        this.libraryId = null;
+        this.folderPaths = [];
         this.generation = null;
         this.isCurrentLibrary = () => false;
+    }
+
+    bindEvents(eventBus) {
+
+        eventBus.on("library-settings:save-requested", () => {
+            void this.save();
+        });
+        eventBus.on("library-settings:migrate-requested", () => {
+            void this.migrate();
+        });
+        eventBus.on("library-settings:reload-requested", () => {
+            void this.reload();
+        });
+        eventBus.on("library-settings:conflict-reload-requested", () => {
+            void this.reload({ discardDirty: true });
+        });
+        eventBus.on("library-settings:overwrite-requested", () => {
+            void this.overwrite();
+        });
     }
 
     setPanel(panel) {
@@ -72,6 +95,8 @@ export default class LibrarySettingsCoordinator {
         }
 
         this.rootHandle = loadContext.rootHandle;
+        this.libraryId = libraryId;
+        this.folderPaths = [...folderPaths];
         this.generation = loadContext.generation;
         this.isCurrentLibrary = loadContext.isCurrent;
         this.folderColorState.setActiveLibrary(
@@ -95,61 +120,105 @@ export default class LibrarySettingsCoordinator {
 
     async save() {
 
-        const saveRequestId = this.state.beginSave();
+        const status = this.state.getStatus();
 
-        if (saveRequestId === null || !this.rootHandle) {
+        if (
+            status.saveStatus === "conflict" ||
+            (status.status === "invalid" && status.dirty)
+        ) {
+            this.panel?.openConflict?.({
+                invalid: status.status === "invalid"
+            });
+            return { status: "recovery-required", errorCode: status.errorCode };
+        }
+
+        return this.#startSave("save", "require-match");
+    }
+
+    async migrate() {
+
+        return this.#startSave("migration", "require-match");
+    }
+
+    async overwrite() {
+
+        return this.#startSave("overwrite", "explicit-overwrite");
+    }
+
+    async reload({ discardDirty = false } = {}) {
+
+        const status = this.state.getStatus();
+
+        if (
+            status.dirty &&
+            !discardDirty &&
+            !this.confirmDiscard(
+                "未保存のLibrary設定を破棄して再読み込みしますか？"
+            )
+        ) {
+            return { status: "cancelled", errorCode: null };
+        }
+
+        const reloadRequestId = this.state.beginReload();
+
+        if (reloadRequestId === null || !this.rootHandle) {
             return { status: "ignored", errorCode: null };
         }
 
+        const shouldContinue = this.#createCurrentGuard();
+
         this.setSaveInteraction(true);
+        this.#render();
 
         try {
-            return await this.#performSave(saveRequestId);
+            const result = await this.repository.load(this.rootHandle);
+
+            if (
+                !shouldContinue() ||
+                !this.state.isCurrentReload(reloadRequestId)
+            ) {
+                this.state.cancelReload(reloadRequestId);
+                this.#render();
+                return { status: "stale", errorCode: "stale-library" };
+            }
+
+            const oldPaths = Object.keys(
+                this.folderColorState.getExplicitColors()
+            );
+            const applied = this.state.applyReload(
+                reloadRequestId,
+                result,
+                this.displaySettingsStore.getFolderColors(this.libraryId)
+            );
+
+            if (!applied) {
+                this.state.cancelReload(reloadRequestId);
+                this.#render();
+                return { status: "failed", errorCode: "reload-failed" };
+            }
+
+            this.#projectFolderColors(oldPaths);
+            this.#render();
+
+            return { status: "reloaded", errorCode: result.errorCode };
+        } catch {
+            this.state.cancelReload(reloadRequestId);
+            this.#render();
+            return { status: "failed", errorCode: "reload-failed" };
         } finally {
             this.setSaveInteraction(false);
         }
-    }
-
-    async #performSave(saveRequestId) {
-
-        const generation = this.generation;
-        const shouldContinue = () => (
-            generation === this.generation && this.isCurrentLibrary()
-        );
-
-        this.#render();
-
-        const result = await this.repository.save(this.rootHandle, {
-            baseline: this.state.getStatus(),
-            snapshot: this.state.getSnapshot(),
-            shouldContinue
-        });
-
-        if (
-            !shouldContinue() ||
-            !this.state.isCurrentSave(saveRequestId)
-        ) {
-            return result;
-        }
-
-        if (result.status === "saved") {
-            this.state.applySaveSuccess(saveRequestId, result.loadResult);
-        } else if (CONFLICT_ERRORS.has(result.errorCode)) {
-            this.state.markConflict(saveRequestId, result.errorCode);
-        } else {
-            this.state.applySaveFailure(saveRequestId, result.errorCode);
-        }
-
-        this.#render();
-
-        return result;
     }
 
     canSwitchLibrary() {
 
         const status = this.state.getStatus();
 
-        if (status.saving) {
+        if (
+            status.saving ||
+            status.reloading ||
+            this.panel?.isConflictOpen?.()
+        ) {
             return false;
         }
 
@@ -164,7 +233,96 @@ export default class LibrarySettingsCoordinator {
 
     isSaving() {
 
-        return this.state.getStatus().saving;
+        const status = this.state.getStatus();
+
+        return status.saving || status.reloading;
+    }
+
+    async #startSave(operation, conflictPolicy) {
+
+        const saveRequestId = operation === "migration"
+            ? this.state.beginMigration()
+            : operation === "overwrite"
+                ? this.state.beginOverwrite()
+                : this.state.beginSave();
+
+        if (saveRequestId === null || !this.rootHandle) {
+            return { status: "ignored", errorCode: null };
+        }
+
+        this.setSaveInteraction(true);
+
+        try {
+            return await this.#performSave(saveRequestId, conflictPolicy);
+        } finally {
+            this.setSaveInteraction(false);
+        }
+    }
+
+    async #performSave(saveRequestId, conflictPolicy) {
+
+        const shouldContinue = this.#createCurrentGuard();
+
+        this.#render();
+
+        const result = await this.repository.save(this.rootHandle, {
+            baseline: this.state.getStatus(),
+            snapshot: this.state.getSnapshot(),
+            conflictPolicy,
+            shouldContinue
+        });
+
+        if (!shouldContinue() || !this.state.isCurrentSave(saveRequestId)) {
+            return result;
+        }
+
+        if (result.status === "saved") {
+            this.state.applySaveSuccess(saveRequestId, result.loadResult);
+        } else if (CONFLICT_ERRORS.has(result.errorCode)) {
+            this.state.markConflict(saveRequestId, result.errorCode);
+        } else {
+            this.state.applySaveFailure(saveRequestId, result.errorCode);
+        }
+
+        this.#render();
+
+        if (this.state.getStatus().saveStatus === "conflict") {
+            this.panel?.openConflict?.({
+                invalid: result.errorCode === "invalid-current-file"
+            });
+        }
+
+        return result;
+    }
+
+    #projectFolderColors(oldExplicitPaths) {
+
+        this.folderColorState.setActiveLibrary(
+            this.libraryId,
+            this.folderPaths,
+            this.state.getSnapshot().folderColors
+        );
+
+        const affectedPaths = new Set([
+            "",
+            ...oldExplicitPaths,
+            ...Object.keys(this.folderColorState.getExplicitColors())
+        ]);
+
+        affectedPaths.forEach(path => {
+            if (this.folderColorState.hasFolderPath(path)) {
+                this.applyFolderColorChange(path);
+            }
+        });
+    }
+
+    #createCurrentGuard() {
+
+        const generation = this.generation;
+
+        return () => (
+            generation === this.generation && this.isCurrentLibrary()
+        );
     }
 
     #render() {

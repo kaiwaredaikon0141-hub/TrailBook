@@ -92,9 +92,44 @@ body{
     margin:0;
 }
 
-.library-settings-save{
+.library-settings-actions{
+
+    display:flex;
+
+    flex-wrap:wrap;
+
+    gap:6px;
 
     margin-top:8px;
+}
+
+.settings-conflict-dialog{
+
+    width:min(440px, calc(100vw - 32px));
+
+    padding:16px;
+
+    border:1px solid var(--border);
+
+    border-radius:6px;
+}
+
+.settings-conflict-dialog::backdrop{
+
+    background:rgba(0, 0, 0, 0.35);
+}
+
+.settings-conflict-dialog-actions{
+
+    display:flex;
+
+    flex-wrap:wrap;
+
+    justify-content:flex-end;
+
+    gap:8px;
+
+    margin-top:16px;
 }
 
 .toolbar button:disabled{

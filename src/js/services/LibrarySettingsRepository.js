@@ -35,6 +35,11 @@ function createSaveResult(overrides = {}) {
     };
 }
 
+const CONFLICT_POLICIES = new Set([
+    "require-match",
+    "explicit-overwrite"
+]);
+
 /**
  * Reads and validates Library-root shared settings without writing files.
  */
@@ -215,8 +220,13 @@ export default class LibrarySettingsRepository {
     async save(rootHandle, {
         baseline,
         snapshot,
+        conflictPolicy = "require-match",
         shouldContinue = () => true
     } = {}) {
+
+        if (!CONFLICT_POLICIES.has(conflictPolicy)) {
+            return createSaveResult({ errorCode: "invalid-conflict-policy" });
+        }
 
         if (!shouldContinue()) {
             return createSaveResult({
@@ -244,7 +254,9 @@ export default class LibrarySettingsRepository {
         }
 
         const current = await this.load(rootHandle);
-        const conflictError = this.#getConflictError(baseline, current);
+        const conflictError = conflictPolicy === "require-match"
+            ? this.#getConflictError(baseline, current)
+            : this.#getOverwriteReadError(current);
 
         if (conflictError) {
             return createSaveResult({
@@ -442,6 +454,15 @@ export default class LibrarySettingsRepository {
         return baseline.fingerprint === current.fingerprint
             ? null
             : "conflict";
+    }
+
+    #getOverwriteReadError(current) {
+
+        return current.status === "loaded" ||
+            current.status === "missing" ||
+            current.status === "invalid"
+            ? null
+            : "conflict-check-unavailable";
     }
 
     async #createFingerprint(contentBytes) {
