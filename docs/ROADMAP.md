@@ -1,9 +1,9 @@
 # ROADMAP.md
 
-Version: 1.2 Completed
+Version: 1.3 Completed
 Status: Official
-Current Release: 1.2.0 Shared Library Settings
-Next Release: Release 1.3 Previous View Restoration（In Progress）
+Current Release: 1.3.0 Previous View Restoration
+Next Release: Not scheduled（Future Candidatesから別途承認する）
 
 ## Version Policy
 
@@ -369,9 +369,9 @@ Unit 1 Planning、Unit 2 read-only loader、Unit 3 explicit save、Unit 4 migrat
 
 正式な保存原則は「TrailBookは、ユーザーの明示的な保存操作なしにGPXやLibrary設定ファイルを変更、移動、削除しない。」とする。Release 1.2のproduction実装は、明示操作時の`trailbook.json`だけを書き込み対象とし、GPXは引き続きread-onlyである。
 
-## Next Release — Release 1.3 Previous View Restoration
+## Current Release — Release 1.3 Previous View Restoration
 
-Status: In Progress
+Status: Completed
 
 Goal: Libraryを再度開いた時に、端末ごとの前回表示状態を安全かつ軽量に復元し、日常利用の再開操作を減らす。Release 1.2のshared settings、GPX read-only、既存表示Queueとselection契約は変更しない。
 
@@ -417,6 +417,8 @@ Release 1.3は`ViewStateStore`のLibrary keyとして既存の`root-name:<encode
 
 既存GPX再parse方式を約807 visible Tracksで測定した結果は24秒、25秒、25秒、中央値25秒で、約5秒目標に不達だった。このため、IndexedDBへparser / cache schema version、Library cache namespace、relative path、`File.size`、`File.lastModified`と描画用Track / Waypoint座標を保存するcacheを採用する。source情報が一致するentryだけを使用し、変更時はそのGPXだけを無効化して既存Queueで再parseする。cache read / validation / write failureは既存Queueへfallbackし、Leaflet Layer、GPX XML、Queue状態を保存せず、同じpathをparseまたはrenderへ二重投入しない。
 
+採用後の同条件warm restoreは3秒、3秒、3秒、中央値3秒となり、約5秒目標をPassした。baseline中央値25秒から約8倍高速化し、UI停止、duplicate表示、pan / zoom回帰、Console errorは確認されなかった。
+
 ### Units
 
 1. Scope、Architecture、Decisions、schema、identity、save / restore order、performance / test plan（Completed）
@@ -424,8 +426,8 @@ Release 1.3は`ViewStateStore`のLibrary keyとして既存の`root-name:<encode
 3. visible Track snapshot / restore、existing Queue統合、bulk coalescing、stale path / generation（Completed。少数Trackと807 visible TrackのBrowser Acceptance済み）
 4. Previous Library Handle Store / Coordinator、permission UX、自動 / 手動open、stale handle recovery（Completed）
 5. 806 GPX warm restore performance gate、derived geometry cache（Completed。中央値25秒から3秒へ改善）
-6. selected Track restore、Reset UI、error recovery、Library lifecycle統合（Not started）
-7. Chrome / Edge統合受け入れ、0 / 1 / 50 / 200 / 806 GPX性能、文書、Release finalization（Not started）
+6. selected Track restore、Reset UI、error recovery、Library lifecycle統合（Completed）
+7. Chrome / Edge統合受け入れ、806 GPX性能、文書、Release finalization（Completed）
 
 ### Out of Scope
 
@@ -497,7 +499,7 @@ Release 0.9では、車両情報の読み込み、保存、編集、色変更を
 
 ## Future Candidates
 
-Release 1.2 Shared Library SettingsはCompletedであり、Release 1.3 Previous View RestorationはIn Progressである。以下はRelease 1.3より後の候補であり、設計承認時にRelease番号を決定する。
+Release 1.2 Shared Library SettingsとRelease 1.3 Previous View RestorationはCompletedである。以下はRelease 1.3より後の候補であり、設計承認時にRelease番号を決定する。
 
 - GPX Metadata Index
 - Date-based Display

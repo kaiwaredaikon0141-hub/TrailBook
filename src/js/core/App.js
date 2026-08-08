@@ -160,6 +160,7 @@ export default class App {
             controls: this.viewStateControls,
             displayState: this.displayState,
             displayQueue: this.displayQueue,
+            selectionState: this.selectionState,
             debounceMs: this.config.viewState.debounceMs
         });
         this.previousLibraryCoordinator = new PreviousLibraryCoordinator({
@@ -435,9 +436,11 @@ export default class App {
     handleSelectionChanged({ path, reason }) {
 
         const revealFromMap = reason === "map" && path !== null;
+        const revealFromRestore = reason === "view-state-restore" &&
+            path !== null;
 
         this.treeView.setSelectedPath(path, {
-            reveal: revealFromMap,
+            reveal: revealFromMap || revealFromRestore,
             scroll: revealFromMap,
             moveFocus: false
         });

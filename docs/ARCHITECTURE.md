@@ -2,7 +2,7 @@
 
 Version: 1.2 Completed
 Status: Official
-Baseline: Release 1.2.0
+Baseline: Release 1.3.0
 Current: Release 1.2 Shared Library Settings Completed
 Depends: PROJECT.md, ROADMAP.md, DECISIONS.md
 
@@ -635,7 +635,7 @@ root Folder名を変更すると新Libraryとして扱いDefault色へ戻る。�
 
 ## Release 1.2 Architecture — Shared Library Settings
 
-Release 1.2はLibrary root直下の`trailbook.json`をLibrary固有設定の共有先とする。Current Releaseは1.2.0であり、Unit 1〜5はCompletedである。
+Release 1.2はLibrary root直下の`trailbook.json`をLibrary固有設定の共有先とした。Release 1.2 completion時点でUnit 1〜5はCompletedである。
 
 ### File Placement and Identity
 
@@ -812,7 +812,7 @@ File System Access APIのpermissionとwrite lifecycleは[Chrome File System Acce
 
 ## Release 1.3 Architecture — Previous View Restoration
 
-Status: In Progress。Current Releaseは1.2.0のままである。Unit 1〜5はCompleted、Unit 6はNot startedである。
+Status: Completed。Current Releaseは1.3.0であり、Unit 1〜7はCompletedである。
 
 ### Data Boundary
 
@@ -956,7 +956,7 @@ HandleのIndexedDB保存とpermission lifecycleは[Chrome File System Access doc
 - Unit 3は少数Trackと807 visible TrackのBrowser Acceptanceを完了した。stale path、Map center / zoom、Sidebar、duplicate表示、UI応答性、data protectionに問題はなく、復元速度は通常のcold表示とほぼ同等だった。約5秒warm restoreはUnit 5の別Performance Gateとし、Unit 3へprogress UIを追加しない。
 - Unit 4は`PreviousLibraryStore` / Coordinator、permission UX、自動 / 手動open、stale handle recoveryのImplementation / Static TestとChrome / Edge Browser Acceptanceを完了した。
 - Unit 5の既存再parse方式は24秒、25秒、25秒、中央値25秒で約5秒gateに不達だった。geometry cache導入後は3秒、3秒、3秒、中央値3秒となり、約8倍高速化してgateをPassした。UI停止、pan / zoom、duplicate表示、Console errorはない。
-- Unit 6でselected Track restoreと残るlifecycle / Reset統合、Unit 7でChrome / Edge、cold / warm、origin制限、data protection、finalizationを確認する。
+- Unit 6でselected Track restoreと残るlifecycle / Reset統合、Unit 7でChrome / Edgeの既存受け入れ結果、warm restore、origin制限、data protection、finalizationを統合確認した。
 
 ### Unit 4 Previous Library Restore Implementation
 
@@ -968,6 +968,14 @@ HandleのIndexedDB保存とpermission lifecycleは[Chrome File System Access doc
 - recordはcache schema 1、parser schema 1、`File.size`、`File.lastModified`、Track segmentのlatitude / longitude、Waypointのlatitude / longitudeだけを保持する。metadata、name、time、elevation、warning、GPX XML、FileHandle、Leaflet Layer、Queue状態を保持しない。
 - `GPXGeometryLoader`は`getFile()`でsource identityを取得し、valid cache hitなら`File.text()`と`GPXParser.parse()`を省略する。miss / stale / corrupt / schema mismatch / IndexedDB / quota failureは同じ既存Queue request内で通常parseし、成功geometryをbest effortでcacheへ書く。
 - 同一namespace / pathの同時loadは一つのinflight Promiseへ統合する。AppはRepository詳細を扱わず、Library namespaceの設定と既存Queue `run`のLoader呼び出しだけを配線する。
+
+### Unit 6 Selected Track Restore Implementation
+
+- `ViewStateCoordinator`はfull snapshot保存時に`SelectionState.getSelectedPath()`を`selectedTrack`へ保存し、selection eventもMap / sidebar / visibilityと同じ750ms save queueへ統合する。Library切り替え前のflush後に行うruntime selection clearはold snapshotを消さない。
+- restoreはvisible targetのQueueがidleになりsaved Mapを投影した後、saved pathがcurrent metadataに存在し、saved visible listに含まれ、`DisplayState`でchecked / loaded、Map layerが存在する場合だけ`SelectionState.select(path, "system")`を一回実行する。
+- stale、invisible、load error、Layer不在はselectionなしとする。restore中に利用者がselectionを変更した場合は利用者状態を優先し、saved selectionを投影しない。
+- `selection:changed`はreason `view-state-restore`で既存Tree / Search / Map projectionへ接続する。Treeはancestorだけを展開し、focus / scrollを移動せず、Map refocus / pan / zoom / fitを行わない。highlight / outline / `aria-current`は通常selectionと同じ経路を使う。
+- visible Trackが通常parseまたはGeometry Cacheのどちらでloadedになったかを区別せず、同じterminal state条件を使用する。Reset、Library generation、Previous Library lifecycle、GPX / `trailbook.json`非書き込み契約を変更しない。
 - `PreviousLibraryCoordinator`はsupport判定、manual picker、Folder scan、Library generation、read permission、last Handle更新を担当する。Appから既存picker / scan lifecycleを抽出し、AppはCoordinator生成と既存`handleLibraryLoaded()` callbackだけを提供する。
 - startupは保存Handleへ`queryPermission({ mode: "read" })`だけを行う。`granted`なら既存Library lifecycleへ自動接続し、`prompt` / `denied`では`前回のLibraryを開く`を表示する。`requestPermission({ mode: "read" })`はそのnative buttonの明示操作時だけ行う。
 - manual picker成功後、scan、shared settings、Tree / Search、DisplayState登録までcurrent generationで正常完了した場合だけlast Handleを更新する。Map / Sidebar / visible Trackは同じ`ViewStateCoordinator.restoreLibrary()`を通る。

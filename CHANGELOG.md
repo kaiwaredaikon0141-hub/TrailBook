@@ -1,5 +1,43 @@
 # Changelog
 
+## v1.3.0
+
+Date: 2026-08-08
+Status: Ready for final commit and tag
+
+### Added
+
+- Library-scoped restoration of Map center / zoom, Sidebar open state, visible Tracks, and selected Track
+- Previous Library restoration using an origin-local IndexedDB DirectoryHandle record
+- Explicit permission fallback through `前回のLibraryを開く` while retaining the normal Library picker
+- Regenerable IndexedDB parsed geometry cache for fast warm restoration
+- Current-Library view-state Reset without changing shared settings or GPX files
+
+### Changed
+
+- Reused `DisplayState`, `SelectionState`, and `GPXDisplayQueue` as the runtime sources of truth during restoration
+- Restored selection through the normal Tree / Search / highlight / ARIA projection without Map movement or forced focus
+- Coalesced Map, Sidebar, visibility, and selection snapshots through the existing 750 ms save queue
+
+### Performance
+
+- Reduced approximately 807 visible Track warm restore from a 25-second median to a 3-second median
+- Met the approximately 5-second warm restore target without duplicate parse or render
+
+### Data Protection
+
+- GPX files remain read-only and `trailbook.json` is not modified by view restoration
+- DirectoryHandle data is stored only in origin-local IndexedDB, not localStorage or shared JSON
+- Geometry cache entries contain regenerable Track / Waypoint coordinates, not GPX XML, Leaflet Layers, or Queue state
+- Cache miss, invalid data, schema mismatch, quota failure, and storage failure fall back to the existing parse queue
+
+### Known Limitations
+
+- Previous Library and geometry cache data are origin-local and are unavailable after an origin change or site-data deletion
+- Root-name Library identity can collide for different Libraries with the same root Folder name
+- Sidebar width and Search / Tree navigation state are not restored
+- Mobile UI remains unsupported, and Waypoint ON remains expensive for large Libraries
+
 ## v1.2.0
 
 Date: 2026-08-02

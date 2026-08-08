@@ -10,6 +10,7 @@ import GPXGeometryLoader from "../../src/js/services/GPXGeometryLoader.js";
 import PreviousLibraryStore from "../../src/js/services/PreviousLibraryStore.js";
 import ViewStateStore from "../../src/js/services/ViewStateStore.js";
 import DisplayState from "../../src/js/state/DisplayState.js";
+import SelectionState from "../../src/js/state/SelectionState.js";
 import LibraryAccessPanel from "../../src/js/ui/LibraryAccessPanel.js";
 import MapView from "../../src/js/ui/MapView.js";
 import Toolbar from "../../src/js/ui/Toolbar.js";
@@ -364,6 +365,7 @@ function createCoordinatorFixture({
     let currentGeneration = 1;
     let confirmReset = true;
     const displayState = new DisplayState();
+    const selectionState = new SelectionState();
     const controls = {
         open: true,
         hasState: false,
@@ -384,7 +386,10 @@ function createCoordinatorFixture({
             eventBus.emit("map:view-changed", { programmatic: true });
             return true;
         },
-        invalidateSize() { this.invalidations += 1; return true; }
+        invalidateSize() { this.invalidations += 1; return true; },
+        hasDisplay(path) {
+            return displayState.getDisplay(path)?.state === "loaded";
+        }
     };
     const coordinator = new ViewStateCoordinator({
         eventBus,
@@ -393,6 +398,7 @@ function createCoordinatorFixture({
         controls,
         displayState,
         displayQueue,
+        selectionState,
         debounceMs: 750,
         setTimer(callback, delay) {
             const id = ++timerId;
@@ -412,6 +418,7 @@ function createCoordinatorFixture({
         controls,
         mapView,
         displayState,
+        selectionState,
         coordinator,
         timers,
         cleared,
@@ -603,6 +610,193 @@ async function testStaleVisibleRestore() {
     assert(await secondRestore, "current visible restore rejected");
     assert(fixture.mapView.restored.value.zoom === 8, "stale Map replaced current Map");
     assert(fixture.coordinator.getStatus().generation === 2, "stale generation retained");
+}
+
+async function testSelectedTrackRestore() {
+
+    const fixture = createCoordinatorFixture();
+    const libraryId = fixture.store.createLibraryId("Selected");
+    const selectionEvents = [];
+
+    fixture.displayState.setLibrary({ name: "Selected" });
+    for (const path of ["folder/a.gpx", "folder/b.gpx"]) {
+        fixture.displayState.registerFile(path, { name: path }, "#123456");
+    }
+    fixture.eventBus.on("gpx:display-toggled", ({ path, checked }) => {
+        fixture.displayState.setChecked(path, checked);
+        if (checked) fixture.displayState.setLoaded(path, { tracks: [] });
+    });
+    fixture.eventBus.on("selection:changed", data => {
+        selectionEvents.push(data);
+    });
+    fixture.store.setLibraryState(libraryId, state({
+        map: { lat: 40, lng: 140, zoom: 9 },
+        visibleTracks: ["folder/a.gpx"],
+        selectedTrack: "folder/a.gpx"
+    }));
+
+    assert(await fixture.coordinator.restoreLibrary({
+        libraryId,
+        libraryName: "Selected",
+        generation: 1,
+        isCurrent: fixture.isCurrent(1)
+    }), "selected Track restore failed");
+    assert(fixture.selectionState.getSelectedPath() === "folder/a.gpx",
+        "selected Track path not restored");
+    assert(fixture.selectionState.getSource() === "system",
+        "restored selection did not use system source");
+    assert(selectionEvents.at(-1).reason === "view-state-restore",
+        "restored selection event reason missing");
+    assert(fixture.mapView.restored.value.zoom === 9,
+        "selection restore changed saved Map projection");
+
+    fixture.displayState.setChecked("folder/b.gpx", true);
+    fixture.displayState.setLoaded("folder/b.gpx", { tracks: [] });
+    const userChange = fixture.selectionState.select("folder/b.gpx", "tree");
+    fixture.eventBus.emit("selection:changed", {
+        path: userChange.selectedPath,
+        previousPath: userChange.previousPath,
+        reason: "tree"
+    });
+    fixture.runTimer();
+    assert(fixture.store.getLibraryState(libraryId).selectedTrack ===
+        "folder/b.gpx", "SelectionState path not saved");
+    const switchChange = fixture.selectionState.clear("system");
+    fixture.eventBus.emit("selection:changed", {
+        path: null,
+        previousPath: switchChange.previousPath,
+        reason: "library-switch"
+    });
+    assert(fixture.timers.size === 0,
+        "Library switch selection clear scheduled a save");
+    assert(fixture.store.getLibraryState(libraryId).selectedTrack ===
+        "folder/b.gpx", "Library switch erased saved selection");
+
+    const invisible = createCoordinatorFixture();
+    const invisibleId = invisible.store.createLibraryId("Invisible");
+    invisible.displayState.setLibrary({ name: "Invisible" });
+    for (const path of ["a.gpx", "b.gpx"]) {
+        invisible.displayState.registerFile(path, { name: path }, "#123456");
+    }
+    invisible.eventBus.on("gpx:display-toggled", ({ path, checked }) => {
+        invisible.displayState.setChecked(path, checked);
+        if (checked) invisible.displayState.setLoaded(path, { tracks: [] });
+    });
+    invisible.store.setLibraryState(invisibleId, state({
+        visibleTracks: ["a.gpx"],
+        selectedTrack: "b.gpx"
+    }));
+    assert(await invisible.coordinator.restoreLibrary({
+        libraryId: invisibleId,
+        libraryName: "Invisible",
+        generation: 1,
+        isCurrent: invisible.isCurrent(1)
+    }), "invisible selected fixture failed");
+    assert(invisible.selectionState.getSelectedPath() === null,
+        "invisible Track selection restored");
+
+    const stale = createCoordinatorFixture();
+    const staleId = stale.store.createLibraryId("Stale selected");
+    stale.displayState.setLibrary({ name: "Stale selected" });
+    stale.displayState.registerFile("current.gpx", { name: "current.gpx" }, "#123456");
+    stale.eventBus.on("gpx:display-toggled", ({ path, checked }) => {
+        stale.displayState.setChecked(path, checked);
+        if (checked) stale.displayState.setLoaded(path, { tracks: [] });
+    });
+    stale.store.setLibraryState(staleId, state({
+        visibleTracks: ["current.gpx", "missing.gpx"],
+        selectedTrack: "missing.gpx"
+    }));
+    assert(await stale.coordinator.restoreLibrary({
+        libraryId: staleId,
+        libraryName: "Stale selected",
+        generation: 1,
+        isCurrent: stale.isCurrent(1)
+    }), "stale selected fixture failed");
+    assert(stale.selectionState.getSelectedPath() === null,
+        "stale Track selection restored");
+
+    const failed = createCoordinatorFixture();
+    const failedId = failed.store.createLibraryId("Failed");
+    failed.displayState.setLibrary({ name: "Failed" });
+    failed.displayState.registerFile("failed.gpx", { name: "failed.gpx" }, "#123456");
+    failed.eventBus.on("gpx:display-toggled", ({ path }) => {
+        failed.displayState.setChecked(path, true);
+        failed.displayState.setError(path, new Error("parse failed"));
+    });
+    failed.store.setLibraryState(failedId, state({
+        visibleTracks: ["failed.gpx"],
+        selectedTrack: "failed.gpx"
+    }));
+    assert(await failed.coordinator.restoreLibrary({
+        libraryId: failedId,
+        libraryName: "Failed",
+        generation: 1,
+        isCurrent: failed.isCurrent(1)
+    }), "failed selected fixture rejected");
+    assert(failed.selectionState.getSelectedPath() === null,
+        "failed Track selection restored");
+
+    let releaseIdle;
+    const override = createCoordinatorFixture({
+        displayQueue: {
+            whenIdle: () => new Promise(resolve => { releaseIdle = resolve; })
+        }
+    });
+    const overrideId = override.store.createLibraryId("Override");
+    override.displayState.setLibrary({ name: "Override" });
+    for (const path of ["saved.gpx", "user.gpx"]) {
+        override.displayState.registerFile(path, { name: path }, "#123456");
+        override.displayState.setChecked(path, true);
+        override.displayState.setLoaded(path, { tracks: [] });
+    }
+    override.store.setLibraryState(overrideId, state({
+        visibleTracks: ["saved.gpx"],
+        selectedTrack: "saved.gpx"
+    }));
+    const restoring = override.coordinator.restoreLibrary({
+        libraryId: overrideId,
+        libraryName: "Override",
+        generation: 1,
+        isCurrent: override.isCurrent(1)
+    });
+    const overrideChange = override.selectionState.select("user.gpx", "tree");
+    override.eventBus.emit("selection:changed", {
+        path: overrideChange.selectedPath,
+        previousPath: overrideChange.previousPath,
+        reason: "tree"
+    });
+    releaseIdle();
+    assert(await restoring, "selection override restore failed");
+    assert(override.selectionState.getSelectedPath() === "user.gpx",
+        "saved selection overwrote user selection");
+}
+
+function testSelectedTrackProjection() {
+
+    const treeOptions = [];
+    let highlightPath = null;
+    const context = {
+        treeView: {
+            setSelectedPath(path, options) { treeOptions.push({ path, options }); }
+        },
+        searchView: { setSelectedPath() {} },
+        mapView: { clearSelectionHighlight() {} },
+        applySelectionHighlight(path) { highlightPath = path; }
+    };
+
+    App.prototype.handleSelectionChanged.call(context, {
+        path: "deep/folder/selected.gpx",
+        reason: "view-state-restore"
+    });
+    assert(treeOptions[0].options.reveal === true,
+        "restored selection did not reveal ancestors");
+    assert(treeOptions[0].options.scroll === false,
+        "restored selection forced Tree scroll");
+    assert(treeOptions[0].options.moveFocus === false,
+        "restored selection forced Tree focus");
+    assert(highlightPath === "deep/folder/selected.gpx",
+        "restored selection did not use normal highlight projection");
 }
 
 async function testMapOverrideDuringRestore() {
@@ -811,7 +1005,7 @@ function testSidebarControls() {
     const workspace = document.createElement("main");
     const sidebar = document.createElement("aside");
     const treeMarker = document.createElement("span");
-    const toolbar = new Toolbar("1.2.0");
+    const toolbar = new Toolbar("1.3.0");
     const eventBus = new EventBus();
     const events = [];
     const controls = new ViewStateControls(eventBus, {
@@ -1076,7 +1270,7 @@ function testPreviousLibraryPanel() {
 }
 
 try {
-    assert(Config.version === "1.2.0", "Config version changed");
+    assert(Config.version === "1.3.0", "Config version changed");
     assert(Config.uiSettings.schemaVersion === 1, "UI schema changed");
     assert(Config.sharedLibrarySettings.schemaVersion === 1, "shared schema changed");
     assert(Config.viewState.storageKey === "trailbook.viewState", "view key");
@@ -1093,6 +1287,8 @@ try {
     await testCoordinator();
     await testVisibleTrackState();
     await testStaleVisibleRestore();
+    await testSelectedTrackRestore();
+    testSelectedTrackProjection();
     await testMapOverrideDuringRestore();
     await testDisplayQueueIdle();
     await testGeometryCache();

@@ -517,8 +517,9 @@ Consequences: JSONがない状態でlegacy colorがある場合は、非blocking
 ## Decision 0036 — Previous View State Uses a Dedicated Device-local Store
 
 Date: 2026-08
-Status: Proposed
+Status: Accepted
 Scope: Release 1.3 Planning
+Extended by: Decision 0039 / 0040（DirectoryHandleと再生成可能geometry cacheに限りorigin-local IndexedDBを使用する）
 
 Decision Proposal: Map center / zoom、visible Track relative paths、selected Track、desktop sidebar open / closedをLibrary単位のdevice-local previous view stateとし、専用`trailbook.viewState` keyとschema version 1を持つ`ViewStateStore`へ保存する。`trailbook.json`、GPX、既存`trailbook.uiSettings`には保存しない。Map modeは既存global設定、Folder colorsはshared JSON / legacy fallbackの既存契約を維持する。
 
@@ -529,8 +530,9 @@ Consequences: FileHandle、FolderHandle、GPX XML、TrackPoint、geometry、cach
 ## Decision 0037 — Release 1.3 Retains Root-name Library Identity
 
 Date: 2026-08
-Status: Proposed
+Status: Accepted
 Scope: Release 1.3 Planning
+Superseded in part by: Decision 0039（DirectoryHandleはprevious Library再開用IndexedDB recordだけへ保存する）
 
 Decision Proposal: previous view stateのLibrary keyは既存`root-name:<encoded root folder name>`を使用する。FileHandleをlocalStorage / IndexedDBへ保存せず、Library全内容hash、GPX内容hash、構造fingerprint、user aliasをRelease 1.3へ追加しない。
 
@@ -541,7 +543,7 @@ Consequences: 同名root Folderは同じdevice-local view stateを共有し得�
 ## Decision 0038 — Restoration Reuses Runtime State and the Existing Display Queue
 
 Date: 2026-08
-Status: Proposed
+Status: Accepted
 Scope: Release 1.3 Planning
 
 Decision Proposal: `DisplayState`をvisibility、`SelectionState`をselection、`GPXDisplayQueue`をparse concurrencyの唯一の正本として維持する。restoreはvalid relative pathを既存display pipelineへ投入し、専用RestoreQueue、duplicate parser / layer、GPX内容hashを作らない。restore中の自動fitBoundsを抑止し、target確定後にsaved Mapを一回、visibleかつloadedなselected Trackをsystem sourceで一回投影する。
@@ -550,10 +552,12 @@ Reason: Release 1.2までに806 GPXのroot一括表示、requestId、Library gen
 
 Consequences: initial designでは件数hard limitとconfirmationを固定せず、0 / 1 / 50 / 200 / 806 GPXで測定する。UI blockまたは再現可能な重大回帰がある場合だけ既存Queueへのchunked enqueue / progressを追加する。restore中の利用者操作とLibrary generationをsaved stateより優先し、missing / error Trackをselectionへ復元しない。Waypoint初期OFFと大量Markerの既知制限を維持する。
 
+Implementation Note: Release 1.3 Unit 6はQueue terminal後、saved pathがvisible / checked / loadedでMap layerを持つ場合だけ`SelectionState.select(path, "system")`を行う。Tree ancestor reveal、Search、highlight / outline、`aria-current`は既存projectionを再利用し、focus、scroll、Map pan / zoom / fitを発生させない。stale / invisible / load failureとrestore中の利用者selectionではsaved selectionを投影しない。
+
 ## Decision 0039 — Previous Directory Handle Uses Origin-local IndexedDB
 
 Date: 2026-08
-Status: Proposed
+Status: Accepted
 Scope: Release 1.3 Additional Planning
 
 Decision Proposal: 最後に正常に開いた`FileSystemDirectoryHandle`をorigin-local IndexedDBへstructured cloneで保存する。次回起動時は`queryPermission({ mode: "read" })`が`granted`の場合だけ、現在のLibrary load pipelineで自動openする。`prompt` / `denied`では自動permission requestを行わず、keyboard操作可能な`前回のLibraryを開く`と既存の手動pickerを提示する。HandleをlocalStorage、`trailbook.json`、Consoleへ保存または出力しない。

@@ -833,7 +833,7 @@ Folder color dialogのApplyは画面とsession / local fallbackへ反映して`U
 
 # 22. Release 1.3 UI — Previous View Restoration
 
-Status: In Progress。Release 1.2の確定UIを維持する。Unit 1〜5はCompleted、Unit 6はNot startedである。
+Status: Completed。Release 1.2までの確定UIを維持し、Unit 1〜7のBrowser Acceptanceを完了した。
 
 ## Restored State
 
@@ -886,7 +886,7 @@ Unit 2ではこのReset基盤とdevice-local状態表示を実装した。Reset�
 - `前回のLibraryを開く`の失敗はStatusBar / Library access案内へ安全な文言で通知し、完全path、Handle、内部exception、GPX内容を表示しない。retry、手動picker、前回handleの破棄を可能にする。
 - originのscheme / host / portが変わると保存Handleとcacheを利用できないことを既知制限として記載する。HandleをlocalStorageまたは`trailbook.json`へ保存しない。
 
-## Fast Visible Track Restore — Planned Performance Gate
+## Fast Visible Track Restore — Completed Performance Gate
 
 - 806前後のprevious visible Trackは、Library scan後から全target terminalまでのwarm中央値約5秒以内を目標とする。permission / picker時間とcold初回parseは別に記録する。
 - 既存再parse方式の中央値25秒で目標不達となったためIndexedDB geometry cacheを採用する。cache failure時は既存Queueへfallbackし、checkbox、loading / loaded / error、StatusBarの既存表示を維持する。新しいprogressやcache UIは追加しない。
@@ -894,7 +894,7 @@ Unit 2ではこのReset基盤とdevice-local状態表示を実装した。Reset�
 
 ## Release 1.3 Scope Boundary
 
-`trailbook.json`へのview state保存、browser間共有、Google Drive API同期、FileHandleのlocalStorage / shared JSON保存、Search / Tree navigation復元、sidebar width、Mobile sidebar、GPX編集、Folder操作は実装しない。Release 1.3で予定するIndexedDBはprevious DirectoryHandleと、性能gate不達時の再生成可能geometry cacheだけに限定する。
+`trailbook.json`へのview state保存、browser間共有、Google Drive API同期、FileHandleのlocalStorage / shared JSON保存、Search / Tree navigation復元、sidebar width、Mobile sidebar、GPX編集、Folder操作は実装しない。Release 1.3のIndexedDB利用はprevious DirectoryHandleと、性能gate不達により採用した再生成可能geometry cacheだけに限定する。
 
 ## Unit 2 Acceptance Status
 
@@ -904,3 +904,4 @@ Unit 2ではこのReset基盤とdevice-local状態表示を実装した。Reset�
 - Unit 3: Completed
 - Unit 4: Previous Library RestoreはCompleted
 - Unit 5: Fast Restore performance gateとgeometry cacheはCompleted。warm restore中央値3秒で約5秒目標をPass
+- Unit 6: Selected Track RestoreはCompleted

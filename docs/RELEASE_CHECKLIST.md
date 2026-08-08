@@ -1,8 +1,8 @@
 # TrailBook Release Checklist
 
-Version: 1.0.0 / 1.1.0 release records / 1.2.0 ready for final commit and tag
-Status: Release 1.0 / 1.1 / 1.2 Completed / Release 1.3 In Progress
-Baseline: v1.1.0 for Release 1.2
+Version: 1.0.0 / 1.1.0 / 1.2.0 release records / 1.3.0 ready for final commit and tag
+Status: Release 1.0 / 1.1 / 1.2 / 1.3 Completed
+Baseline: v1.2.0 for Release 1.3
 
 ## Purpose
 
@@ -1741,11 +1741,11 @@ Final commit / tag / push: Pending
 
 Release 1.2はfinal commitとtagを作成できる状態である。commit、tag、pushはこのUnitでは実行しない。
 
-## Release 1.3 Previous View Restoration — In Progress
+## Release 1.3 Previous View Restoration — Completed
 
-Release Status: In Progress
+Release Status: Ready for final commit and tag
 
-Current Release: `1.2.0`。Release 1.2 Unit 1〜5のCompleted記録、v1.2.0 baseline、shared settings schema version 1を変更しない。
+Current Release: `1.3.0`。Release 1.2 Unit 1〜5のCompleted記録、v1.2.0 baseline、shared settings schema version 1を変更しない。
 
 ### Unit 1 Preflight
 
@@ -1771,22 +1771,22 @@ Current runtime contract: `DisplayState.checked`が表示意図、loading / load
 | 3 | visible Track restore、existing Queue、bulk coalescing、stale guard | Completed |
 | 4 | Previous Library Handle Store / Coordinator、permission UX、自動 / 手動open | Completed |
 | 5 | 806 GPX warm restore performance gate、geometry cache | Completed |
-| 6 | selected Track restore、Reset UI、error / lifecycle integration | Not started |
-| 7 | Chrome / Edge、806 GPX、documentation、Release finalization | Not started |
+| 6 | selected Track restore、Reset UI、error / lifecycle integration | Completed |
+| 7 | Chrome / Edge、806 GPX、documentation、Release finalization | Completed |
 
-Production Implementation Status: Unit 4 Completed
+Production Implementation Status: Completed
 
 ### Frozen Planning Scope
 
-- [ ] Map center / zoomをLibrary単位でdevice-local保存・復元する
+- [x] Map center / zoomをLibrary単位でdevice-local保存・復元する
 - [x] visible GPX relative path listを保存し、current metadataに存在するpathだけを既存display pipelineへ復元する
-- [ ] visibleかつloadedなselected TrackだけをSelectionStateへ復元する
-- [ ] desktop sidebar open / closedを保存・復元する。widthは保存しない
-- [ ] current Libraryの保存済みprevious view stateだけを消すconfirmation付きResetを提供する
+- [x] visibleかつloadedなselected TrackだけをSelectionStateへ復元する
+- [x] desktop sidebar open / closedを保存・復元する。widthは保存しない
+- [x] current Libraryの保存済みprevious view stateだけを消すconfirmation付きResetを提供する
 - [x] 最後に正常に開いたDirectoryHandleとcache専用opaque namespaceをIndexedDBへ保存し、localStorage / shared JSONへHandleを書かない
 - [x] permission `granted`時の自動openと、`prompt` / `denied`時の`前回のLibraryを開く` / manual pickerを提供する
 - [x] `trailbook.json`、GPX、Folder、Leaflet Layer、Queueへview stateを書かない。geometry cacheは5秒gate不達により再生成可能な補助として実装する
-- [ ] existing Queue concurrency 2、cache上限100、Waypoint初期OFF、Search / Folder bulk契約を維持する
+- [x] existing Queue concurrency 2、cache上限100、Waypoint初期OFF、Search / Folder bulk契約を維持する
 
 Future: sidebar width、Search query、Tree expanded paths / scroll / focus、stable Library alias。Mobile sidebar、shared view state、browser間同期はRelease 1.3対象外とする。
 
@@ -2129,4 +2129,97 @@ Decision 0040に従い、既存GPX再parse方式を先に実Browserで測定す�
 
 Static testではcache hit、namespace分離、source変更、schema mismatch、corrupt geometry、read / quota failure fallback、inflight deduplication、Queue concurrency 2、localStorage bulk write coalescingを確認した。Browser再測定では中央値3秒、UI停止なし、pan / zoom正常、duplicate表示なし、Console errorなしを確認した。baseline中央値25秒から約8倍高速化した。
 
-cache miss / invalid時は既存parseへfallbackし、GPX / `trailbook.json`へ書き込まない。IndexedDB geometry cacheは正本ではなく、削除・再生成可能な派生データとして正式採用する。Unit 5をCompletedとし、Unit 6はNot startedのまま維持する。
+cache miss / invalid時は既存parseへfallbackし、GPX / `trailbook.json`へ書き込まない。IndexedDB geometry cacheは正本ではなく、削除・再生成可能な派生データとして正式採用する。Unit 5をCompletedとする。
+
+### Unit 6 Selected Track Restore
+
+Unit 6 Implementation Status: Completed
+
+Unit 6 Static Test Status: Completed
+
+Unit 6 Browser Acceptance Status: Completed
+
+Unit 6 Status: Completed
+
+Implementation result:
+
+- `SelectionState`をselectionの唯一の正本として維持し、selected relative pathを既存full view snapshotへ保存する
+- visible restoreと既存Queueのterminal後、saved pathが存在、saved visible、checked、loaded、Map layerありの場合だけsystem sourceでselectionを復元する
+- stale / invisible / load failure / Layer不在はselectionなしとし、restore中の利用者selectionを優先する
+- saved Map投影後にselectionを同期し、Map pan / zoom / fit / refocusを行わない
+- Treeは必要なancestorだけを展開し、focus / scrollを強制しない。Search、highlight / outline、`aria-current`は通常selection projectionを再利用する
+- Geometry Cache hitと通常parseを区別せず、同じDisplayState loaded条件を使用する
+- Reset、Library generation、Previous Library Restore、GPX / `trailbook.json`非書き込み契約を維持する
+
+Static result:
+
+- selected path save / restore、system source、normal projection、Map共存を確認
+- Library切り替え前のruntime selection clearがold Libraryの保存selectionを消さないことを確認
+- invisible、stale、load failureではselectionを復元しないことを確認
+- restore中の利用者selectionがsaved selectionより優先されることを確認
+- ancestor revealは有効、Tree focus / scrollは無効、normal highlight projectionを確認
+
+Browser Acceptance result:
+
+| Check | Result | Notes |
+|---|---|---|
+| selected Track restore | Pass | visible / loaded Trackをsystem sourceで復元 |
+| Map movement | Pass | pan / zoom / fit / refocusなし |
+| Tree reveal | Pass | 必要なancestorだけ展開 |
+| Tree focus / scroll | Pass | 強制移動なし |
+| selection projection | Pass | highlight / outline / ARIA正常 |
+| invalid restore targets | Pass | invisible / stale / load失敗はselectionなし |
+| load source | Pass | Geometry Cache / 通常parseの両方で正常 |
+| Library switch | Pass | selection混在なし |
+| Console | Pass | アプリ由来errorなし |
+| Data protection | Pass | GPX / `trailbook.json`への書き込みなし |
+
+Unit 6のImplementation / Static Test / Browser AcceptanceはCompletedである。
+
+### Unit 7 Integration Acceptance and Release Finalization
+
+Unit 7 Integration Acceptance Status: Completed
+
+Unit 7 Documentation Status: Completed
+
+Unit 7 Static Validation Status: Completed
+
+Unit 7 Status: Completed
+
+Release 1.3 Status: Ready for final commit and tag
+
+既存Unit 2〜6のChrome / Edge Browser AcceptanceをRelease 1.3の統合結果として再確認した。各機能は同じLibrary lifecycle、`DisplayState`、`SelectionState`、`GPXDisplayQueue`、generation guardを使用しており、追加のproduction変更なしで次を満たす。
+
+| Integration check | Result | Evidence |
+|---|---|---|
+| Previous Library Restore | Pass | Chrome / Edge Unit 4。granted自動open、prompt / denied明示操作、manual picker fallback |
+| Map center / zoom、Sidebar、Reset | Pass | Chrome / Edge Unit 2。Library別復元、current LibraryだけのReset |
+| Visible Track Restore | Pass | Unit 3。少数と807 visible Tracks、stale path、duplicate表示なし |
+| Selected Track Restore | Pass | Unit 6。visible / loadedだけをsystem sourceで復元し、Map移動なし |
+| Geometry Cache warm restore | Pass | Unit 5。中央値25秒から3秒、約5秒gate達成 |
+| Geometry Cache miss / invalid fallback | Pass | static testで既存parse Queue fallback、schema / source / corrupt / storage failureを確認 |
+| permission / stale recovery | Pass | Unit 4。denied / stale HandleでもViewerとmanual pickerを継続 |
+| Library isolation | Pass | Unit 2〜4 / 6。pending flush、generation guard、selection / visibility混在なし |
+| Data protection | Pass | GPXと`trailbook.json`へのview restoration由来の書き込みなし |
+
+Final static validation:
+
+| Check | Result | Notes |
+|---|---|---|
+| View State test page | Pass | 262 assertions |
+| Production module graph | Pass | 50 / 50 reachable、missing import 0、cycle 0 |
+| Config / schemas | Pass | Config `1.3.0`、DisplaySettingsStore 1、shared settings 1、View State 1、geometry cache 1 |
+| App / TreeView size | Pass | 919 / 997 lines |
+| Markdown | Pass | local link切れ0、code fence不整合0、heading level jump 0 |
+| Decision records | Pass | ID 40件、重複0。Decision 0036〜0040はAccepted |
+| `git diff --check` | Pass | whitespace errorなし |
+
+追加Browser確認が必要なrelease blockerはない。計画時の件数matrixのうち50 / 200 Trackを個別benchmarkとして再測定していないが、少数、807件、cache hit、通常parseの受け入れで境界を確認済みであり、v1.3.0 finalizationを妨げない。将来数値比較が必要な場合はUnit 5と同じ測定境界を再利用する。
+
+Known limitations:
+
+- previous Library recordとgeometry cacheはorigin-localで、scheme / host / port変更、site data削除、private browsing終了後は利用できない
+- root-name Library identityのため、同名root Folderはdevice-local view stateが衝突し得る
+- sidebar width、Search query、Tree expanded paths / scroll / focusは復元しない
+- Mobile UIは非対応で、大量LibraryのWaypoint ONは重い
+- geometry cacheは派生データであり、miss / invalid / quota時は通常parseへfallbackする

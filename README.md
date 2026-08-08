@@ -4,10 +4,10 @@ TrailBookは、GPXを含むFolderをLibraryとして閲覧する、個人利用�
 
 ## Current Status
 
-- Current Release: `1.2.0` Shared Library Settings
-- Release 1.2 Shared Library Settings: Completed
+- Current Release: `1.3.0` Previous View Restoration
+- Release 1.3 Previous View Restoration: Completed
 
-Release 1.2は個人利用向けStable Viewerを維持しながら、Folder色をLibrary rootの`trailbook.json`へ明示保存し、通常fileとして共有できるようにした完成Releaseです。一般公開版や配布artifactではありません。
+Release 1.3は個人利用向けStable Viewerを維持しながら、前回Library、Map、Sidebar、visible / selected Trackを安全に復元し、IndexedDB geometry cacheで大量Trackのwarm restoreを高速化した完成Releaseです。一般公開版や配布artifactではありません。
 
 ## Implemented Features
 
@@ -28,20 +28,23 @@ Release 1.2は個人利用向けStable Viewerを維持しながら、Folder色�
 - Library root直下の`trailbook.json`によるFolder色共有
 - shared settingsの明示Save、legacy色migration、manual Reload
 - 外部変更を保護するReload / Overwrite / Cancel conflict recovery
+- LibraryごとのMap center / zoom、Sidebar、visible / selected Track復元
+- 前回Libraryの自動復元とpermission拒否時の手動picker fallback
+- 再生成可能なIndexedDB geometry cacheによる大量Trackのwarm restore
 - ローカル同梱したLeaflet 1.9.4による地図表示
 
 SearchはGPX内容を解析せず、検索入力だけでGPX表示、Queue、cache、Mapを変更しません。
 
 ## Data Principles
 
-- Release 1.2ではGPXは読み取り専用で扱います。
+- Release 1.3でもGPXは読み取り専用で扱います。
 - GPXを変更、移動、削除、保存しません。
 - `trailbook.json`への書き込みはSave、Migration、明示Overwriteの利用者操作時だけ行います。
-- SQLite、IndexedDBなどの独自DBを使用しません。
-- `localStorage`はdevice-local Map modeとlegacy Folder色fallbackに使用し、GPXや解析結果を保存しません。
+- SQLiteやIndexedDBをFolder / GPXに代わるLibrary正本として使用しません。
+- `localStorage`はdevice-local Map mode、legacy Folder色fallback、Library別のprevious view stateに使用し、GPX XMLやgeometryを保存しません。
 - validなshared JSONがある場合、Folder色へlegacy localStorage値を項目単位で混ぜません。
 - Folder構造とGPXファイルが唯一の正本です。
-- FileHandleと解析cacheは現在のbrowser sessionだけで保持し、Library切り替えで破棄します。
+- 前回LibraryのDirectoryHandleと再生成可能なparsed geometryだけをorigin-local IndexedDBへ保存します。GPXとFolder構造が引き続き唯一のデータ正本です。
 
 ## Supported Environment
 
@@ -65,7 +68,7 @@ File System Access API、secure context、対応originが必要です。対応or
 
 ### Mobile
 
-iPhone Chromeでは、HTTPSでの起動、Google Drive上のFolder選択、Folder走査、Tree表示までは成功しました。一方、GPX checkbox、Track表示、touch UIは動作しなかったため、Release 1.2では非対応です。原因分類はAPI不足ではなくMobile UI / touch操作未対応です。
+iPhone Chromeでは、HTTPSでの起動、Google Drive上のFolder選択、Folder走査、Tree表示までは成功しました。一方、GPX checkbox、Track表示、touch UIは動作しなかったため、Release 1.3では非対応です。原因分類はAPI不足ではなくMobile UI / touch操作未対応です。
 
 Android ChromeとiPad Chromeは未確認です。将来候補`Mobile Viewer UX`でresponsive layout、touch操作、gesture分離などを検討します。
 
@@ -135,10 +138,10 @@ TrailBookはGPXファイルやGPX内容を外部serverへアップロードし�
 - File System AccessはユーザーがFolder pickerを操作したときだけ開始します。
 - pickerはread-only modeを指定します。`createWritable`は明示保存時の`trailbook.json`だけに使用します。
 - GPXを変更、移動、削除、保存しません。
-- FileHandleと解析cacheはsession限定で、Library切り替え時に破棄します。
-- SQLiteとIndexedDBを使用しません。
-- `localStorage`にはdevice-local Map modeとlegacy Folder色fallbackだけを保存します。
-- FileHandle、FolderHandle、GPX XML、TrackPoint、解析geometryを永続化しません。
+- session cacheはLibrary切り替え時に破棄します。前回Library Handleと再生成可能geometry cacheだけはorigin-local IndexedDBへ保存します。
+- SQLiteやIndexedDBをLibraryの正本として使用しません。
+- `localStorage`にはdevice-local UI設定とLibrary別previous view stateを保存します。
+- DirectoryHandleをlocalStorage / `trailbook.json`へ保存せず、GPX XML、Leaflet Layer、Queue状態を永続化しません。
 - 自動保存、polling、background sync、automatic merge、外部serverへのGPX送信を行いません。
 
 ## Known Limitations
@@ -158,7 +161,8 @@ TrailBookはGPXファイルやGPX内容を外部serverへアップロードし�
 - File System Access API対応browserと対応originが必要です。
 - `file://`では起動できません。
 - overlapping Trackをclickした場合は、最前面の1件を選択します。
-- 同名root Folderは同じLibrary IDとなり、Folder色設定が共有される場合があります。root名を変更すると別Libraryとして扱われます。
+- 同名root Folderは同じLibrary IDとなり、Folder色設定とdevice-local view stateが衝突する場合があります。root名を変更すると別Libraryとして扱われます。
+- 前回Library recordとgeometry cacheはorigin単位です。scheme、host、portの変更やsite data削除後は利用できず、通常picker / parseへfallbackします。
 - Monochrome Map Modeは既存OSM tileへCSS filterを適用する方式です。
 
 ## Documentation

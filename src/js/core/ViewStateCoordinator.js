@@ -12,6 +12,7 @@ export default class ViewStateCoordinator {
         controls,
         displayState,
         displayQueue,
+        selectionState,
         debounceMs = 750,
         setTimer = globalThis.setTimeout.bind(globalThis),
         clearTimer = globalThis.clearTimeout.bind(globalThis)
@@ -23,6 +24,7 @@ export default class ViewStateCoordinator {
         this.controls = controls;
         this.displayState = displayState;
         this.displayQueue = displayQueue;
+        this.selectionState = selectionState;
         this.debounceMs = debounceMs;
         this.setTimer = setTimer;
         this.clearTimer = clearTimer;
@@ -35,6 +37,7 @@ export default class ViewStateCoordinator {
         this.resetBlocked = false;
         this.restoreRequestId = 0;
         this.mapChangedDuringRestore = false;
+        this.selectionChangedDuringRestore = false;
         this.saveAfterRestore = false;
         this.#bindEvents();
     }
@@ -69,6 +72,7 @@ export default class ViewStateCoordinator {
 
         this.restoring = true;
         this.mapChangedDuringRestore = false;
+        this.selectionChangedDuringRestore = false;
         this.saveAfterRestore = false;
         const state = this.store.getLibraryState(libraryId);
 
@@ -113,6 +117,8 @@ export default class ViewStateCoordinator {
                 silent: true
             });
         }
+
+        this.#restoreSelection(state);
 
         this.restoring = false;
 
@@ -168,6 +174,19 @@ export default class ViewStateCoordinator {
         this.eventBus.on("map:clear-requested", () => {
             this.#handleRuntimeChange();
         });
+        this.eventBus.on("selection:changed", ({ reason } = {}) => {
+            if (
+                reason === "view-state-restore" ||
+                reason === "library-switch"
+            ) {
+                return;
+            }
+
+            if (this.restoring) {
+                this.selectionChangedDuringRestore = true;
+            }
+            this.#handleRuntimeChange();
+        });
         this.eventBus.on("view-state:sidebar-layout-changed", () => {
             this.mapView.invalidateSize({ silent: true });
         });
@@ -216,6 +235,7 @@ export default class ViewStateCoordinator {
             ...existing,
             map: this.mapView.getViewState(),
             visibleTracks: this.displayState.getCheckedPaths(),
+            selectedTrack: this.selectionState.getSelectedPath(),
             sidebar: { open: this.controls.isSidebarOpen() }
         });
 
@@ -231,6 +251,43 @@ export default class ViewStateCoordinator {
         return paths
             .map(path => this.displayState.getDisplay(path))
             .filter(display => display && !display.checked);
+    }
+
+    #restoreSelection(state) {
+
+        const path = state?.selectedTrack;
+
+        if (
+            this.selectionChangedDuringRestore ||
+            !path ||
+            !state.visibleTracks.includes(path)
+        ) {
+            return false;
+        }
+
+        const display = this.displayState.getDisplay(path);
+
+        if (
+            !display?.checked ||
+            display.state !== "loaded" ||
+            !this.mapView.hasDisplay(path)
+        ) {
+            return false;
+        }
+
+        const change = this.selectionState.select(path, "system");
+
+        if (!change) {
+            return false;
+        }
+
+        this.eventBus.emit("selection:changed", {
+            path: change.selectedPath,
+            previousPath: change.previousPath,
+            reason: "view-state-restore"
+        });
+
+        return true;
     }
 
     #resetCurrentLibrary() {

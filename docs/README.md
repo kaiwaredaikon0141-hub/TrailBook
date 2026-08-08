@@ -4,11 +4,11 @@
 
 ## Current Status
 
-- Current Release: `1.2.0` Shared Library Settings
-- Completed: Release 0.1からRelease 1.2
-- Next Release: Release 1.3 Previous View Restoration（In Progress）
+- Current Release: `1.3.0` Previous View Restoration
+- Completed: Release 0.1からRelease 1.3
+- Next Release: Not scheduled（Future Candidatesから別途承認する）
 
-Release 1.2 Shared Library SettingsはCompletedです。Library rootの`trailbook.json`によるFolder色共有、明示Save、legacy migration、manual Reload、Conflict / Invalid JSON recoveryを実装し、Chrome / Edge / Google Drive同期Folderの統合受け入れを完了しています。Release 1.3 Unit 1〜5はCompletedです。Unit 5は既存再parse中央値25秒からIndexedDB geometry cache導入後3秒へ改善し、約5秒gateをPassしました。
+Release 1.3 Previous View RestorationはCompletedです。前回Library、Map、Sidebar、visible / selected Trackを復元し、既存再parse中央値25秒からIndexedDB geometry cache導入後3秒へ改善して約5秒gateをPassしました。Chrome / Edgeの既存Browser AcceptanceとRelease 1.3 Unit 1〜7の完了記録を統合確認しています。
 
 ## Read Order
 
@@ -24,7 +24,7 @@ Release 1.2 Shared Library SettingsはCompletedです。Library rootの`trailboo
 10. [CONTRIBUTING.md](CONTRIBUTING.md) — Gitと変更手順
 11. [GLOSSARY.md](GLOSSARY.md) — 用語
 
-Release 1.0のUnit 1〜8、Release 1.1のUnit 1〜7、Release 1.2のUnit 1〜5は[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)に記録しています。
+Release 1.0のUnit 1〜8、Release 1.1のUnit 1〜7、Release 1.2のUnit 1〜5、Release 1.3のUnit 1〜7は[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)に記録しています。
 
 Release 1.1 Unit roles:
 
@@ -54,7 +54,7 @@ Release 1.3 Unit roles:
 6. selected Track restore、Reset UI、error / Library lifecycle
 7. Chrome / Edge統合受け入れ、性能、文書、Release finalization
 
-## Implemented Through Release 1.2
+## Implemented Through Release 1.3
 
 - Folder Libraryと再帰走査
 - GPX Parser
@@ -76,12 +76,15 @@ Release 1.3 Unit roles:
 - manual ReloadとReload / Overwrite / Cancel Conflict recovery
 - invalid shared JSONのfail-closed処理と明示Overwrite recovery
 - Google Drive等の同期Folderを通常fileとして利用する運用
+- LibraryごとのMap center / zoom、Sidebar、visible / selected Track復元
+- IndexedDBのprevious DirectoryHandleによる前回Library再開
+- 再生成可能なIndexedDB geometry cacheと約807 Trackの3秒warm restore中央値
 
 実装済み範囲の詳細は[CHANGELOG.md](../CHANGELOG.md)、Release順序は[ROADMAP.md](ROADMAP.md)を正本とします。
 
 ## Current Release and Future Features
 
-Release 1.2 Shared Library SettingsはCompletedです。TrailBookはGoogle Drive APIや同期statusを使用せず、同期後のmanual ReloadまたはLibrary再選択を利用します。Release 1.3 Previous View RestorationはIn Progressです。Unit 3のvisible Track復元、Unit 4のprevious DirectoryHandle復元、Unit 5のgeometry cacheとPerformance GateはCompletedです。selected Track復元は未実装です。
+Release 1.3 Previous View RestorationはCompletedです。TrailBookはGoogle Drive APIや同期statusを使用せず、同期後のmanual ReloadまたはLibrary再選択を利用します。前回表示状態と前回Libraryは端末・browser origin限定であり、共有設定やGPXの正本ではありません。
 
 sidebar width、Search / Tree navigation復元、Stable Library Identity / Aliasに加え、Statistics、Replay、HeatMap、GPX Metadata Index、日付表示、vehicle metadata、GPX編集、GPX size reduction、Cloud Sync、Mobile Viewer UX、Waypoint性能最適化、数値性能再測定、Plugin、AI Searchなども未実装の将来候補です。
 
