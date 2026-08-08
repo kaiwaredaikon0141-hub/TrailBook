@@ -6,6 +6,7 @@ export default class GPXDisplayQueue {
         this.queue = [];
         this.activeCount = 0;
         this.activeRequests = new Set();
+        this.idleWaiters = new Set();
     }
 
     enqueue(request) {
@@ -61,6 +62,16 @@ export default class GPXDisplayQueue {
         });
 
         this.queue = [];
+        this.#resolveIdleWaiters();
+    }
+
+    whenIdle() {
+
+        if (this.activeCount === 0 && this.queue.length === 0) {
+            return Promise.resolve();
+        }
+
+        return new Promise(resolve => this.idleWaiters.add(resolve));
     }
 
     getActiveCount() {
@@ -89,6 +100,8 @@ export default class GPXDisplayQueue {
             this.activeRequests.add(request);
             this.#run(request);
         }
+
+        this.#resolveIdleWaiters();
     }
 
     async #run(request) {
@@ -113,5 +126,15 @@ export default class GPXDisplayQueue {
             this.activeRequests.delete(request);
             this.#drain();
         }
+    }
+
+    #resolveIdleWaiters() {
+
+        if (this.activeCount !== 0 || this.queue.length !== 0) {
+            return;
+        }
+
+        this.idleWaiters.forEach(resolve => resolve());
+        this.idleWaiters.clear();
     }
 }

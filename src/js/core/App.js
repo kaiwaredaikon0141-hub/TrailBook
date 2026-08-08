@@ -70,7 +70,10 @@ export default class App {
         this.viewStateStore = new ViewStateStore(this.config.viewState);
         this.folderColorState = new FolderColorState({
             store: this.displaySettingsStore,
-            pathColorResolver: path => this.getPathHashColor(path),
+            pathColorResolver: path => resolvePathHashColor(
+                path,
+                this.config.map.displayPalette
+            ),
             fallbackColor: this.config.map.trackStyle.lineColor
         });
         this.librarySettingsCoordinator = new LibrarySettingsCoordinator({
@@ -148,6 +151,8 @@ export default class App {
             store: this.viewStateStore,
             mapView: this.mapView,
             controls: this.viewStateControls,
+            displayState: this.displayState,
+            displayQueue: this.displayQueue,
             debounceMs: this.config.viewState.debounceMs
         });
 
@@ -420,7 +425,7 @@ export default class App {
             this.libraryAccessPanel.hide();
         }
 
-        this.viewStateCoordinator.restoreLibrary({
+        void this.viewStateCoordinator.restoreLibrary({
             libraryId: this.currentLibraryId,
             libraryName: library.name,
             generation,
@@ -547,6 +552,7 @@ export default class App {
         }
 
         this.displayState.setChecked(path, checked);
+        this.treeView.setDisplayChecked(path, checked);
 
         if (!checked) {
             this.stopDisplay(path);
@@ -794,6 +800,9 @@ export default class App {
     }
 
     scheduleRefocus() {
+        if (this.viewStateCoordinator.isRestoring()) {
+            return;
+        }
 
         clearTimeout(this.#refocusTimer);
 
@@ -918,11 +927,6 @@ export default class App {
     getColor(path) {
 
         return this.folderColorState.resolveTrackColor(path);
-    }
-
-    getPathHashColor(path) {
-
-        return resolvePathHashColor(path, this.config.map.displayPalette);
     }
 
     createTrackStyle(color) {

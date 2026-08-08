@@ -1768,20 +1768,24 @@ Current runtime contract: `DisplayState.checked`が表示意図、loading / load
 | --- | --- | --- |
 | 1 | Scope、Architecture、Decisions、schema、identity、restore order、performance / test plan | Completed |
 | 2 | ViewStateStore / schema、Map state、desktop sidebar、Reset基盤 | Completed |
-| 3 | visible Track restore、existing Queue、bulk coalescing、stale guard、performance | Not started |
-| 4 | selected Track restore、Reset UI、error / lifecycle integration | Not started |
-| 5 | Chrome / Edge、806 GPX、documentation、Release finalization | Not started |
+| 3 | visible Track restore、existing Queue、bulk coalescing、stale guard | Completed |
+| 4 | Previous Library Handle Store / Coordinator、permission UX、自動 / 手動open | Not started |
+| 5 | 806 GPX warm restore performance gate、条件付きgeometry cache | Not started |
+| 6 | selected Track restore、Reset UI、error / lifecycle integration | Not started |
+| 7 | Chrome / Edge、806 GPX、documentation、Release finalization | Not started |
 
-Production Implementation Status: Unit 2 Completed
+Production Implementation Status: Unit 3 Completed
 
 ### Frozen Planning Scope
 
 - [ ] Map center / zoomをLibrary単位でdevice-local保存・復元する
-- [ ] visible GPX relative path listを保存し、current metadataに存在するpathだけを既存display pipelineへ復元する
+- [x] visible GPX relative path listを保存し、current metadataに存在するpathだけを既存display pipelineへ復元する
 - [ ] visibleかつloadedなselected TrackだけをSelectionStateへ復元する
 - [ ] desktop sidebar open / closedを保存・復元する。widthは保存しない
 - [ ] current Libraryの保存済みprevious view stateだけを消すconfirmation付きResetを提供する
-- [ ] `trailbook.json`、GPX、Folder、FileHandle、geometry、cache / Queueへview stateを書かない
+- [ ] 最後に正常に開いたDirectoryHandleだけをIndexedDBへ保存し、localStorage / shared JSONへHandleを書かない
+- [ ] permission `granted`時の自動openと、`prompt` / `denied`時の`前回のLibraryを開く` / manual pickerを提供する
+- [ ] `trailbook.json`、GPX、Folder、Leaflet Layer、Queueへview stateを書かない。geometry cacheは5秒gate不達時だけ再生成可能な補助として検討する
 - [ ] existing Queue concurrency 2、cache上限100、Waypoint初期OFF、Search / Folder bulk契約を維持する
 
 Future: sidebar width、Search query、Tree expanded paths / scroll / focus、stable Library alias。Mobile sidebar、shared view state、browser間同期はRelease 1.3対象外とする。
@@ -1821,7 +1825,8 @@ Validation gates:
 | Candidate | Planning Result | Validation |
 | --- | --- | --- |
 | existing root-name ID | Adopt for Release 1.3 | same name collision、root renameで別ID、move後同名をtest |
-| FolderHandle-derived stable ID | Reject | `isSameEntry()`はhandle比較だけ。FileHandleを永続化しない |
+| FolderHandle-derived View State ID | Reject | `isSameEntry()`はhandle比較だけ。root-nameのlocalStorage keyを置き換えない |
+| Previous DirectoryHandle record | Adopt in planned Unit 4 | IndexedDB structured clone。opaque cache namespaceはshared identityへ流用しない |
 | root structure fingerprint | Reject | rename / move / file増減、scan cost、GPX内容hash禁止 |
 | user Library alias | Future | UIとshared metadataの別Decisionが必要 |
 
@@ -1830,8 +1835,8 @@ Known limitation: 同名root Folderは同じdevice-local view stateを共有し�
 ### Save Timing Plan
 
 - [x] Map `moveend`後だけ保存し、pan / zoom中と`zoomend`との二重writeを避ける
-- [ ] individual / Search checkbox、Folder / root bulk、Clearの完了後にchecked path snapshotを取る
-- [ ] selection / clearとvisible Track変更はUnit 3 / 4で同じdebounce queueへ接続する。sidebar toggleはUnit 2で接続済み
+- [x] individual / Search checkbox、Folder / root bulk、Clearの完了後にchecked path snapshotを取る
+- [x] clearとvisible Track変更をMap / sidebarと同じdebounce queueへ接続する。selectionはUnit 4で接続する
 - [x] delayを750msへ固定し、Map / sidebar操作を一つのtimerへcoalesceする
 - [x] restore中はsave suspend、Library switch前はold Library pending snapshotをflushする
 - [x] unloadだけへ依存せず、background interval、parse完了ごとのwrite、shared JSON writeを行わない
@@ -1865,7 +1870,9 @@ Map / selection / sidebarの利用者操作はrestore中のsaved投影より優�
 - [ ] existing Queue only、duplicate enqueue / parse / renderなし、request invalidation
 - [ ] Reset current Library only。Map mode、Folder colors、shared JSON、other Library不変
 - [ ] production module import、missing import、circular dependency、unused import
-- [ ] no GPX / shared JSON write、no FileHandle persistence、no IndexedDB
+- [ ] no GPX / shared JSON write、no Handle in localStorage / shared JSON
+- [ ] IndexedDB unavailable / corrupt、permission拒否、stale handle、origin変更でViewerとmanual pickerを継続
+- [ ] geometry cache採用時はsource validation、schema、fallback、duplicate parse / render防止、quota failureを検証
 
 ### Browser Acceptance Plan
 
@@ -1880,6 +1887,8 @@ Chrome / Edge:
 - [ ] Monochrome、shared Folder colors、Search、Waypoint OFF / ON、Map click / highlight regression
 - [ ] reload、storage unavailable / malformed、Console、keyboard、ARIA、body / sidebar scroll
 - [ ] GPX / `trailbook.json` content and timestamp不変
+- [ ] startup `granted` auto-open、`prompt` / `denied` non-blocking action、manual picker維持、stale handle破棄
+- [ ] scheme / host / port変更では保存Handle / cacheを共有しないことを確認
 
 Mobile Viewer UXは既存の非対応 / 未確認結果を維持し、Release 1.3でsidebar drawerやtouch UIを追加しない。
 
@@ -1899,8 +1908,11 @@ Mobile Viewer UXは既存の非対応 / 未確認結果を維持し、Release 1.
 - [ ] cache上限100のため806件すべてをwarmと記載しない
 - [ ] Waypoint ONの大量Marker既知制限をprevious view restore回帰と混同しない
 - [ ] 数値benchmark未実施時は定性的結果と明記し、20%比較を推測しない
+- [ ] 806前後のwarm restoreはLibrary scan / permission時間を分離し、Waypoint OFF、最低3回の中央値約5秒以内を目標とする
+- [ ] cold初回parseは従来速度を許容し、warmと混同しない
+- [ ] 既存再parse方式を先に測定し、不達の場合だけIndexedDB geometry cacheを実装して同じ条件で再測定する
 
-Initial policyは既存root bulk相当の一括enqueueである。806件で再現可能なUI blockまたは重大回帰がある場合だけ、既存Queueへのchunked enqueueとprogressを検討する。hard limit、200件confirmation、別RestoreQueueはUnit 1で採用しない。
+Initial policyは既存root bulk相当の一括enqueueである。806件で再現可能なUI blockまたは重大回帰がある場合だけ、既存Queueへのchunked enqueueとprogressを検討する。hard limit、200件confirmation、別RestoreQueueは採用しない。約5秒gate不達時のgeometry cacheは既存Queueの正本性を維持し、cache failureを通常parseへfallbackさせる。
 
 ### Unit 2 Implementation and Static Result
 
@@ -1914,7 +1926,7 @@ Unit 2 Browser Acceptance Status: Completed
 
 Unit 2 Status: Completed
 
-Unit 3 Status: Not started
+Unit 3 Status at Unit 2 completion: Not started
 
 Implemented foundation:
 
@@ -1960,8 +1972,81 @@ Browser用`sample/release/view-state-store-test.html`と`view-state-store-test.j
 | Data protection | Pass | `trailbook.viewState`以外、shared JSON、GPX、timestamp、handle、geometryを変更・保存しない |
 | visible / selected Track restore | Not implemented as planned | Unit 3 / 4 Scope |
 
-### Open Validation After Unit 2
+### Open Validation After Unit 3
 
-- restore terminal判定とStatusBar progressが806件で必要か（Unit 3）
-- user Map操作があったvisible Track restore中にsaved Mapをskipするstatic / browser検証（Unit 3）
-- 0 / 1 / 50 / 200 / 806 Trackのrestore性能（Unit 3）
+- Previous Library Restore（Unit 4）
+- 806前後のwarm restore約5秒目標と条件付きgeometry cache（Unit 5）
+- selected Track restore（Unit 6）
+
+### Unit 3 Visible Track Restoration
+
+Unit 3 Implementation Status: Completed
+
+Unit 3 Static Test Status: Completed
+
+Unit 3 Browser Acceptance Status: Completed
+
+Unit 3 Status: Completed
+
+Unit 4 Previous Library Restore Status: Not started
+
+Unit 5 Fast Restore Performance Gate Status: Not started
+
+Implementation result:
+
+- `DisplayState.checked`からvisible relative pathを収集し、Map / sidebarと同じLibrary snapshotへ保存する
+- individual / Search checkbox、Folder / root bulk、Clearを既存750ms debounceへ統合する
+- normalized pathをcurrent DisplayStateへ解決し、missing / stale pathを無視する
+- restore requestは既存`gpx:display-toggled`と`GPXDisplayQueue`を使用し、Queue concurrency 2を維持する
+- Queue全target terminal後にsaved Mapを一回復元し、restore中のsaveと自動refocusを抑止する
+- Library generation / restore request IDでstale completionを破棄する
+- selected Track restore、progress、chunking、専用Queue、件数limitは追加しない
+
+Static result:
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| View State Unit 1〜3 test page | Pass | 142 assertions |
+| visible Track 0 / 1 / multiple | Pass | empty、single、multiple snapshot / restore |
+| stale / duplicate path | Pass | staleを無視し、duplicateを一回だけrestore |
+| Folder / root bulk coalescing | Pass | timer 1件、localStorage write 1回 |
+| Clear | Pass | `visibleTracks: []`を保存 |
+| Library switch / generation | Pass | stale restoreを破棄しcurrent Map / Libraryを維持 |
+| Map / Sidebar coexistence | Pass | visible restore完了後にsaved Map、Sidebarを維持 |
+| restore中のuser Map操作 | Pass | saved Map投影をskipし、user Mapを完了後に保存 |
+| GPXDisplayQueue | Pass | concurrency 2、全request後のidle通知、重複実行なし |
+| Unit 2 regression | Pass | Store、Map、Sidebar、Reset、fallbackを含む |
+| Browser Acceptance後のstatic revalidation | Pass | 142 assertions、production module 46、missing import 0、cycle 0 |
+| App / TreeView size | Pass | 999 / 997 lines |
+| Config / schema | Pass | Config `1.2.0`、DisplaySettingsStore 1、shared settings 1 |
+
+Browser Acceptance result:
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| 少数Track復元 | Pass | 保存済みvisible pathを既存display pipelineへ復元 |
+| 807 visibleTracks保存 | Pass | duplicate pathなし |
+| 807 Track最終復元 | Pass | duplicate表示とUI停止なし |
+| stale path | Pass | 架空項目や復元errorを発生させず無視 |
+| Map center / zoom共存 | Pass | visible restore後も保存Mapを維持 |
+| Sidebar共存 | Pass | 保存済みopen / closedを維持 |
+| qualitative performance | Pass | 通常のcold表示とほぼ同等。warm約5秒の数値判定は未実施 |
+| progress UI | Not added as planned | 現時点では不要。Unit 5 Performance Gateと分離 |
+| Data protection | Pass | `trailbook.json` / GPXへの書き込みなし |
+
+Unit 3はCompletedである。806前後のwarm restore約5秒目標はUnit 5で同一条件により判定する。既存再parse方式が不達の場合だけ、Decision 0040のIndexedDB geometry cacheを実装候補とする。数値や約5秒達成を推測しない。
+
+### Additional Planning — Previous Library and Fast Restore
+
+Planning Addendum Status: Completed
+
+Production Implementation Status: Not started for Previous Library / geometry cache
+
+- [x] previous DirectoryHandleはIndexedDBだけへ保存し、HandleをlocalStorage / shared JSONへ保存しない設計とした
+- [x] startupはread permission `granted`時だけ自動openし、`prompt` / `denied`は利用者gestureの`前回のLibraryを開く`へ分離した
+- [x] IndexedDB / permission / stale handle failureでもmanual pickerとViewerを継続する
+- [x] originはscheme / host / port単位であり、site data削除 / private browsingではrecordを保証しない
+- [x] 806前後のwarm restore中央値約5秒をperformance gateとし、cold loadと分離した
+- [x] geometry cacheはgate不達時だけ採用し、Library namespace + relative path、parser / cache schema、size、lastModifiedでvalidationする
+- [x] cache miss / invalid / failureはexisting Queueへfallbackし、duplicate parse / renderを禁止する
+- [x] Unit 3はBrowser AcceptanceまでCompleted。Previous Library RestoreとPerformance GateはNot startedのまま維持した

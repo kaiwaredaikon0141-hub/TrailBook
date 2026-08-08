@@ -382,21 +382,23 @@ Goal: Libraryを再度開いた時に、端末ごとの前回表示状態を安�
 - visibleかつ正常に表示できたselected Track
 - desktop sidebarのopen / closed。現行UIには開閉状態がないため、Release 1.3でkeyboard操作可能な最小toggleを追加する
 - current Libraryだけの保存済み前回表示状態を消去するReset UI
+- 最後に正常に開いた`FileSystemDirectoryHandle`をIndexedDBへ保存し、次回起動時にread permissionが`granted`なら同じ既存Library load pipelineで自動openする
+- permissionが`prompt` / `denied`、または自動openできない場合に、Viewerを止めず`前回のLibraryを開く`と通常のLibrary pickerを提示する
 - Chrome / Edge、0 / 1 / 50 / 200 / 806 GPXでの復元、安全性、性能確認
 
 sidebar width、Search query、Tree expanded paths、Tree scroll、Tree focusはFuture Candidateとし、Release 1.3へ含めない。Map modeは既存のglobal device-local設定を継続し、新しいview stateへ重複保存しない。
 
 ### Shared and Device-local Boundary
 
-`trailbook.json`はFolder colors等のLibrary共有設定の正本であり、previous view stateを保存しない。Map、visible / selected Track、sidebarはbrowser originと端末に限定した`localStorage`へ保存する。FileHandle、FolderHandle、GPX XML、TrackPoint、parsed geometry、cache、Queue状態は永続化しない。
+`trailbook.json`はFolder colors等のLibrary共有設定の正本であり、previous view stateを保存しない。Map、visible / selected Track、sidebarはbrowser originと端末に限定した`localStorage`へ保存する。最後に選択した`FileSystemDirectoryHandle`だけはprevious Library再開用にIndexedDBへstructured cloneで保存するが、localStorage、`trailbook.json`、Consoleへ出さない。GPX XMLとLeaflet Layerは永続化しない。parsed geometryは5秒性能目標を既存再parse方式で満たせない場合だけ、再生成可能なIndexedDB cacheとして採用を判断する。
 
 Release 1.3は専用storage keyとschema version 1を持つ`ViewStateStore`を採用する。既存`DisplaySettingsStore` schema version 1とshared settings schema version 1は変更せず、schema migrationやFolder color / Map modeとの結合を発生させない。
 
 ### Library Identity
 
-Release 1.3は既存の`root-name:<encoded root folder name>`を継続する。`FileSystemHandle.isSameEntry()`は二つのhandle比較には使えるが、localStorageへ保存できる安定identifierを公開しない。handle自体の永続化にはstructured-clone storageが必要となり、TrailBookはIndexedDBを導入しない。Library全内容hash、GPX内容hash、構造fingerprintはscan負荷とrename / moveへの不安定さから採用しない。Library aliasまたは`trailbook.json`内の明示IDは将来候補とする。
+Release 1.3は`ViewStateStore`のLibrary keyとして既存の`root-name:<encoded root folder name>`を継続する。前回Library用IndexedDB recordはDirectoryHandleと内部用のopaque cache namespaceを保持できるが、このnamespaceはshared identityまたはlocalStorage keyへ流用しない。手動選択したhandleと保存handleの同一性確認には`FileSystemHandle.isSameEntry()`を使用できる。Library全内容hash、GPX内容hash、構造fingerprintはscan負荷とrename / moveへの不安定さから採用しない。Library aliasまたは`trailbook.json`内の明示IDは将来候補とする。
 
-このため同名root Folderは同じdevice-local view stateを共有し得て、root名変更時は別Library扱いになる。FileHandleをlocalStorageへ保存せず、Reset UIを回復手段として提供する。
+このため同名root Folderは同じdevice-local view stateを共有し得て、root名変更時は別Library扱いになる。HandleをlocalStorageへ保存せず、view state Resetと前回Library handleの破棄を別の回復操作として扱う。IndexedDBはorigin単位で分離されるため、scheme、host、portが変わると以前のhandleとcacheは利用できない。
 
 ### Save and Restore Boundary
 
@@ -406,24 +408,30 @@ Release 1.3は既存の`root-name:<encoded root folder name>`を継続する。`
 - 全restore対象がloaded / error / cancelledへ確定した後、Mapをanimationなしで一回復元する。saved Mapがない場合だけ既存fitBounds / defaultを使用する。
 - selected Trackはcurrent Libraryに存在し、checkedかつloadedの時だけ`SelectionState`へsystem restoreする。Treeは祖先をrevealできるがfocus、scroll、Map panを発生させない。
 - restore中の利用者操作は対象stateごとにsaved値より優先する。Library generationが変わった結果は破棄する。
+- 起動時は保存handleへ`queryPermission({ mode: "read" })`だけを行う。`granted`なら自動openし、`prompt` / `denied`では自動でpermission promptを出さない。利用者が`前回のLibraryを開く`を実行した時だけ、必要に応じて`requestPermission({ mode: "read" })`を行う。
+- IndexedDB unavailable、破損record、stale / missing handle、permission拒否でも初回案内と手動pickerを維持する。恒久的に無効と確認できたrecordは安全に破棄できるが、一時的なprovider offlineを自動削除理由にしない。
 
 ### Performance Policy
 
-既存Queueの並列数2、cache上限100、path identity、通常のbulk表示pipelineを再利用する。Unit 1では自動復元件数のhard limitや確認dialogを固定しない。0 / 1 / 50 / 200 / 806 Trackで、UI応答性、復元時間、Queue重複、localStorage size、Waypoint OFF / ONの既知制限を測定する。806件で操作不能または再現可能な重大回帰が確認された場合だけ、既存Queueへchunked enqueueとprogress表示を追加検討する。
+既存Queueの並列数2、session cache上限100、path identity、通常のbulk表示pipelineを再利用する。0 / 1 / 50 / 200 / 806 Trackで、UI応答性、復元時間、Queue重複、localStorage size、Waypoint OFF / ONの既知制限を測定する。806前後のprevious visible Trackは、Library scanとpermission処理を分けたwarm restoreを同一PC / browser / origin、Waypoint OFF、最低3回の中央値で約5秒以内とする性能目標を追加する。初回cold loadは従来速度を許容する。
+
+既存GPX再parse方式が目標を満たすかを先に計測する。満たせない場合だけ、IndexedDBへparser / cache schema version、Library cache namespace、relative path、`File.size`、`File.lastModified`とparsed geometry DTOを保存するcacheを実装候補とする。source情報が一致するentryだけを使用し、変更時はそのGPXだけを無効化して既存Queueで再parseする。cache read / validation / write failureは既存Queueへfallbackし、Leaflet Layer、GPX XML、Queue状態を保存せず、同じpathをparseまたはrenderへ二重投入しない。
 
 ### Units
 
 1. Scope、Architecture、Decisions、schema、identity、save / restore order、performance / test plan（Completed）
 2. `ViewStateStore` / pure schema、Map state、desktop sidebar open / closed、Reset基盤（Completed）
-3. visible Track snapshot / restore、existing Queue統合、bulk coalescing、stale path / generation、806 GPX性能（Not started）
-4. selected Track restore、Reset UI、error recovery、Library lifecycle統合（Not started）
-5. Chrome / Edge統合受け入れ、0 / 1 / 50 / 200 / 806 GPX性能、文書、Release finalization（Not started）
+3. visible Track snapshot / restore、existing Queue統合、bulk coalescing、stale path / generation（Completed。少数Trackと807 visible TrackのBrowser Acceptance済み）
+4. Previous Library Handle Store / Coordinator、permission UX、自動 / 手動open、stale handle recovery（Not started）
+5. 806 GPX warm restore performance gate。約5秒を満たせない場合だけderived geometry cacheを実装（Not started）
+6. selected Track restore、Reset UI、error recovery、Library lifecycle統合（Not started）
+7. Chrome / Edge統合受け入れ、0 / 1 / 50 / 200 / 806 GPX性能、文書、Release finalization（Not started）
 
 ### Out of Scope
 
 - shared JSONへのview state保存、browser / device間共有、Google Drive同期
 - sidebar width、Search query、Tree expanded paths / scroll / focusの復元
-- FileHandle永続化、IndexedDB、account、server、独自database
+- FileHandleのlocalStorage / shared JSON保存、account、server、Library正本となる独自database
 - GPX内容hash、Library全内容hash、構造fingerprint、automatic Library alias
 - automatic save / edit of GPXまたは`trailbook.json`
 - Date Tree、GPX編集、Folder rename / move、Track軽量化、Mobile Viewer UX、cloud API

@@ -59,7 +59,7 @@ GPXを独自形式へ取り込むのではなく、ユーザーのGPX資産を�
 - `LibrarySettingsCoordinator`がload、explicit save、migration、manual Reload、Conflict recoveryを調停する。
 - `LibrarySettingsPanel`と`SettingsConflictDialog`がstatusとReload / Overwrite / Cancel操作を担当する。
 
-Release 1.3 Unit 1 PlanningとUnit 2はCompletedである。Unit 2は専用`ViewStateStore`、Map center / zoom、desktop sidebar open / closed、Reset基盤を実装し、Browser Acceptanceを完了した。visible / selected Track restoreはUnit 3 / 4の対象で未実装。既存DisplaySettingsStore / shared settings schema、DisplayState、SelectionState、GPXDisplayQueueを正本として維持する。
+Release 1.3 Unit 1〜3はCompletedである。Unit 3は少数Trackと807 visible TrackのBrowser Acceptanceに合格し、stale path、Map / Sidebar共存、duplicate表示、UI応答性、data protectionを確認した。追加設計ではUnit 4にprevious DirectoryHandle / permission UX、Unit 5に806前後のwarm restore約5秒のperformance gateと条件付きgeometry cache、Unit 6にselected Track restore、Unit 7に統合受け入れを配置した。既存DisplaySettingsStore / shared settings schema、DisplayState、SelectionState、GPXDisplayQueueを正本として維持する。
 
 ## Implemented Through Release 1.2
 
@@ -78,9 +78,9 @@ Release 1.2 Shared Library SettingsはCompletedである。Library root直下の
 - GPXは唯一の正本である。
 - ユーザーの明示的な保存操作なしにGPXやLibrary設定ファイルを変更、移動、削除しない。
 - Folder構造とGPXファイルをデータの正本とする。
-- SQLite、IndexedDBなどの独自DBを持たない。一時的なセッションcacheは独自DBに含めない。
-- 独自DBを持たない方針を変更する場合は、新しいDecisionを必要とする。
-- 現行production 1.2ではMap表示modeとlegacy Folder色fallbackだけを`localStorage`へ保存する。Release 1.3 Unit 2は専用keyへ再生成可能なdevice-local Map / sidebar stateを追加し、Browser AcceptanceまでCompletedである。Folder色はvalidなshared JSONがある場合に項目単位でlegacy値を混ぜない。GPX内容、解析結果、FileHandle、FolderHandle、cacheの永続化は禁止する。
+- SQLite、IndexedDBなどをFolder / GPXに代わるLibrary正本として持たない。一時的なセッションcacheは独自DBに含めない。
+- Release 1.3追加設計はDecision 0039 / 0040により、IndexedDBをprevious DirectoryHandleと、性能gate不達時の再生成可能geometry cacheにだけ使用可能とする。これはLibrary正本ではなく、削除・失敗時にViewerが継続できるorigin-local補助である。
+- 現行production 1.2ではMap表示modeとlegacy Folder色fallbackだけを`localStorage`へ保存する。Release 1.3 Unit 2は専用keyへ再生成可能なdevice-local Map / sidebar stateを追加し、Browser AcceptanceまでCompletedである。Folder色はvalidなshared JSONがある場合に項目単位でlegacy値を混ぜない。HandleをlocalStorage / `trailbook.json`へ保存せず、GPX内容とLeaflet Layerを永続化しない。
 - `trailbook.json`への書き込みはSave、migration、明示Overwriteだけに限定し、permissionの永続化を前提にしない。
 - Framework、TypeScript、Node.jsを追加しない。
 - UI同士を直接接続せず、EventBusとAppの調停を使用する。

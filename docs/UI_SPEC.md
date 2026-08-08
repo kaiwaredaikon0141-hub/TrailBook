@@ -833,7 +833,7 @@ Folder color dialogのApplyは画面とsession / local fallbackへ反映して`U
 
 # 22. Release 1.3 UI — Previous View Restoration
 
-Status: In Progress。Release 1.2の確定UIを維持する。Unit 1 PlanningとUnit 2はCompleted、Unit 3はNot startedである。
+Status: In Progress。Release 1.2の確定UIを維持する。Unit 1〜3はCompleted、Unit 4 Previous Library RestoreとUnit 5 Fast Restore Performance GateはNot startedである。
 
 ## Restored State
 
@@ -854,7 +854,7 @@ Unit 2はdesktop用の最小toggleをToolbarへ追加した。sidebar DOMと内�
 ## Restoration Feedback and Interaction
 
 - visible Track restoreは既存checkboxのchecked / loading / loaded / error表示とStatusBar件数を使用し、別の重複progress stateをTreeへ作らない。
-- 806 GPX等でrestoreが長時間続く場合に限り、Unit 3の性能結果から簡潔な`前回の表示を復元中`と件数表示を検討する。modalで操作をblockしない。
+- Unit 3の807 Track Browser AcceptanceではUI停止がなく、復元速度は通常のcold表示とほぼ同等だったため、現時点でprogress UIを追加しない。約5秒warm restore目標はUnit 5の別Performance Gateで扱い、必要性を再評価する場合もmodalで操作をblockしない。
 - restore中もTree、Search、Map、Clear、Library切り替えを操作可能にし、利用者のMap / selection / sidebar / checkbox操作を後続のsaved投影で上書きしない。
 - selected Track restoreはTree ancestorだけを必要に応じて展開する。scrollIntoView、focus移動、Map refocus / pan、Search query変更を行わない。
 - selected Trackがmissing、invisible、load errorならselectionなしで継続し、error dialogを強制しない。
@@ -878,13 +878,29 @@ Unit 2ではこのReset基盤とdevice-local状態表示を実装した。Reset�
 - duplicate / stale pathは画面上の架空項目を作らず無視する。invalid Map / sidebar / selectionは該当fieldだけdefaultへ戻す。
 - body scrollなし、sidebar内scroll、MapView固定、Tree / Search keyboard、roving tabindex、existing ARIAを維持する。
 
+## Previous Library Restore — Planned
+
+- 起動時に保存済みDirectoryHandleのread permissionが`granted`なら、既存Library load表示を使って前回Libraryを自動で開く。別のTree / Search / Map pipelineは作らない。
+- permissionが`prompt` / `denied`、Handleが利用不能、またはIndexedDBが利用できない場合も初回案内と通常の`ライブラリを開く`を維持する。
+- 保存handleがあり自動openできない場合は、非blockingでkeyboard操作可能な`前回のLibraryを開く`を提示する。permission requestはこの利用者操作からだけ開始し、起動時にpromptを強制しない。
+- `前回のLibraryを開く`の失敗はStatusBar / Library access案内へ安全な文言で通知し、完全path、Handle、内部exception、GPX内容を表示しない。retry、手動picker、前回handleの破棄を可能にする。
+- originのscheme / host / portが変わると保存Handleとcacheを利用できないことを既知制限として記載する。HandleをlocalStorageまたは`trailbook.json`へ保存しない。
+
+## Fast Visible Track Restore — Planned Performance Gate
+
+- 806前後のprevious visible Trackは、Library scan後から全target terminalまでのwarm中央値約5秒以内を目標とする。permission / picker時間とcold初回parseは別に記録する。
+- 既存再parse方式を先に測定し、目標不達の場合だけIndexedDB geometry cacheを検討する。cache failure時は既存Queueへfallbackし、checkbox、loading / loaded / error、StatusBarの既存表示を維持する。
+- cache使用時も同じGPXを二重parse / renderせず、GPX変更時だけ該当entryを無効化する。復元中の操作をmodalでblockしない。
+
 ## Release 1.3 Scope Boundary
 
-`trailbook.json`へのview state保存、browser間共有、Google Drive同期、FileHandle永続化、Search / Tree navigation復元、sidebar width、Mobile sidebar、GPX編集、Folder操作は実装しない。
+`trailbook.json`へのview state保存、browser間共有、Google Drive API同期、FileHandleのlocalStorage / shared JSON保存、Search / Tree navigation復元、sidebar width、Mobile sidebar、GPX編集、Folder操作は実装しない。Release 1.3で予定するIndexedDBはprevious DirectoryHandleと、性能gate不達時の再生成可能geometry cacheだけに限定する。
 
 ## Unit 2 Acceptance Status
 
 - Implementation: Completed
 - Static validation: Completed
 - Chrome / Edge Browser Acceptance: Completed
-- Unit 3: Not started
+- Unit 3: Completed
+- Unit 4: Previous Library RestoreはNot started
+- Unit 5: Fast Restore performance gate / conditional cacheはNot started

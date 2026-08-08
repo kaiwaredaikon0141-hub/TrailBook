@@ -55,6 +55,13 @@ export default class DisplayState {
         return this.displays;
     }
 
+    getCheckedPaths() {
+
+        return [...this.displays.values()]
+            .filter(display => display.checked)
+            .map(display => display.path);
+    }
+
     setChecked(path, checked) {
 
         const display = this.displays.get(path);

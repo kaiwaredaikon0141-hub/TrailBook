@@ -10,6 +10,8 @@ export default class ViewStateCoordinator {
         store,
         mapView,
         controls,
+        displayState,
+        displayQueue,
         debounceMs = 750,
         setTimer = globalThis.setTimeout.bind(globalThis),
         clearTimer = globalThis.clearTimeout.bind(globalThis)
@@ -19,6 +21,8 @@ export default class ViewStateCoordinator {
         this.store = store;
         this.mapView = mapView;
         this.controls = controls;
+        this.displayState = displayState;
+        this.displayQueue = displayQueue;
         this.debounceMs = debounceMs;
         this.setTimer = setTimer;
         this.clearTimer = clearTimer;
@@ -29,6 +33,9 @@ export default class ViewStateCoordinator {
         this.pendingSave = false;
         this.restoring = false;
         this.resetBlocked = false;
+        this.restoreRequestId = 0;
+        this.mapChangedDuringRestore = false;
+        this.saveAfterRestore = false;
         this.#bindEvents();
     }
 
@@ -45,7 +52,7 @@ export default class ViewStateCoordinator {
         return this.#saveSnapshot();
     }
 
-    restoreLibrary({ libraryId, libraryName, generation, isCurrent }) {
+    async restoreLibrary({ libraryId, libraryName, generation, isCurrent }) {
 
         if (!isCurrent()) {
             return false;
@@ -58,8 +65,11 @@ export default class ViewStateCoordinator {
         this.activeLibraryGeneration = generation;
         this.isCurrentLibrary = isCurrent;
         this.resetBlocked = false;
+        const restoreRequestId = ++this.restoreRequestId;
 
         this.restoring = true;
+        this.mapChangedDuringRestore = false;
+        this.saveAfterRestore = false;
         const state = this.store.getLibraryState(libraryId);
 
         this.controls.setLibrary({
@@ -71,7 +81,33 @@ export default class ViewStateCoordinator {
         });
         this.mapView.invalidateSize({ silent: true });
 
-        if (state?.map && this.mapView.isValidViewState(state.map)) {
+        this.#resolveVisibleDisplays(state?.visibleTracks ?? [])
+            .forEach(display => {
+                this.eventBus.emit("gpx:display-toggled", {
+                    path: display.path,
+                    fileHandle: display.fileHandle,
+                    checked: true,
+                    source: "view-state-restore"
+                });
+            });
+
+        await this.displayQueue.whenIdle();
+
+        if (
+            restoreRequestId !== this.restoreRequestId ||
+            !this.#isCurrent(generation)
+        ) {
+            if (restoreRequestId === this.restoreRequestId) {
+                this.restoring = false;
+            }
+            return false;
+        }
+
+        if (
+            !this.mapChangedDuringRestore &&
+            state?.map &&
+            this.mapView.isValidViewState(state.map)
+        ) {
             this.mapView.setViewState(state.map, {
                 animate: false,
                 silent: true
@@ -80,7 +116,16 @@ export default class ViewStateCoordinator {
 
         this.restoring = false;
 
-        return this.#isCurrent(generation);
+        if (this.saveAfterRestore) {
+            this.#scheduleSave();
+        }
+
+        return true;
+    }
+
+    isRestoring() {
+
+        return this.restoring;
     }
 
     getStatus() {
@@ -97,12 +142,31 @@ export default class ViewStateCoordinator {
     #bindEvents() {
 
         this.eventBus.on("map:view-changed", ({ programmatic = false } = {}) => {
-            if (!programmatic) {
-                this.#scheduleSave();
+            if (programmatic) {
+                return;
             }
+
+            if (this.restoring) {
+                this.mapChangedDuringRestore = true;
+                this.saveAfterRestore = true;
+                return;
+            }
+
+            this.#scheduleSave();
         });
         this.eventBus.on("view-state:sidebar-toggled", () => {
-            this.#scheduleSave();
+            this.#handleRuntimeChange();
+        });
+        this.eventBus.on("gpx:display-toggled", data => {
+            if (data?.source !== "view-state-restore") {
+                this.#handleRuntimeChange();
+            }
+        });
+        this.eventBus.on("folder:display-toggled", () => {
+            this.#handleRuntimeChange();
+        });
+        this.eventBus.on("map:clear-requested", () => {
+            this.#handleRuntimeChange();
         });
         this.eventBus.on("view-state:sidebar-layout-changed", () => {
             this.mapView.invalidateSize({ silent: true });
@@ -110,6 +174,16 @@ export default class ViewStateCoordinator {
         this.eventBus.on("view-state:reset-requested", () => {
             this.#resetCurrentLibrary();
         });
+    }
+
+    #handleRuntimeChange() {
+
+        if (this.restoring) {
+            this.saveAfterRestore = true;
+            return;
+        }
+
+        this.#scheduleSave();
     }
 
     #scheduleSave() {
@@ -141,6 +215,7 @@ export default class ViewStateCoordinator {
         const saved = this.store.setLibraryState(this.activeLibraryId, {
             ...existing,
             map: this.mapView.getViewState(),
+            visibleTracks: this.displayState.getCheckedPaths(),
             sidebar: { open: this.controls.isSidebarOpen() }
         });
 
@@ -149,6 +224,13 @@ export default class ViewStateCoordinator {
         }
 
         return saved;
+    }
+
+    #resolveVisibleDisplays(paths) {
+
+        return paths
+            .map(path => this.displayState.getDisplay(path))
+            .filter(display => display && !display.checked);
     }
 
     #resetCurrentLibrary() {

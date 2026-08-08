@@ -812,7 +812,7 @@ File System Access APIのpermissionとwrite lifecycleは[Chrome File System Acce
 
 ## Release 1.3 Architecture — Previous View Restoration
 
-Status: In Progress。Current Releaseは1.2.0のままである。Unit 1とUnit 2はCompleted、Unit 3はNot startedである。
+Status: In Progress。Current Releaseは1.2.0のままである。Unit 1〜3はCompleted、Unit 4 Previous Library RestoreとUnit 5 Fast Restore Performance GateはNot startedである。
 
 ### Data Boundary
 
@@ -826,7 +826,9 @@ previous view stateはLibrary内容ではなく、同じbrowser origin上の端�
 | visible / selected Track | 保存しない | 保存しない | Library単位、relative path |
 | sidebar open / closed | 保存しない | 保存しない | Library単位 |
 | sidebar width、Search / Tree navigation | 保存しない | 保存しない | Release 1.3では保存しない |
-| Handle、GPX、geometry、cache / Queue | 保存しない | 保存しない | 保存しない |
+| last DirectoryHandle | 保存しない | 保存しない | IndexedDBへ前回Library再開用として保存予定 |
+| GPX XML、Leaflet Layer、Queue | 保存しない | 保存しない | 保存しない |
+| parsed geometry | 保存しない | 保存しない | 5秒性能gate不達時だけ再生成可能なIndexedDB cache候補 |
 
 既存`DisplaySettingsStore` schema version 1をversion 2へ上げる案は採用しない。Map mode / legacy Folder colorとLibrary view lifecycleを同じdocumentへ結合し、既存schema migration、unknown-version failure範囲、test matrixを不要に広げるためである。専用Storeはschema version 1から開始するので、Release 1.3にschema 1からのdata migrationはない。既存key、schema、保存値をそのまま維持する。
 
@@ -867,18 +869,18 @@ previous view stateはLibrary内容ではなく、同じbrowser origin上の端�
 
 ### Library Identity
 
-Release 1.3は既存`createLibraryId(rootFolderName)`の`root-name:<encoded root folder name>`を継続する。identity生成はpure helperへ集約し、`DisplaySettingsStore`と`ViewStateStore`が同じ規則を利用するが、Store同士は参照しない。
+Release 1.3は`ViewStateStore`用に既存`createLibraryId(rootFolderName)`の`root-name:<encoded root folder name>`を継続する。identity生成はpure helperへ集約し、`DisplaySettingsStore`と`ViewStateStore`が同じ規則を利用するが、Store同士は参照しない。前回Library用IndexedDB recordのopaque ID / cache namespaceはHandleとcacheの内部識別に限定し、shared Library identityまたはlocalStorage keyを置き換えない。
 
 比較結果:
 
 | Candidate | Result | Reason |
 | --- | --- | --- |
 | A. existing root-name | 採用 | scan追加なし、Library移動後も同名なら復元、既存運用と一致 |
-| B. FolderHandle由来ID | 不採用 | `isSameEntry()`はhandle同士を比較するAPIで、localStorage用の安定IDを返さない。handle永続化にはstructured-clone storageが必要 |
+| B. FolderHandle由来ID | View State keyには不採用 | `isSameEntry()`はhandle同士の同一性確認に使用するが、localStorage用の安定IDを返さない。Handle自体はprevious Library用IndexedDB recordへ保存予定 |
 | C. root構造fingerprint | 不採用 | rename / move / file増減で変わり、全内容hashは特に高コスト。GPX内容hashは行わない |
 | D. user alias | Future | 衝突回避には有効だが、UI、rename、shared metadataとの意味付けがRelease 1.3を越える |
 
-同名root Folderは衝突し、root名変更時は別Libraryになる。この制限をUI / test / known limitationへ明記し、current Libraryのview stateだけを消すResetを回復経路とする。FileHandleをlocalStorage、IndexedDB、`trailbook.json`へ保存しない。[File System Standard](https://fs.spec.whatwg.org/)が定義するhandle serializationと`isSameEntry()`は、安定した文字列identifierの提供とは別の契約である。
+同名root FolderはView State上で衝突し、root名変更時は別Libraryになる。この制限をUI / test / known limitationへ明記し、current Libraryのview stateだけを消すResetを回復経路とする。HandleをlocalStorageまたは`trailbook.json`へ保存しない。最後に正常に開いたDirectoryHandleだけはprevious Library用IndexedDBへ保存し、`isSameEntry()`で手動選択handleとの同一性を確認できる。[File System Access specification](https://wicg.github.io/file-system-access/)が定義するhandle serializationと`isSameEntry()`は、sharedまたはlocalStorage用の安定文字列identifierとは別の契約である。
 
 ### Responsibilities and Dependencies
 
@@ -898,6 +900,22 @@ Release 1.3は既存`createLibraryId(rootFolderName)`の`root-name:<encoded root
 - EventBusとLibrary lifecycleを購読し、一つのdebounce timer / save queueでsnapshotをcoalesceする
 - restore generation、pending target、restore中のfield別user override、refocus抑止、restore完了を管理する
 - `DisplayState`、`SelectionState`、Map / Sidebar UIの正本を置き換えず、callbackとEventBusを通じて既存処理へ接続する
+
+Planned `PreviousLibraryStore` / `PreviousLibraryCoordinator`:
+
+- IndexedDBのversioned object storeへ最後に正常に開いた`FileSystemDirectoryHandle`とopaque cache namespaceだけを保存し、localStorageとshared settingsを参照しない
+- 起動時は`queryPermission({ mode: "read" })`だけを行い、`granted`なら既存Library load callbackへ接続する。`prompt` / `denied`では自動promptを出さず、利用者gestureによる`requestPermission({ mode: "read" })`と手動pickerを維持する
+- IndexedDB unavailable / corrupt、stale / missing handle、permission failureをnon-fatalにし、AppへIndexedDB transaction、permission分岐、cache policyを直接追加しない
+- originのscheme / host / port変更、site data削除、private browsing終了ではrecordを共有または保証しない
+
+Conditional `GeometryCacheRepository`:
+
+- Unit 5の性能gateが不達の場合だけ実装し、Library cache namespace + relative pathをentry keyとする
+- parser / cache schema version、`File.size`、`File.lastModified`が一致するplain parsed DTOだけを返す。Leaflet Layer、GPX XML、FileHandle、Queue状態をentryへ含めない
+- miss / stale / invalid / quota / transaction failureは既存`GPXDisplayQueue`のload / parseへfallbackする。cache hitとfallbackを同じpathへ二重enqueueまたは二重renderしない
+- cacheは削除可能・再生成可能であり、Folder構造、GPX、`trailbook.json`の正本性を変更しない
+
+HandleのIndexedDB保存とpermission lifecycleは[Chrome File System Access documentation](https://developer.chrome.com/docs/capabilities/web-apis/file-system-access)、[File System Access specification](https://wicg.github.io/file-system-access/)、[MDN `queryPermission()`](https://developer.mozilla.org/en-US/docs/Web/API/FileSystemHandle/queryPermission)を根拠とする。origin分離は[MDN IndexedDB terminology](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API/Basic_Terminology)、source validationは[MDN `getFile()`](https://developer.mozilla.org/en-US/docs/Web/API/FileSystemFileHandle/getFile)と[MDN `File.lastModified`](https://developer.mozilla.org/en-US/docs/Web/API/File/lastModified)を参照する。
 
 `ViewStateControls`:
 
@@ -924,11 +942,27 @@ Release 1.3は既存`createLibraryId(rootFolderName)`の`root-name:<encoded root
 - Resetはconfirmation後にcurrent Library entryだけを削除し、runtime Map / sidebar、Map mode、Folder colors、shared JSON、GPX、他Library stateを維持する。programmatic eventでは再保存せず、次のuser Map / sidebar操作で保存を再開する。
 - Unit 2はexisting `visibleTracks` / `selectedTrack` fieldをnormalized snapshot内で保持するが、値の収集・復元は行わない。
 
+### Unit 3 Visible Track Restoration Implementation
+
+- `DisplayState.getCheckedPaths()`がcurrent Libraryの表示意図をrelative pathのstable listとして返し、`ViewStateCoordinator`がMap / sidebarと同じfull snapshotへ保存する。別のvisibility stateを作らない。
+- individual / Search checkbox、Folder / root bulk、Clearの既存Eventを共通750ms timerへ接続する。bulk内部の各pathではなく、操作完了後の最新`DisplayState.checked`を原則一回だけ書く。
+- restore時はschemaで正規化済み`visibleTracks`をcurrent `DisplayState`へ解決し、missing / stale pathを無視して、既存`gpx:display-toggled`経路から既存`GPXDisplayQueue`へ投入する。checked済みpathとduplicate pathを再投入しない。
+- `GPXDisplayQueue.whenIdle()`は既存concurrency 2とFIFOを変更せず、queue / active requestがすべてterminalになった時だけ復元完了を通知する。専用RestoreQueue、件数limit、duplicate parser / Layerを追加しない。
+- restore中はView State saveと自動refocusを抑止し、全target terminal後にsaved Mapをanimationなしで一回投影する。restore中のuser Map / sidebar / visibility操作はruntimeを優先し、完了後に最新snapshotをdebounce保存する。
+- selected Trackの収集・復元、progress UI、chunked enqueueはUnit 3で実装しない。AppはCoordinatorへのruntime依存注入と既存UI projectionの接続だけを行い、999行を維持する。
+
+### Release 1.3 Additional Restoration Plan
+
+- Unit 3は少数Trackと807 visible TrackのBrowser Acceptanceを完了した。stale path、Map center / zoom、Sidebar、duplicate表示、UI応答性、data protectionに問題はなく、復元速度は通常のcold表示とほぼ同等だった。約5秒warm restoreはUnit 5の別Performance Gateとし、Unit 3へprogress UIを追加しない。
+- Unit 4で`PreviousLibraryStore` / Coordinator、permission UX、自動 / 手動open、stale handle recoveryを実装する。
+- Unit 5で806前後のvisible Trackを同一条件で最低3回測定し、Library scan後からterminalまでのwarm中央値約5秒をgateとする。既存再parse方式が達成すればgeometry cacheを実装しない。不達の場合だけ上記cacheを実装して再測定する。
+- Unit 6でselected Track restoreと残るlifecycle / Reset統合、Unit 7でChrome / Edge、cold / warm、origin制限、data protection、finalizationを確認する。
+
 ### Save Timing
 
 - Mapは`moveend`でfinal center / zoomを取得し、pan / zoom中は書かない。`zoomend`と二重保存しない。
 - individual / Search checkbox、Folder / root bulk、Clearの既存処理完了後に`DisplayState.checked`のpath集合をsnapshotとする。bulk内部のpath件数だけwriteしない。
-- Unit 2はMap moveendとsidebar toggleを同じ750ms debounce queueへ送る。selection / clearはUnit 4、visible Track / bulkはUnit 3で接続する。
+- Unit 3はMap moveend、sidebar toggle、individual / Search checkbox、Folder / root bulk、Clearを同じ750ms debounce queueへ送る。selectionはUnit 4で接続する。
 - 一つのLibraryに対するpending saveは常に最新full snapshot一件へ置換し、partial patchと複数timerを作らない。
 - restore投影中はsaveをsuspendし、完了直後のprogrammatic Map / selection / sidebar eventで保存値を書き戻さない。
 - Library switch前にold Libraryのpending snapshotを同期flushし、active identity変更後にold timerがnew Libraryへ書かないようgenerationを確認する。

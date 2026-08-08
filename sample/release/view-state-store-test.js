@@ -3,7 +3,9 @@ import App from "../../src/js/core/App.js";
 import EventBus from "../../src/js/core/EventBus.js";
 import ViewStateCoordinator from "../../src/js/core/ViewStateCoordinator.js";
 import DisplaySettingsStore from "../../src/js/services/DisplaySettingsStore.js";
+import GPXDisplayQueue from "../../src/js/services/GPXDisplayQueue.js";
 import ViewStateStore from "../../src/js/services/ViewStateStore.js";
+import DisplayState from "../../src/js/state/DisplayState.js";
 import MapView from "../../src/js/ui/MapView.js";
 import Toolbar from "../../src/js/ui/Toolbar.js";
 import ViewStateControls from "../../src/js/ui/ViewStateControls.js";
@@ -265,7 +267,9 @@ function testMapView() {
     assert(!mapView.setViewState({ lat: Infinity, lng: 0, zoom: 1 }), "invalid restore applied");
 }
 
-function createCoordinatorFixture() {
+function createCoordinatorFixture({
+    displayQueue = { whenIdle: () => Promise.resolve() }
+} = {}) {
 
     const eventBus = new EventBus();
     const storage = new MemoryStorage();
@@ -275,6 +279,7 @@ function createCoordinatorFixture() {
     let timerId = 0;
     let currentGeneration = 1;
     let confirmReset = true;
+    const displayState = new DisplayState();
     const controls = {
         open: true,
         hasState: false,
@@ -302,6 +307,8 @@ function createCoordinatorFixture() {
         store,
         mapView,
         controls,
+        displayState,
+        displayQueue,
         debounceMs: 750,
         setTimer(callback, delay) {
             const id = ++timerId;
@@ -320,6 +327,7 @@ function createCoordinatorFixture() {
         store,
         controls,
         mapView,
+        displayState,
         coordinator,
         timers,
         cleared,
@@ -334,13 +342,13 @@ function createCoordinatorFixture() {
     };
 }
 
-function testCoordinator() {
+async function testCoordinator() {
 
     const fixture = createCoordinatorFixture();
     const a = fixture.store.createLibraryId("A");
     const b = fixture.store.createLibraryId("B");
 
-    assert(fixture.coordinator.restoreLibrary({
+    assert(await fixture.coordinator.restoreLibrary({
         libraryId: a,
         libraryName: "A",
         generation: 1,
@@ -368,7 +376,7 @@ function testCoordinator() {
         map: { lat: 40, lng: 140, zoom: 8 },
         sidebar: { open: true }
     }));
-    assert(fixture.coordinator.restoreLibrary({
+    assert(await fixture.coordinator.restoreLibrary({
         libraryId: b,
         libraryName: "B",
         generation: 2,
@@ -385,7 +393,7 @@ function testCoordinator() {
     assert(!fixture.store.hasLibraryState(b), "Reset retained current Library");
     assert(fixture.store.hasLibraryState(a), "Reset removed other Library");
     assert(fixture.coordinator.getStatus().resetBlocked, "Reset did not block immediate save");
-    assert(fixture.mapView.current.zoom === 12, "Reset changed runtime Map");
+    assert(fixture.mapView.current.zoom === 13, "Reset changed runtime Map");
     fixture.eventBus.emit("map:view-changed", { programmatic: true });
     assert(fixture.timers.size === 0, "programmatic event re-saved Reset");
     fixture.eventBus.emit("map:view-changed", { programmatic: false });
@@ -398,12 +406,177 @@ function testCoordinator() {
     assert(fixture.store.hasLibraryState(b), "Cancel removed state");
 
     fixture.setGeneration(3);
-    assert(!fixture.coordinator.restoreLibrary({
+    assert(!await fixture.coordinator.restoreLibrary({
         libraryId: a,
         libraryName: "A",
         generation: 2,
         isCurrent: fixture.isCurrent(2)
     }), "stale restore accepted");
+}
+
+async function testVisibleTrackState() {
+
+    const fixture = createCoordinatorFixture();
+    const libraryId = fixture.store.createLibraryId("Visible");
+    const restored = [];
+
+    fixture.displayState.setLibrary({ name: "Visible" });
+    for (const path of ["a.gpx", "folder/b.gpx", "folder/c.gpx"]) {
+        fixture.displayState.registerFile(path, { name: path }, "#123456");
+    }
+    fixture.eventBus.on("gpx:display-toggled", data => {
+        if (data.checked) {
+            restored.push(data.path);
+            fixture.displayState.setChecked(data.path, true);
+        }
+    });
+    fixture.store.setLibraryState(libraryId, state({
+        map: { lat: 40, lng: 140, zoom: 9 },
+        visibleTracks: ["a.gpx", "missing.gpx", "folder/b.gpx", "a.gpx"],
+        sidebar: { open: false }
+    }));
+
+    assert(await fixture.coordinator.restoreLibrary({
+        libraryId,
+        libraryName: "Visible",
+        generation: 1,
+        isCurrent: fixture.isCurrent(1)
+    }), "visible restore failed");
+    assert(restored.join(",") === "a.gpx,folder/b.gpx", "stale or duplicate path restored");
+    assert(fixture.displayState.getCheckedPaths().length === 2, "restored checked state mismatch");
+    assert(fixture.mapView.restored.value.zoom === 9, "Map state lost with visible restore");
+    assert(fixture.controls.open === false, "Sidebar state lost with visible restore");
+
+    const writesBeforeBulk = fixture.storage.writes.length;
+    fixture.displayState.setChecked("folder/c.gpx", true);
+    fixture.eventBus.emit("folder:display-toggled", { checked: true });
+    fixture.eventBus.emit("folder:display-toggled", { checked: true });
+    assert(fixture.timers.size === 1, "bulk created multiple timers");
+    fixture.runTimer();
+    assert(fixture.storage.writes.length === writesBeforeBulk + 1, "bulk wrote more than once");
+    assert(fixture.store.getLibraryState(libraryId).visibleTracks.length === 3, "bulk snapshot incomplete");
+
+    fixture.eventBus.emit("map:clear-requested");
+    fixture.displayState.clearDisplays();
+    fixture.runTimer();
+    assert(fixture.store.getLibraryState(libraryId).visibleTracks.length === 0, "Clear snapshot not empty");
+
+    const singleLibraryId = fixture.store.createLibraryId("Single");
+    fixture.displayState.setLibrary({ name: "Single" });
+    fixture.displayState.registerFile("only.gpx", { name: "only.gpx" }, "#123456");
+    fixture.store.setLibraryState(singleLibraryId, state({
+        visibleTracks: ["only.gpx"]
+    }));
+    fixture.setGeneration(2);
+    restored.length = 0;
+    assert(await fixture.coordinator.restoreLibrary({
+        libraryId: singleLibraryId,
+        libraryName: "Single",
+        generation: 2,
+        isCurrent: fixture.isCurrent(2)
+    }), "single visible restore failed");
+    assert(restored.join(",") === "only.gpx", "single visible path not restored once");
+}
+
+async function testStaleVisibleRestore() {
+
+    const idleResolvers = [];
+    const fixture = createCoordinatorFixture({
+        displayQueue: {
+            whenIdle: () => new Promise(resolve => idleResolvers.push(resolve))
+        }
+    });
+    const firstId = fixture.store.createLibraryId("First");
+    const secondId = fixture.store.createLibraryId("Second");
+
+    fixture.displayState.setLibrary({ name: "First" });
+    fixture.displayState.registerFile("first.gpx", { name: "first.gpx" }, "#123456");
+    fixture.store.setLibraryState(firstId, state({
+        map: { lat: 10, lng: 20, zoom: 5 },
+        visibleTracks: ["first.gpx"]
+    }));
+    const firstRestore = fixture.coordinator.restoreLibrary({
+        libraryId: firstId,
+        libraryName: "First",
+        generation: 1,
+        isCurrent: fixture.isCurrent(1)
+    });
+
+    fixture.setGeneration(2);
+    fixture.displayState.setLibrary({ name: "Second" });
+    fixture.store.setLibraryState(secondId, state({
+        map: { lat: 30, lng: 40, zoom: 8 }
+    }));
+    const secondRestore = fixture.coordinator.restoreLibrary({
+        libraryId: secondId,
+        libraryName: "Second",
+        generation: 2,
+        isCurrent: fixture.isCurrent(2)
+    });
+
+    idleResolvers.splice(0).forEach(resolve => resolve());
+    assert(!await firstRestore, "stale visible restore completed");
+    assert(await secondRestore, "current visible restore rejected");
+    assert(fixture.mapView.restored.value.zoom === 8, "stale Map replaced current Map");
+    assert(fixture.coordinator.getStatus().generation === 2, "stale generation retained");
+}
+
+async function testMapOverrideDuringRestore() {
+
+    let releaseIdle;
+    const fixture = createCoordinatorFixture({
+        displayQueue: {
+            whenIdle: () => new Promise(resolve => { releaseIdle = resolve; })
+        }
+    });
+    const libraryId = fixture.store.createLibraryId("Map override");
+
+    fixture.store.setLibraryState(libraryId, state({
+        map: { lat: 10, lng: 20, zoom: 5 }
+    }));
+    const restore = fixture.coordinator.restoreLibrary({
+        libraryId,
+        libraryName: "Map override",
+        generation: 1,
+        isCurrent: fixture.isCurrent(1)
+    });
+    fixture.mapView.current = { lat: 45, lng: 145, zoom: 12 };
+    fixture.eventBus.emit("map:view-changed", { programmatic: false });
+    releaseIdle();
+
+    assert(await restore, "Map override restore failed");
+    assert(fixture.mapView.restored === null, "saved Map overwrote user Map");
+    assert(fixture.timers.size === 1, "user Map override was not queued for save");
+    fixture.runTimer();
+    assert(fixture.store.getLibraryState(libraryId).map.zoom === 12, "user Map override not saved");
+}
+
+async function testDisplayQueueIdle() {
+
+    const queue = new GPXDisplayQueue(2);
+    const releases = [];
+    const starts = [];
+    let idle = false;
+
+    for (const path of ["a.gpx", "b.gpx", "c.gpx"]) {
+        queue.enqueue({
+            path,
+            run: () => new Promise(resolve => releases.push(resolve)),
+            onSuccess: () => starts.push(path)
+        });
+    }
+
+    assert(queue.getActiveCount() === 2, "Queue concurrency changed");
+    assert(queue.getQueuedCount() === 1, "Queue pending count mismatch");
+    const idlePromise = queue.whenIdle().then(() => { idle = true; });
+    releases.shift()();
+    await Promise.resolve();
+    await Promise.resolve();
+    assert(!idle && queue.getActiveCount() === 2, "Queue reported idle before all work");
+    releases.splice(0).forEach(resolve => resolve());
+    await idlePromise;
+    assert(idle && queue.getActiveCount() === 0, "Queue idle notification missing");
+    assert(starts.length === 3, "Queue duplicated or skipped work");
 }
 
 function testSidebarControls() {
@@ -459,7 +632,11 @@ try {
     testIdentityAndSchema();
     testStore();
     testMapView();
-    testCoordinator();
+    await testCoordinator();
+    await testVisibleTrackState();
+    await testStaleVisibleRestore();
+    await testMapOverrideDuringRestore();
+    await testDisplayQueueIdle();
     testSidebarControls();
 
     output.textContent = `PASS: ${assertions} assertions`;
