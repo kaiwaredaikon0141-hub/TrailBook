@@ -4,10 +4,10 @@ TrailBookは、GPXを含むFolderをLibraryとして閲覧する、個人利用�
 
 ## Current Status
 
-- Current Release: `1.3.0` Previous View Restoration
-- Release 1.3 Previous View Restoration: Completed
+- Current Release: `1.4.0` Library Browsing / Track Discovery
+- Release 1.4 Library Browsing / Track Discovery: Completed
 
-Release 1.3は個人利用向けStable Viewerを維持しながら、前回Library、Map、Sidebar、visible / selected Trackを安全に復元し、IndexedDB geometry cacheで大量Trackのwarm restoreを高速化した完成Releaseです。一般公開版や配布artifactではありません。
+Release 1.4は個人利用向けStable Viewerを維持しながら、Date Tree、Track Info、Track名 / Folder / date range Search・Filterを1つのDiscovery Indexで提供する完成Releaseです。Release 1.3のprevious view restorationとIndexedDB geometry cacheを維持し、一般公開版や配布artifactにはしていません。
 
 ## Implemented Features
 
@@ -31,13 +31,20 @@ Release 1.3は個人利用向けStable Viewerを維持しながら、前回Libra
 - LibraryごとのMap center / zoom、Sidebar、visible / selected Track復元
 - 前回Libraryの自動復元とpermission拒否時の手動picker fallback
 - 再生成可能なIndexedDB geometry cacheによる大量Trackのwarm restore
+- 年 / 月 / 日とUnknown Dateで横断表示するlazy Date Tree
+- 年 / 月 / 日単位のbulk visibilityとFolder Treeとの状態同期
+- selected Trackの距離、point数、日時、duration、elevationを表示するTrack Info
+- Track名 / Folder pathとinclusive date rangeによるSearch / Filter
+- 通常Track opacity 0.55のalpha blending
+- desktop Sidebar幅とTrack list / Track Info高のresize・復元
+- GPX encoding decodeと壊れた内部Track名のfilename fallback
 - ローカル同梱したLeaflet 1.9.4による地図表示
 
-SearchはGPX内容を解析せず、検索入力だけでGPX表示、Queue、cache、Mapを変更しません。
+従来のFolder名、GPXファイル名、relative path Searchはmetadataだけで動作します。Track名またはdate filterを明示した場合だけDiscovery Indexを遅延構築し、filter入力だけではGPX表示、SelectionState、DisplayState、Map center / zoomを変更しません。
 
 ## Data Principles
 
-- Release 1.3でもGPXは読み取り専用で扱います。
+- Release 1.4でもGPXは読み取り専用で扱います。
 - GPXを変更、移動、削除、保存しません。
 - `trailbook.json`への書き込みはSave、Migration、明示Overwriteの利用者操作時だけ行います。
 - SQLiteやIndexedDBをFolder / GPXに代わるLibrary正本として使用しません。
@@ -68,7 +75,7 @@ File System Access API、secure context、対応originが必要です。対応or
 
 ### Mobile
 
-iPhone Chromeでは、HTTPSでの起動、Google Drive上のFolder選択、Folder走査、Tree表示までは成功しました。一方、GPX checkbox、Track表示、touch UIは動作しなかったため、Release 1.3では非対応です。原因分類はAPI不足ではなくMobile UI / touch操作未対応です。
+iPhone Chromeでは、HTTPSでの起動、Google Drive上のFolder選択、Folder走査、Tree表示までは成功しました。一方、GPX checkbox、Track表示、touch UIは動作しなかったため、Release 1.4では非対応です。原因分類はAPI不足ではなくMobile UI / touch操作未対応です。
 
 Android ChromeとiPad Chromeは未確認です。将来候補`Mobile Viewer UX`でresponsive layout、touch操作、gesture分離などを検討します。
 

@@ -80,7 +80,19 @@ export default class ViewStateCoordinator {
             name: libraryName,
             hasState: Boolean(state)
         });
-        this.controls.setSidebarOpen(state?.sidebar.open ?? true, {
+        this.controls.setSidebarWidth(
+            state?.sidebar?.width ?? this.controls.getDefaultSidebarWidth(),
+            {
+                emit: false,
+                notifyLayout: false
+            }
+        );
+        this.controls.setTrackInfoHeight(
+            state?.sidebar?.trackInfoHeight ??
+                this.controls.getDefaultTrackInfoHeight(),
+            { emit: false }
+        );
+        this.controls.setSidebarOpen(state?.sidebar?.open ?? true, {
             notifyLayout: false
         });
         this.mapView.invalidateSize({ silent: true });
@@ -163,6 +175,12 @@ export default class ViewStateCoordinator {
         this.eventBus.on("view-state:sidebar-toggled", () => {
             this.#handleRuntimeChange();
         });
+        this.eventBus.on("view-state:sidebar-width-changed", () => {
+            this.#handleRuntimeChange();
+        });
+        this.eventBus.on("view-state:track-info-height-changed", () => {
+            this.#handleRuntimeChange();
+        });
         this.eventBus.on("gpx:display-toggled", data => {
             if (data?.source !== "view-state-restore") {
                 this.#handleRuntimeChange();
@@ -236,7 +254,11 @@ export default class ViewStateCoordinator {
             map: this.mapView.getViewState(),
             visibleTracks: this.displayState.getCheckedPaths(),
             selectedTrack: this.selectionState.getSelectedPath(),
-            sidebar: { open: this.controls.isSidebarOpen() }
+            sidebar: {
+                open: this.controls.isSidebarOpen(),
+                width: this.controls.getSidebarWidth(),
+                trackInfoHeight: this.controls.getTrackInfoHeight()
+            }
         });
 
         if (saved) {

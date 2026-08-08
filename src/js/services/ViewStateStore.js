@@ -33,7 +33,13 @@ export default class ViewStateStore {
         maxVisibleTracks = 5000,
         maxSerializedBytes = 1048576,
         minZoom = 0,
-        maxZoom = 19
+        maxZoom = 19,
+        sidebarDefaultWidth = 260,
+        sidebarMinWidth = 220,
+        sidebarMaxWidth = 520,
+        trackInfoDefaultHeight = 220,
+        trackInfoMinHeight = 120,
+        trackInfoMaxHeight = 420
     } = {}) {
 
         this.storage = storage;
@@ -42,7 +48,13 @@ export default class ViewStateStore {
             schemaVersion,
             maxVisibleTracks,
             minZoom,
-            maxZoom
+            maxZoom,
+            sidebarDefaultWidth,
+            sidebarMinWidth,
+            sidebarMaxWidth,
+            trackInfoDefaultHeight,
+            trackInfoMinHeight,
+            trackInfoMaxHeight
         };
         this.maxSerializedBytes = maxSerializedBytes;
         this.document = createEmptyViewStateDocument(schemaVersion);

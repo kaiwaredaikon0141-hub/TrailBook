@@ -11,6 +11,18 @@ export default class DisplayState {
         this.displays = new Map();
         this.cache = new Map();
         this.requestIds = new Map();
+        this.listeners = new Set();
+    }
+
+    subscribe(listener) {
+
+        if (typeof listener !== "function") {
+            throw new TypeError("DisplayState listener must be a function.");
+        }
+
+        this.listeners.add(listener);
+
+        return () => this.listeners.delete(listener);
     }
 
     setLibrary(rootHandle) {
@@ -20,6 +32,7 @@ export default class DisplayState {
         this.displays.clear();
         this.cache.clear();
         this.requestIds.clear();
+        this.#notify(null);
 
         return this.libraryGeneration;
     }
@@ -43,6 +56,7 @@ export default class DisplayState {
             requestId: previous?.requestId ?? 0,
             lastUsedAt: previous?.lastUsedAt ?? 0
         });
+        this.#notify(path);
     }
 
     getDisplay(path) {
@@ -72,6 +86,8 @@ export default class DisplayState {
             if (checked) {
                 display.lastUsedAt = Date.now();
             }
+
+            this.#notify(path);
         }
     }
 
@@ -83,6 +99,7 @@ export default class DisplayState {
             display.state = "loading";
             display.error = null;
             display.requestId = requestId;
+            this.#notify(path);
         }
     }
 
@@ -94,6 +111,7 @@ export default class DisplayState {
             display.state = "loaded";
             display.error = null;
             display.lastUsedAt = Date.now();
+            this.#notify(path);
         }
     }
 
@@ -105,6 +123,7 @@ export default class DisplayState {
             display.state = "error";
             display.error = error;
             display.checked = false;
+            this.#notify(path);
         }
     }
 
@@ -115,6 +134,7 @@ export default class DisplayState {
         if (display) {
             display.state = IDLE;
             display.error = null;
+            this.#notify(path);
         }
     }
 
@@ -168,6 +188,7 @@ export default class DisplayState {
         if (display) {
             display.requestId = requestId;
             display.state = display.checked ? display.state : IDLE;
+            this.#notify(path);
         }
 
         return requestId;
@@ -197,6 +218,7 @@ export default class DisplayState {
         });
 
         this.requestIds.clear();
+        this.#notify(null);
     }
 
     clearLibrary() {
@@ -206,6 +228,7 @@ export default class DisplayState {
         this.displays.clear();
         this.cache.clear();
         this.requestIds.clear();
+        this.#notify(null);
     }
 
     evictCache() {
@@ -226,5 +249,12 @@ export default class DisplayState {
             candidates.sort((first, second) => first.lastUsedAt - second.lastUsedAt);
             this.cache.delete(candidates[0].path);
         }
+    }
+
+    #notify(path) {
+
+        const display = path === null ? null : this.getDisplay(path);
+
+        this.listeners.forEach(listener => listener({ path, display }));
     }
 }

@@ -1,9 +1,9 @@
 # ARCHITECTURE.md
 
-Version: 1.2 Completed
+Version: 1.3 Completed
 Status: Official
 Baseline: Release 1.3.0
-Current: Release 1.2 Shared Library Settings Completed
+Current: Release 1.3 Previous View Restoration Completed
 Depends: PROJECT.md, ROADMAP.md, DECISIONS.md
 
 ## Architecture Overview
@@ -1014,6 +1014,134 @@ restore中にuserがMapを操作した場合は後続saved Map投影をskipし�
 - malformed / unknown / oversize store、quota / SecurityErrorではViewerを継続し、defaultまたはsession memoryを使用する。raw JSON、Library path、GPX内容をConsoleへ出さず、同じfailureを反復warningしない。
 - stale / invalid pathは無視し、Track load failureは既存error状態へ投影して他targetを継続する。failed / missing Trackをselectedにしない。
 - Resetはcurrent Library entryだけをconfirmation後に削除する。Map mode、Folder colors、shared JSON、GPX、他Library stateを削除せず、現在表示は維持する。Reset直後は次の明示的なview変更まで自動再保存を抑止する。
+
+## Release 1.4 Architecture Plan — Library Browsing / Track Discovery
+
+Status: Completed。Unit 1〜6のArchitecture、Implementation、Browser Acceptance、performance、data protection、finalizationを完了した。broken internal Track name fallbackはAcceptedである。
+
+### Responsibility Split
+
+Release 1.4はexisting Folder TreeをLibrary構造のprojectionとして維持し、Date Tree、Track Info、advanced Search / Filterを同じDiscovery Indexの別projectionとして追加する。実Folder / GPX、`trailbook.json`、DisplayStateへDiscovery分類を書き戻さない。
+
+Planned components:
+
+- `TrackDiscoveryEntry` Model: 1 GPX pathのimmutable summary。DOM、FileHandle、Leaflet Layerを持たない
+- `TrackSummaryBuilder` Service: 1回のparser resultとFile metadataからdate source、Track名、distance、point / time / elevation summaryをpure計算する
+- `LibraryDiscoveryIndexService`: current Libraryのpath-keyed summary、build lifecycle、将来のTrack name / Folder / date range query基盤を管理する
+- shared derived-data loader / repository: Geometry Cacheのsource validationとinflight deduplicationを再利用し、geometryとsummaryを同一parseから生成する
+- `TrackDiscoveryCoordinator`: explicit index build、cancel、generation guard、selection projection、UI statusを調停する
+- `DateTreeView`: virtual year / month / day hierarchyのlazy DOMとGPX path操作を担当する
+- `TrackInfoView`: selected GPX summaryをread-only表示する
+- `SidebarResizeHandle`: desktopのSidebar / Map境界resize、separator ARIA、width projectionだけを担当する
+- `TrackInfoResizeHandle`: desktopのTrack list / Track Info境界resize、separator ARIA、height projectionだけを担当する
+- `DiscoveryFilterService`: NFKC / case-insensitive textとinclusive local date rangeをpureに評価し、total countと最大100件の結果を返す
+- 限定的な`SearchView`拡張: text、From / To、Clear、index status、既存result activate / checkbox / keyboard / ARIAを担当する
+- `FolderTreeFilterProjection`: matching GPXと祖先FolderだけをTreeViewのlazy DOMへ投影し、TreeView metadata / expansion / selection / visibility stateは所有しない
+
+依存方向はUI → Coordinator event contract → Index / Loader / Modelとする。`TrackDiscoveryEntry`とsummary builderはUI、EventBus、Map、File System Handleを参照しない。CoordinatorはAppの新しい大規模責務にせず、Appは生成と既存Event接続だけを行う。`TreeView.js`へDate hierarchy、Track Info、filter責務を追加しない。
+
+### Shared Parse and Derived Cache
+
+Release 1.3 `GeometryCacheRepository`は描画座標だけを保持し、cache hitではGPX metadata、Track名、time、elevation summaryを返せない。Release 1.4はcache schemaを明示的に更新し、compact discovery summaryをgeometryと同じderived recordへ追加する。
+
+- source identityはLibrary opaque namespace + relative path + `File.size` + `File.lastModified` + parser / cache schemaを維持する
+- cache miss時はGPX Parser resultからgeometryとsummaryを同時生成し、1 path 1 inflight promiseで表示要求とindex要求をdeduplicateする
+- summary-only readはgeometry / TrackPoint配列をIndex memoryへcopyしない
+- old schema、missing / corrupt summary、quota / IndexedDB failureは該当GPXだけ通常parseへfallbackする
+- cold indexで得たgeometryは後続Map表示にも利用可能とし、同一GPXをindex用とdisplay用に二重parseしない
+- GPX XML、Leaflet Layer、DisplayState、Queue状態はIndexedDBへ保存しない
+
+Discovery IndexはLibrary session stateであり、Library切り替え時にclearする。derived cacheだけがorigin-localに残り、Folder / GPXの正本を置き換えない。Display session cache上限100とDiscovery summary件数は別責務であり、summaryは1 GPX 1件のcompact dataへ限定する。
+
+### Date and Metrics Contract
+
+date source priorityはDecision 0025を具体化し、valid `metadata.time`、document順の最初のvalid TrackPoint time、`File.lastModified`、厳密に解析可能なoriginal filenameの順とする。runtime `recordedAt`はDate、cache representationはvalidated ISO stringとsource enum、Date Tree keyはbrowser local calendarの`YYYY-MM-DD`とする。invalid / missingは`Unknown Date`へ置く。
+
+distanceは各Segment内の隣接pointだけをHaversine計算し、Segment間を接続しない。point countは全valid TrackPoint、start / endは全valid point timeの最小 / 最大、durationは両方があり非負の場合だけ算出する。elevationはvalid値のmin / maxだけをRelease 1.4 Scopeとする。複数Trackを含むGPXもrelative path単位で集計し、個別Track selectionへ変えない。
+
+### Existing Contract Protection
+
+- Date Tree GPX activateは既存primary selection、表示中Track refocus、非表示TrackのMap不変契約を再利用する
+- Date Tree individual checkboxは既存`gpx:display-toggled`相当のpath / FileHandle解決をCoordinator経由で使用し、selectionを変更しない
+- Library openと空Searchはindex buildを開始しない。textまたはdate filterの明示入力でだけ1回indexを準備し、その後はmemory queryだけを行う
+- textはdisplay / Track nameまたはrelative Folder path、date rangeはlocal calendarのinclusive From / Toを対象とし、複数条件はANDとする
+- index buildはDisplayState.checked、SelectionState、Map、Folder expanded pathsを変更しない
+- selected Track InfoのloadはMap pan / zoom / fit、visibility、selectionを変更しない
+- generation変更、cancel、partial parse failureで旧Library entryを投影しない
+
+### Unit 2 Index Foundation Implementation
+
+- `TrackDiscoveryEntry`はrelative path、Folder path、display / Track name、resolved date / source、point / time / distance / elevation summary、File identity、ready / error statusだけをimmutableに保持する
+- `TrackSummaryBuilder`はparser resultを一回走査し、Segment境界を跨がないHaversine distance、valid point timeのmin / max、duration、elevation min / maxを計算する
+- `GPXGeometryLoader.load()`と`loadSummary()`はnamespace + pathの同じinflight bundleを共有し、同時要求でもXML read / parse / cache writeを一回にする
+- `GeometryCacheRepository` schema version 2はdrawing geometryとserialized compact summaryを同じsource identityで検証する。GPX XML、Leaflet Layer、Queue状態は保存しない
+- `LibraryDiscoveryIndexService.setLibrary()`はpath / FileHandle sourceだけを準備し、明示`build()`までFile readを行わない。buildはconcurrency 2、duplicate path排除、partial error fallback、progress、cancel、generation guardを持つ
+- parse failureでもpathと取得可能なFile metadataからerror status entryを生成し、1 GPX 1 entryとViewer継続を維持する
+- Unit 2ではApp、TreeView、Date Tree、Track Info、Search / Filterへ接続しない。Index Serviceが`main.js` graphへ未接続なのはUnit 3以降のUI開始前の意図した状態である
+- Unit 2 Browser Acceptanceでは約806 GPXのcold build中央値21秒、warm build中央値3秒を確認した。coldは初回buildの非blocking結果として許容し、valid cached summaryを使うwarm buildは約5秒目標をPassした。cache hit時のduplicate parse、UI block、pan / zoom、Cancel、Library切り替え、data protectionに回帰はない
+
+### Unit 3 Date Tree Implementation
+
+- `DateTreeBuilder`はDiscovery entry参照を年 / 月 / 日へlocal calendarでgroup化し、年・月・日は新しい順、同日Trackはresolved date降順、display name、relative pathの順でstable sortする。日付なしは末尾の`Unknown Date`へ置く
+- `DateTreeView`はFolder Treeと別DOMを持ち、初期描画はtop-level year / Unknown groupだけとする。月、日、Trackは親group展開時にだけ生成し、800件超のTrack rowを一括生成しない
+- `DateTreeVisibilityIndex`はDOM非依存で各year / month / day groupの全descendant entryとpathから祖先groupへの逆indexを保持する。tri-stateはその都度DisplayState.checkedを集計し、Date Tree独自visibility stateを作らない
+- `TrackDiscoveryCoordinator`はFolder / Date切替、明示Date表示時のIndex build、progress / cancel、Library generation、FileHandle解決、DisplayState / SelectionState projectionを調停する。Index groupingやDOM責務をApp / TreeViewへ置かない
+- Date Track activateは既存`gpx:selection-requested`、checkboxは既存`gpx:display-toggled`を発行する。DisplayStateの購読通知でFolder / Date双方のchecked / loading / errorを同期し、selectionは既存`selection:changed`だけを投影する
+- year / month / day checkboxはIndex descendantを`fileEntries`へ解決し、1回の既存`folder:display-toggled`を発行する。lazy未展開Trackも対象とし、既存App bulk、Queue、Map、TreeView、750ms view-state save coalescingを再利用する。Date group eventだけは`preserveMapView` / `preserveSelection`を指定して自動refocusとselection変更を抑止し、DisplayState通知のDate DOM反映もmicrotask単位にまとめる
+- Folder / Date modeはschema version 1の`trailbook.discoveryView`へdevice-localに保存する。FileHandle、GPX、summary、geometry、Library設定を保存せず、storage failure時はsession stateでViewerを継続する
+- mode切替とDate group bulkはselectionまたはMap center / zoomを変更しない。Track Infoとadvanced FilterはUnit 3へ含めない
+
+### Track Alpha Blending
+
+Status: Completed。通常Track opacity 0.55をChrome Browser Acceptance結果に基づいて正式採用する。
+
+- 通常Trackのopacityは`TrackStyleService`と`Config.map.trackStyle`へ集約し、0.55とする。Folder / Date / Searchの表示入口に依存せず、全Track Layerへ同じstyle契約を適用する
+- Track color、Folder color解決、zoom bucket別weightは変更せず、重なりはLeaflet Canvasの通常alpha合成へ委ねる。追加のblend layerやgeometry再生成は行わない
+- selected mainはopacity 1.0、既存outlineはopacity 0.95を維持する。Waypoint、背景tile、Monochrome filter、Map restoreには通常Track opacityを適用しない
+- style変更だけでGPX parse、Layer再生成、Bounds、Map center / zoom、GPX、`trailbook.json`を変更しない
+
+### Unit 4 Track Info Implementation
+
+- `TrackInfoCoordinator`は`selection:changed`のrelative pathとLibrary generationを受け、同じpathの最新requestだけを`TrackInfoView`へ投影する。SelectionStateを置き換えず、Map、Tree、Searchへselectionを書き戻さない
+- `LibraryDiscoveryIndexService.loadEntry()`は既存entryを即時返し、未構築pathだけをshared `GPXGeometryLoader.loadSummary()`へ要求する。同一pathの進行中requestをdeduplicateし、full Index buildを開始しない
+- summaryはGeometry Cache hitと通常parseのどちらでも同じ`TrackDiscoveryEntry`となる。load failureはerror entry、missing / stale pathはunavailable stateとし、Library generation変更後の結果を破棄する
+- `TrackInfoView`はDOMと人間向けformatだけを担当する。distanceはm / km、durationは時間 / 分 / 秒、elevationはm、日時はbrowser localeで表示し、欠損値は`—`とする
+- Track Info取得はvisibility、Map pan / zoom / fit、selection、Date / Folder mode、GPX、`trailbook.json`を変更しない
+
+### Unit 4 Sidebar Layout and Width
+
+- `TrackDiscoveryCoordinator`はSidebar shellを構築し、固定control領域、独立scrollするFolder / Date Track list、下部固定`TrackInfoView`を分離する。Track Infoが利用可能高を超える場合はpanel内部だけをscrollする
+- `SidebarResizeHandle`はdesktopのfine pointer環境だけで表示し、pointer dragとkeyboardのArrow Left / Right、Home / Endを提供する。`role="separator"`、vertical orientation、現在値とmin / maxをARIAへ公開する
+- 幅は220〜520px、default 260pxとし、drag中はtext selectionを抑止する。drag終了またはkeyboard変更時だけ既存layout eventを発行し、Mapは`invalidateSize({ silent: true })`で残り領域へ追従する
+- `ViewStateSchema` schema version 1のoptional `sidebar.width`としてLibrary単位の`trailbook.viewState`へ保存する。旧payloadのmissing値は260pxへfallbackし、Sidebar open / closedと同じ750ms save queueを使う
+- Track list / Track Info境界はhorizontal separatorとし、Track Info高120〜420px、default 220px、Track list最小100pxを維持する。Arrow Up / Downは16px、Home / Endはmin / available maxへ移動する
+- Track Info高はschema version 1のoptional `sidebar.trackInfoHeight`として同じLibrary単位snapshotと750ms save queueへ保存する。旧payloadのmissing値は220pxへfallbackする
+- width restore / resizeはMap center / zoom、selection、visibility、Tree / Search stateを変更しない。GPX、`trailbook.json`、shared settingsへ保存しない。Mobile / coarse pointerではresize handleを表示しない
+
+### Unit 4 GPX Text Decoding
+
+- root causeは`File.text()`がFile byte列を常にUTF-8としてdecodeし、XML declarationのShift_JIS / Windows-31Jを反映しなかったことである。TrackInfoViewで文字列を補正せず、`GPXLoader`をbyte decodeの単一入口とする
+- BOMはUTF-8 / UTF-16LE / UTF-16BEを優先し、ASCII互換XML declarationからUTF-8、Shift_JIS、Windows-31J / CP932 aliasをallowlistで解決する。宣言なしではstrict UTF-8を先に試し、invalid byte列の場合だけShift_JISを試す
+- unsupported declarationまたはdecoder failureはUTF-8 replacement decodeへfallbackし、Viewer全体を停止しない。判定のために外部通信せず、GPXを書き換えない
+- `GPXGeometryLoader`のcache miss経路は`GPXLoader.decode()`を利用し、Parser、Geometry Cache、Discovery Index、Date Tree、Track Infoが同じUnicode parse resultを共有する
+- Geometry Cache schema version 3と`textDecoderSchemaVersion: 1`はschema 2の誤decode済みcompact summary、およびdecode markerを持たない過渡的schema 3 recordをinvalidにする。source GPXのsize / lastModifiedが同じでも該当recordだけを削除し、既存parse fallbackでgeometryとsummaryを再生成する。DB全体clearは行わない
+- `TrackSummaryBuilder`はdecode / Parser後のnameを共通validatorへ通し、空、U+FFFD、C0 / DEL制御文字を含むmetadata / Track nameをDiscovery nameとして採用しない。display nameはusable metadata name、最初のusable Track name、relative path由来filenameの順で決定し、Search / Date Tree / Track Infoへ同じentryを投影する
+- `GeometryCacheRepository`も同じvalidatorでcached display / Track nameを検証する。broken summaryは該当cache keyだけを削除して既存parseへfallbackし、他GPX recordとDB全体は維持する。cache schema 3とdecoder marker 1は変更しない
+- Browser AcceptanceではSearch / Date Tree / Track Infoの名前一致、broken Track nameの検索除外、filename fallback、手動cache clear不要、該当GPXだけの再生成と他cache維持をPassした
+
+### Unit 5 Search / Filter Implementation
+
+- `DiscoveryFilterService`は1 GPX 1件のready / error summaryをmemory内で走査し、NFKC後のcase-insensitive textを`displayName`、全Track name、`folderPath`へ適用する。From / Toはbrowser local calendarの`YYYY-MM-DD`でinclusive比較し、date指定時のUnknown Dateは除外する
+- `TrackDiscoveryCoordinator`がSearch filter event、遅延Index build、generation guard、Folder / Date両projection、result status同期を調停する。warm Indexは再利用し、queryごとのFile read / parse / cache writeを行わない
+- `FolderTreeFilterProjection`はmatching relative pathと祖先Folderの`hidden`だけをlazy DOMへ反映する。MutationObserverでfilter後に生成されたrowも同じpredicateへ投影し、TreeViewのmetadata、expanded paths、roving tabindex、DisplayState、SelectionStateを変更しない
+- Date Treeは同じmatching entry集合からgroupを再構築するため、年 / 月 / 日bulkもfilter候補だけを対象にする。Folder / Date切替はfilter、selection、checked、Map center / zoomを維持する
+- result listは既存activate / checkbox eventを再利用し、最大100件表示とtotal countを維持する。filter自体はMap visibilityを変更せず、filtered-out TrackをOFFにしない。Clearは両Treeを全entryへ戻す
+- filter stateはschema version 1の`trailbook.discoveryView`へLibrary ID別device-local dataとして保存する。FileHandle、summary、geometry、GPX XMLは保存せず、Library切り替え時に別Library filterを混在させない
+- AppはSearch ownershipをCoordinatorへ委譲し、既存result activate / checkbox eventの配線だけを維持する。App / TreeViewへfilter責務を追加しない
+
+### Size Boundary
+
+`App.js`と`TreeView.js`は各1,000行未満をhard gateとする。Release 1.4 UIを`TreeView`へ追加せず、Appへindex loop、date grouping、metrics計算、cache schema処理を置かない。500行を超える新規fileは分割検討対象とする。
 
 ## Architecture Principles
 

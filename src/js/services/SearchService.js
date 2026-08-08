@@ -2,6 +2,14 @@ import SearchEntry from "../models/SearchEntry.js";
 
 const MAX_SEARCH_RESULTS = 100;
 
+function normalizeSearchText(value) {
+
+    return String(value || "")
+        .normalize("NFKC")
+        .trim()
+        .toLocaleLowerCase();
+}
+
 /**
  * Searches library metadata without reading or parsing GPX files.
  */
@@ -25,8 +33,8 @@ class SearchService {
 
             return {
                 entry,
-                normalizedName: this.#normalize(entry.name),
-                normalizedPath: this.#normalize(entry.path)
+                normalizedName: normalizeSearchText(entry.name),
+                normalizedPath: normalizeSearchText(entry.path)
             };
         });
     }
@@ -49,7 +57,7 @@ class SearchService {
      */
     search(query) {
 
-        const normalizedQuery = this.#normalize(query);
+        const normalizedQuery = normalizeSearchText(query);
 
         if (!normalizedQuery) {
             return { totalCount: 0, results: [] };
@@ -74,14 +82,6 @@ class SearchService {
         };
     }
 
-    #normalize(value) {
-
-        return String(value || "")
-            .normalize("NFKC")
-            .trim()
-            .toLocaleLowerCase();
-    }
-
     #getRank(indexEntry, query) {
 
         const name = indexEntry.normalizedName;
@@ -103,5 +103,5 @@ class SearchService {
     }
 }
 
-export { MAX_SEARCH_RESULTS };
+export { MAX_SEARCH_RESULTS, normalizeSearchText };
 export default SearchService;

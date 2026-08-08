@@ -386,8 +386,14 @@ async function testAppIntegration() {
         setPresentations() {},
         setFileColor() {}
     };
+    app.viewStateCoordinator = { restoreLibrary() {} };
+    const currentContext = {
+        generation: 1,
+        isCurrent: () => true,
+        cacheNamespace: "shared-test"
+    };
 
-    const completed = await app.handleLibraryLoaded(library);
+    const completed = await app.handleLibraryLoaded(library, currentContext);
 
     assert(completed === true, "App shared load did not complete");
     assert(app.librarySettingsCoordinator.state.getStatus().source === "shared-json", "App source");
@@ -395,12 +401,12 @@ async function testAppIntegration() {
     assert(app.displayState.getDisplay("track.gpx").color === "#ABCDEF", "display color");
 
     app.librarySettingsCoordinator.repository.load = async () => stateResult("missing");
-    await app.handleLibraryLoaded(library);
+    await app.handleLibraryLoaded(library, currentContext);
     assert(app.librarySettingsCoordinator.state.getStatus().source === "legacy-local", "App missing fallback");
     assert(app.folderColorState.getExplicitColor("") === "#111111", "App legacy color");
 
     app.displaySettingsStore.getFolderColors = () => ({});
-    await app.handleLibraryLoaded(library);
+    await app.handleLibraryLoaded(library, currentContext);
     assert(app.librarySettingsCoordinator.state.getStatus().source === "auto", "App Auto source");
     assert(app.folderColorState.getExplicitColor("") === null, "App Auto kept explicit color");
 
@@ -409,7 +415,7 @@ async function testAppIntegration() {
         errorCode: "malformed-json",
         fallbackAllowed: false
     });
-    await app.handleLibraryLoaded(library);
+    await app.handleLibraryLoaded(library, currentContext);
     assert(app.librarySettingsCoordinator.state.getStatus().source === "auto", "App invalid used legacy");
     assert(app.folderColorState.getExplicitColor("") === null, "App invalid kept legacy color");
 
@@ -432,16 +438,27 @@ async function testAppIntegration() {
     staleApp.statusBar = app.statusBar;
     staleApp.libraryAccessPanel = app.libraryAccessPanel;
     staleApp.folderColorControl = app.folderColorControl;
+    staleApp.viewStateCoordinator = app.viewStateCoordinator;
 
     const firstHandle = {};
     const secondHandle = {};
+    let currentGeneration = 1;
     const firstLoad = staleApp.handleLibraryLoaded({
         ...library,
         rootFolder: { handle: firstHandle }
+    }, {
+        generation: 1,
+        isCurrent: () => currentGeneration === 1,
+        cacheNamespace: "first"
     });
+    currentGeneration = 2;
     const secondLoad = staleApp.handleLibraryLoaded({
         ...library,
         rootFolder: { handle: secondHandle }
+    }, {
+        generation: 2,
+        isCurrent: () => currentGeneration === 2,
+        cacheNamespace: "second"
     });
 
     pendingLoads.get(firstHandle)(stateResult("loaded", {

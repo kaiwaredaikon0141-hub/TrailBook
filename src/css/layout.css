@@ -41,7 +41,9 @@ body{
 
     grid-template-columns:
 
-        260px
+        var(--sidebar-width, 260px)
+
+        6px
 
         1fr;
 }
@@ -49,6 +51,31 @@ body{
 .workspace.is-sidebar-closed{
 
     grid-template-columns:1fr;
+}
+
+.workspace.is-sidebar-resize-unavailable{
+
+    grid-template-columns:var(--sidebar-width, 260px) 1fr;
+}
+
+.sidebar-shell{
+
+    min-width:0;
+
+    min-height:0;
+
+    display:grid;
+
+    grid-template-rows:
+
+        auto minmax(100px, 1fr) 6px
+
+        minmax(120px, var(--track-info-height, 220px));
+}
+
+.sidebar-shell.is-track-info-resize-unavailable{
+
+    grid-template-rows:auto minmax(80px, 1fr) auto;
 }
 
 .map-view{

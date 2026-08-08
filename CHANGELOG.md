@@ -1,5 +1,44 @@
 # Changelog
 
+## v1.4.0
+
+Date: 2026-08-08
+Status: Ready for final commit and tag
+
+### Added
+
+- One path-keyed Library Discovery Index shared by Date Tree, Track Info, and Search / Filter
+- Lazy year / month / day Date Tree with Unknown Date and group bulk visibility
+- Selected Track information for name, Folder, date source, distance, points, time, duration, and elevation range
+- Track name / Folder path search with inclusive From / To date filters
+- Desktop Sidebar width and Track list / Track Info split resizing with Library-local restoration
+- GPX byte decoding for UTF-8, UTF-16 BOM, Shift_JIS, and Windows-31J declarations
+
+### Changed
+
+- Normal Track opacity is 0.55 for alpha blending while selected Tracks remain fully opaque with the existing outline
+- Broken internal GPX names containing replacement or control characters fall back to the relative-path filename
+- Geometry Cache schema validation regenerates only stale or incompatible GPX entries and shares compact Discovery summaries with drawing geometry
+- Folder and Date views share SelectionState and DisplayState without changing Map visibility during filtering
+
+### Performance
+
+- Approximately 806 GPX cold Discovery Index median: 21 seconds without blocking the UI
+- Approximately 806 GPX warm Discovery Index median: 3 seconds, meeting the approximately 5-second target
+- Existing approximately 807 Track warm restore median remains 3 seconds as the accepted baseline; Release 1.4 acceptance found no observable regression, but did not repeat the numerical timing run
+
+### Data Protection
+
+- Discovery data and filters do not write to GPX or `trailbook.json`
+- Encoding recovery never rewrites the source GPX
+- Geometry and Discovery caches remain origin-local, derived, disposable data
+
+### Known Limitations
+
+- Date grouping and inclusive date filtering use the browser's local calendar date and can change with the local timezone
+- Mobile UI remains unsupported, and Waypoint ON remains expensive for large Libraries
+- Automated DOM static test pages require a browser runtime; Search / Filter was accepted through human Browser Acceptance and static module validation
+
 ## v1.3.0
 
 Date: 2026-08-08

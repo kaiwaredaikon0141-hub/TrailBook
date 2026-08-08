@@ -4,11 +4,13 @@
 
 ## Current Status
 
-- Current Release: `1.3.0` Previous View Restoration
-- Completed: Release 0.1からRelease 1.3
-- Next Release: Not scheduled（Future Candidatesから別途承認する）
+- Current Release: `1.4.0` Library Browsing / Track Discovery
+- Completed: Release 0.1からRelease 1.4
+- Next Release: Not defined
 
-Release 1.3 Previous View RestorationはCompletedです。前回Library、Map、Sidebar、visible / selected Trackを復元し、既存再parse中央値25秒からIndexedDB geometry cache導入後3秒へ改善して約5秒gateをPassしました。Chrome / Edgeの既存Browser AcceptanceとRelease 1.3 Unit 1〜7の完了記録を統合確認しています。
+Release 1.4 Library Browsing / Track DiscoveryはCompletedです。Release 1.3の前回Library / view restorationとgeometry cacheを維持し、1つのDiscovery IndexからDate Tree、Track Info、Track名 / Folder / date range Search・Filterを提供します。
+
+Release 1.4 Unit 1〜6の設計、実装、Browser Acceptance、performance、data protection、finalization記録はCompletedです。warm Discovery Indexは約806 GPXで中央値3秒、warm Track restoreは既存中央値3秒を維持する定性的受け入れを完了しています。
 
 ## Read Order
 
@@ -24,7 +26,7 @@ Release 1.3 Previous View RestorationはCompletedです。前回Library、Map、
 10. [CONTRIBUTING.md](CONTRIBUTING.md) — Gitと変更手順
 11. [GLOSSARY.md](GLOSSARY.md) — 用語
 
-Release 1.0のUnit 1〜8、Release 1.1のUnit 1〜7、Release 1.2のUnit 1〜5、Release 1.3のUnit 1〜7は[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)に記録しています。
+Release 1.0のUnit 1〜8、Release 1.1のUnit 1〜7、Release 1.2のUnit 1〜5、Release 1.3のUnit 1〜7、Release 1.4のUnit 1〜6は[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)に記録しています。
 
 Release 1.1 Unit roles:
 
@@ -54,7 +56,16 @@ Release 1.3 Unit roles:
 6. selected Track restore、Reset UI、error / Library lifecycle
 7. Chrome / Edge統合受け入れ、性能、文書、Release finalization
 
-## Implemented Through Release 1.3
+Release 1.4 Unit roles:
+
+1. Planning、Architecture、Decision、date / summary contract
+2. Library Discovery Indexとshared derived-data cache
+3. Date Tree、Folder / Date mode、年月日bulk visibility、Track Alpha Blending
+4. Track Info、Sidebar resize、GPX encoding / cache invalidation
+5. Track名 / Folder / date range Search・Filter
+6. Chrome / Edge統合、performance、data protection、documentation、finalization
+
+## Implemented Through Release 1.4
 
 - Folder Libraryと再帰走査
 - GPX Parser
@@ -79,14 +90,20 @@ Release 1.3 Unit roles:
 - LibraryごとのMap center / zoom、Sidebar、visible / selected Track復元
 - IndexedDBのprevious DirectoryHandleによる前回Library再開
 - 再生成可能なIndexedDB geometry cacheと約807 Trackの3秒warm restore中央値
+- 1 GPX 1件のLibrary Discovery Indexと約806 GPXの3秒warm build中央値
+- 年 / 月 / 日 / Unknown Dateのlazy Date Treeと年月日bulk visibility
+- selected Trackのread-only Track Info
+- Track名 / Folder path / inclusive date range Search・Filter
+- Track Alpha Blendingとdesktop Sidebar / Track Info resize
+- GPX encoding decodeとbroken Track nameのfilename fallback
 
 実装済み範囲の詳細は[CHANGELOG.md](../CHANGELOG.md)、Release順序は[ROADMAP.md](ROADMAP.md)を正本とします。
 
 ## Current Release and Future Features
 
-Release 1.3 Previous View RestorationはCompletedです。TrailBookはGoogle Drive APIや同期statusを使用せず、同期後のmanual ReloadまたはLibrary再選択を利用します。前回表示状態と前回Libraryは端末・browser origin限定であり、共有設定やGPXの正本ではありません。
+Release 1.4 Library Browsing / Track DiscoveryはCompletedです。Discovery IndexとGeometry Cacheは削除・再生成可能なderived dataであり、Folder構造、GPX、`trailbook.json`の正本性を変更しません。
 
-sidebar width、Search / Tree navigation復元、Stable Library Identity / Aliasに加え、Statistics、Replay、HeatMap、GPX Metadata Index、日付表示、vehicle metadata、GPX編集、GPX size reduction、Cloud Sync、Mobile Viewer UX、Waypoint性能最適化、数値性能再測定、Plugin、AI Searchなども未実装の将来候補です。
+Search / Tree navigation復元、Stable Library Identity / Aliasに加え、Statistics、Replay、HeatMap、vehicle metadata、GPX編集、GPX size reduction、Cloud Sync、Mobile Viewer UX、Waypoint性能最適化、数値性能再測定、Plugin、AI Searchなどは未実装の将来候補です。
 
 ## Source of Truth
 

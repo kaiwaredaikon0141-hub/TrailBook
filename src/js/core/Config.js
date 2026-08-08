@@ -4,10 +4,15 @@
 
 const Config = {
 
-    version: "1.3.0",
+    version: "1.4.0",
 
     uiSettings: {
         storageKey: "trailbook.uiSettings",
+        schemaVersion: 1
+    },
+
+    discoveryView: {
+        storageKey: "trailbook.discoveryView",
         schemaVersion: 1
     },
 
@@ -18,7 +23,16 @@ const Config = {
         maxVisibleTracks: 5000,
         maxSerializedBytes: 1048576,
         minZoom: 0,
-        maxZoom: 19
+        maxZoom: 19,
+        sidebarDefaultWidth: 260,
+        sidebarMinWidth: 220,
+        sidebarMaxWidth: 520,
+        sidebarKeyboardStep: 16,
+        trackInfoDefaultHeight: 220,
+        trackInfoMinHeight: 120,
+        trackInfoMaxHeight: 420,
+        trackListMinHeight: 100,
+        trackInfoKeyboardStep: 16
     },
 
     previousLibrary: {
@@ -32,8 +46,9 @@ const Config = {
         databaseName: "trailbook.geometryCache",
         databaseVersion: 1,
         objectStoreName: "entries",
-        cacheSchemaVersion: 1,
-        parserSchemaVersion: 1
+        cacheSchemaVersion: 3,
+        parserSchemaVersion: 1,
+        textDecoderSchemaVersion: 1
     },
 
     sharedLibrarySettings: {
@@ -66,7 +81,7 @@ const Config = {
         trackStyle: {
             lineColor: "#e53935",
             lineWeight: 4,
-            lineOpacity: 0.85,
+            lineOpacity: 0.55,
             selectedWeightOffset: 3,
             selectedOpacity: 1,
             outlineWeightOffset: 2,

@@ -47,13 +47,20 @@ export function isValidGPXPath(path) {
     ));
 }
 
-export function createDefaultLibraryViewState() {
+export function createDefaultLibraryViewState({
+    sidebarDefaultWidth = 260,
+    trackInfoDefaultHeight = 220
+} = {}) {
 
     return {
         map: null,
         visibleTracks: [],
         selectedTrack: null,
-        sidebar: { open: true }
+        sidebar: {
+            open: true,
+            width: sidebarDefaultWidth,
+            trackInfoHeight: trackInfoDefaultHeight
+        }
     };
 }
 
@@ -103,7 +110,7 @@ export function normalizeLibraryViewState(value, options) {
         return null;
     }
 
-    const normalized = createDefaultLibraryViewState();
+    const normalized = createDefaultLibraryViewState(options);
 
     normalized.map = normalizeMap(value.map, options);
     normalized.visibleTracks = normalizeVisibleTracks(
@@ -117,6 +124,36 @@ export function normalizeLibraryViewState(value, options) {
         typeof value.sidebar.open === "boolean"
         ? value.sidebar.open
         : true;
+    const sidebarMinWidth = Number.isFinite(options.sidebarMinWidth)
+        ? options.sidebarMinWidth
+        : 220;
+    const sidebarMaxWidth = Number.isFinite(options.sidebarMaxWidth)
+        ? options.sidebarMaxWidth
+        : 520;
+    const sidebarDefaultWidth = Number.isFinite(options.sidebarDefaultWidth)
+        ? options.sidebarDefaultWidth
+        : 260;
+    normalized.sidebar.width = isPlainObject(value.sidebar) &&
+        Number.isFinite(value.sidebar.width) &&
+        value.sidebar.width >= sidebarMinWidth &&
+        value.sidebar.width <= sidebarMaxWidth
+        ? Math.round(value.sidebar.width)
+        : sidebarDefaultWidth;
+    const trackInfoMinHeight = Number.isFinite(options.trackInfoMinHeight)
+        ? options.trackInfoMinHeight
+        : 120;
+    const trackInfoMaxHeight = Number.isFinite(options.trackInfoMaxHeight)
+        ? options.trackInfoMaxHeight
+        : 420;
+    const trackInfoDefaultHeight = Number.isFinite(options.trackInfoDefaultHeight)
+        ? options.trackInfoDefaultHeight
+        : 220;
+    normalized.sidebar.trackInfoHeight = isPlainObject(value.sidebar) &&
+        Number.isFinite(value.sidebar.trackInfoHeight) &&
+        value.sidebar.trackInfoHeight >= trackInfoMinHeight &&
+        value.sidebar.trackInfoHeight <= trackInfoMaxHeight
+        ? Math.round(value.sidebar.trackInfoHeight)
+        : trackInfoDefaultHeight;
 
     return normalized;
 }
@@ -156,7 +193,11 @@ export function cloneLibraryViewState(state) {
         map: state.map ? { ...state.map } : null,
         visibleTracks: [...state.visibleTracks],
         selectedTrack: state.selectedTrack,
-        sidebar: { open: state.sidebar.open }
+        sidebar: {
+            open: state.sidebar.open,
+            width: state.sidebar.width,
+            trackInfoHeight: state.sidebar.trackInfoHeight
+        }
     };
 }
 

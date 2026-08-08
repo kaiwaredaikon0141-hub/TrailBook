@@ -905,3 +905,94 @@ Unit 2ではこのReset基盤とdevice-local状態表示を実装した。Reset�
 - Unit 4: Previous Library RestoreはCompleted
 - Unit 5: Fast Restore performance gateとgeometry cacheはCompleted。warm restore中央値3秒で約5秒目標をPass
 - Unit 6: Selected Track RestoreはCompleted
+
+# 23. Release 1.4 UI Plan — Library Browsing / Track Discovery
+
+Status: Completed。Unit 1〜6のUI ImplementationとBrowser Acceptanceを完了し、文字化けfallbackもAcceptedである。
+
+## Folder / Date Browse Mode
+
+- Sidebar内にnative buttonの`Folder` / `Date`切替を置く。保存値がない初期値は`Folder`とし、device-localな前回modeを復元する。既存TreeView DOMとexpanded stateを破棄しない
+- `Date`はvirtual year / month / day hierarchyをlazy DOMで表示し、各GPXはrelative path identityで1回だけ現れる
+- Date GPX rowはactivateとindividual display checkboxを既存path eventへ接続する。checkboxはselectionを変更しない
+- 年 / 月 / 日groupはexpand / collapseとbulk checkboxを持つ。全descendant visibleでchecked、一部visibleでindeterminate、全てhiddenでuncheckedとする。bulk ON / OFFはselectionとMap center / zoomを変更しない
+- date不明のGPXは`Unknown Date` groupへ置き、壊れたGPXやpartial failureを架空の日付へ分類しない
+- Date Treeのroving tabindex、Arrow key、Home / End、Enter、Space、focus維持、`aria-expanded`、checked stateは既存Tree contractと同等にtestする
+
+Unit 3ではこのFolder / Date切替、progress / Cancel、year / month / day / TrackとUnknown Dateのlazy DOM、roving keyboard / ARIA、Track activate / individual・group checkboxを実装した。SpaceはTrackまたはgroup rowのcheckboxを切り替え、Enterは既存selectionまたはgroup展開経路へ接続する。group stateとbulk対象はDiscovery Index + DisplayStateから算出し、未展開Trackも対象とする。Folder Tree、Map、visibility、selectionはmode切替だけでは変更しない。Browser AcceptanceはCompletedである。
+
+## Track Alpha Blending
+
+Status: Completed。通常Track opacity 0.55を正式採用する。
+
+- 通常Trackは元のTrack colorを変更せずopacity 0.55で描画し、異色・同色の重なりをCanvasの通常alpha合成で視認できるようにする
+- selected Trackのmainはopacity 1.0、既存outlineはopacity 0.95を維持し、重なりの中でも選択状態を明瞭にする
+- zoom bucket変更はweightだけを変更し、opacityを維持する。Folder / Date / Searchの表示入口、manual Folder color、Color / Monochrome切替で同じ契約を使う
+- Waypoint、OSM tile、Toolbar / sidebarにはTrack opacityを適用しない。Map pan / zoom / restoreや表示中Trackの状態を変更しない
+
+## Discovery Index Feedback
+
+- Date modeまたはadvanced filterを初めて明示操作した時だけindex buildを開始する
+- `準備中 x / total`、partial failure件数、Ready、Cancelを色だけに依存せず表示する。modalでMapやFolder Treeをblockしない
+- basic file / Folder / path Searchはindex未準備でも従来どおり動作する
+- query入力ごとにGPX parseを開始せず、index Ready後はmemory filterだけを行う
+- Library切り替え時は旧progress / resultsを破棄し、新Libraryへ混ぜない
+
+## Track Info
+
+Status: Implementation / Static Test / Browser Acceptance Completed。
+
+selected GPXのread-only information panelへ次を表示する。
+
+- display name、original file name、relative Folder / path
+- Track name。複数名がある場合は重複を除いた一覧または件数を示す
+- recorded date / timeとsource（GPX metadata、first TrackPoint、file modified、filename、Unknown）
+- distance、TrackPoint count、start / end、duration
+- valid elevationがある場合だけmin / max。ない場合は`Not available`
+
+loading、parse error、selectionなしを文字で区別する。欠損値は`—`、root Folderは`Library root`と表示する。distanceはm / km、durationは時間 / 分 / 秒、elevationはm、日時はbrowser localeの人間向け表記とする。Track Infoの取得だけでGPXをMap表示、refocus、pan / zoom、selection変更しない。GPX編集、保存、elevation chartは提供しない。
+
+Track InfoはSidebar shellの下部へ固定し、Folder / DateのTrack listだけを独立した縦scroll領域とする。listをscrollしてもTrack Infoを表示し続け、Track Info自身が利用可能高を超える場合はpanel内部をscroll可能にする。layout変更はselection、Map view、visibilityを変更しない。
+
+## Resizable Sidebar
+
+Status: Implementation / Static Test / Browser Acceptance Completed。
+
+- desktopのSidebar / Map境界にkeyboard focus可能なvertical separatorを置き、pointer dragで幅を変更する
+- 幅は220〜520px、default 260pxとする。Arrow Left / Rightは16px単位、Home / Endはmin / maxへ移動する
+- separatorは`aria-orientation="vertical"`、`aria-valuemin` / `aria-valuemax` / `aria-valuenow`を提供し、drag中は誤ったtext selectionを抑止する
+- drag終了またはkeyboard変更後にMapを`invalidateSize`し、center / zoom、selected Track、visible Trackを変更しない
+- 幅はLibrary単位のdevice-local `trailbook.viewState`へ保存し、Sidebar open / closedと共存する。旧stateやinvalid値はdefaultへfallbackする
+- Mobile / coarse pointerではresize handleを表示せず、Mobile responsive layoutはRelease 1.4 Scopeに含めない
+
+Track list / Track Info境界にはdesktop用horizontal separatorを置く。Track Info高は120〜420px、default 220px、Track listは最低100pxを維持する。pointer dragに加え、Arrow Up / Down、Home / End、horizontal separator ARIAを提供する。Track Info内容が領域高を超える場合はpanel内部scrollを維持する。高さはLibrary単位のdevice-local `sidebar.trackInfoHeight`へ保存し、Sidebar横resize / open / closeと共存する。
+
+## GPX Text Encoding
+
+Status: Implementation / Static Test / Browser Acceptance Completed。
+
+- UTF-8を標準とし、UTF-8 / UTF-16 BOMとXML declarationをLoaderで判定する
+- Shift_JIS、Windows-31J、CP932 aliasを安全なallowlistでdecodeする。宣言なしではstrict UTF-8失敗時だけShift_JISを試す
+- unsupported / decode failureはUTF-8 replacement fallbackでViewerを継続し、文字列をTrack Infoだけで補正しない
+- 同じdecode済みTrack名をGeometry Cache、Discovery Index、Date Tree、Track Infoへ投影する。schema 2または`textDecoderSchemaVersion`のないcache summaryは該当GPXだけinvalidにしてschema 3へ再生成する
+- decode / Parser後のmetadata nameまたはTrack nameが空、U+FFFD、制御文字を含む場合は表示・検索へ使用しない。display nameは正常なmetadata name、正常なTrack name、relative path由来filenameの順でfallbackし、Search / Date Tree / Track Infoで共通とする
+- GPX内容とtimestampを変更せず、encoding変換fileを保存しない
+
+## Search / Filter
+
+- 既存Search欄のtext queryはDiscovery IndexのTrack display name / Track nameとrelative Folder pathを対象にする。NFKC正規化後に大文字小文字を区別せず、日本語をそのまま検索できる
+- advanced filterはFrom / Toの日付入力を持ち、local calendar dateのinclusive start / endとする。date指定時はUnknown Dateを除外し、textだけの場合はUnknown Dateも対象にする
+- 複数filterはAND、text対象field内はmatchのいずれかとする
+- 既存150ms debounce、最大100件表示、total count、result activate / checkbox、keyboard、ARIAを維持する
+- textまたはdate filterの明示入力時にIndex未準備なら1回だけbuildし、progressを表示する。warm Indexはmemory queryへ再利用してduplicate parseしない
+- 同じmatching path集合をFolder / Date Treeへ適用する。Folder Treeはmatching Trackと祖先Folder、Date Treeはmatching Trackを含む年 / 月 / 日だけを表示する
+- filterは候補表示だけを変更し、checked、selection、Map visibility、Map center / zoomを変更しない。filtered-out Trackも表示中ならMap上に維持する
+- Clearはtext / From / Toと結果を消去し、Folder / Date Treeを全件表示へ戻す。0件時はempty resultを文字で表示する
+- filter stateはLibrary別device-local設定であり、別Libraryへ混在させない。GPX / `trailbook.json`へ保存しない
+
+## Release 1.4 UI Out of Scope
+
+- Mobile responsive layout、touch専用UI
+- Folder Tree file labelの日付置換
+- Timeline、chart、statistics dashboard、elevation gain / loss
+- Track / TrackPoint編集、GPX保存、Folder移動 / rename

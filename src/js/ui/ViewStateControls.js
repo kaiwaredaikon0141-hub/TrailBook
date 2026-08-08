@@ -1,3 +1,6 @@
+import SidebarResizeHandle from "./SidebarResizeHandle.js";
+import TrackInfoResizeHandle from "./TrackInfoResizeHandle.js";
+
 const SIDEBAR_ID = "trailbook-sidebar";
 const STATUS_ID = "view-state-status";
 
@@ -11,7 +14,17 @@ export default class ViewStateControls {
         requestFrame = callback => (
             globalThis.requestAnimationFrame?.(callback) ??
             globalThis.setTimeout(callback, 0)
-        )
+        ),
+        sidebarDefaultWidth = 260,
+        sidebarMinWidth = 220,
+        sidebarMaxWidth = 520,
+        sidebarKeyboardStep = 16,
+        trackInfoDefaultHeight = 220,
+        trackInfoMinHeight = 120,
+        trackInfoMaxHeight = 420,
+        trackListMinHeight = 100,
+        trackInfoKeyboardStep = 16,
+        isDesktop
     } = {}) {
 
         this.eventBus = eventBus;
@@ -22,6 +35,21 @@ export default class ViewStateControls {
         this.toolbar = null;
         this.libraryName = "";
         this.sidebarOpen = true;
+        this.resizeHandle = new SidebarResizeHandle(eventBus, {
+            minWidth: sidebarMinWidth,
+            maxWidth: sidebarMaxWidth,
+            defaultWidth: sidebarDefaultWidth,
+            keyboardStep: sidebarKeyboardStep,
+            ...(isDesktop ? { isDesktop } : {})
+        });
+        this.trackInfoResizeHandle = new TrackInfoResizeHandle(eventBus, {
+            minHeight: trackInfoMinHeight,
+            maxHeight: trackInfoMaxHeight,
+            defaultHeight: trackInfoDefaultHeight,
+            minListHeight: trackListMinHeight,
+            keyboardStep: trackInfoKeyboardStep,
+            ...(isDesktop ? { isDesktop } : {})
+        });
         this.element = this.#create();
         this.status = this.element.querySelector(".view-state-message");
         this.resetButton = this.element.querySelector(".view-state-reset");
@@ -32,6 +60,17 @@ export default class ViewStateControls {
         this.toolbar = toolbar;
         this.workspace = workspace;
         this.sidebar = sidebar;
+        this.resizeHandle.attach({ workspace, sidebar });
+        const trackList = sidebar.querySelector(".sidebar");
+        const trackInfo = sidebar.querySelector(".track-info");
+
+        if (trackList && trackInfo) {
+            this.trackInfoResizeHandle.attach({
+                shell: sidebar,
+                trackList,
+                trackInfo
+            });
+        }
         this.sidebar.id = SIDEBAR_ID;
         this.toolbar.sidebarToggleButton.setAttribute("aria-controls", SIDEBAR_ID);
         this.toolbar.sidebarToggleButton.addEventListener("click", () => {
@@ -76,6 +115,12 @@ export default class ViewStateControls {
             !normalizedOpen
         );
         this.toolbar.setSidebarOpen(normalizedOpen);
+        const resizeVisible = this.resizeHandle.setSidebarOpen(normalizedOpen);
+
+        this.workspace.classList.toggle(
+            "is-sidebar-resize-unavailable",
+            normalizedOpen && !resizeVisible
+        );
 
         if (emit) {
             this.eventBus.emit("view-state:sidebar-toggled", {
@@ -93,6 +138,36 @@ export default class ViewStateControls {
     isSidebarOpen() {
 
         return this.sidebarOpen;
+    }
+
+    setSidebarWidth(width, options = {}) {
+
+        return this.resizeHandle.setWidth(width, options);
+    }
+
+    getSidebarWidth() {
+
+        return this.resizeHandle.getWidth();
+    }
+
+    getDefaultSidebarWidth() {
+
+        return this.resizeHandle.getDefaultWidth();
+    }
+
+    setTrackInfoHeight(height, options = {}) {
+
+        return this.trackInfoResizeHandle.setHeight(height, options);
+    }
+
+    getTrackInfoHeight() {
+
+        return this.trackInfoResizeHandle.getHeight();
+    }
+
+    getDefaultTrackInfoHeight() {
+
+        return this.trackInfoResizeHandle.getDefaultHeight();
     }
 
     confirmReset() {

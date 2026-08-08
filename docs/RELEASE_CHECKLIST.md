@@ -2223,3 +2223,414 @@ Known limitations:
 - sidebar width、Search query、Tree expanded paths / scroll / focusは復元しない
 - Mobile UIは非対応で、大量LibraryのWaypoint ONは重い
 - geometry cacheは派生データであり、miss / invalid / quota時は通常parseへfallbackする
+
+## Release 1.4 Library Browsing / Track Discovery
+
+Release Status: Ready for final commit and tag
+
+Current Release: `1.4.0`
+
+Production Implementation Status: Completed
+
+### Proposed Unit Status
+
+| Unit | Scope | Status |
+|---|---|---|
+| 1 | Planning、Architecture、Decision、date / summary contract、performance / test plan | Completed |
+| 2 | Discovery summary、shared derived-data cache、index lifecycle | Completed |
+| 3 | Date Tree、Folder / Date browse mode | Completed |
+| 4 | Track Info、selected path projection、Sidebar usability、GPX decode / cache invalidation | Completed |
+| 5 | Track name / Folder / date range Search・Filter | Completed |
+| 6 | Chrome / Edge統合、806 GPX性能、documentation、finalization | Completed |
+
+### Unit 1 Design Checklist
+
+- [x] Date Tree、Track Info、Search / Filterを1つのpath-keyed Discovery Indexへ統合する
+- [x] existing Folder Treeとbasic metadata Searchをeager parseなしで維持する
+- [x] date source priorityをmetadata.time、first valid TrackPoint.time、File.lastModified、strict original filename dateとする
+- [x] 1 GPX 1 summary、複数Track / Segment aggregate、Unknown Dateを定義する
+- [x] distance、point count、start / end、duration、elevation min / maxの計算境界を定義する
+- [x] Geometry Cacheとsource identity / parser result / inflight requestを共有し、duplicate parseを禁止する
+- [x] index buildを明示Discovery操作まで遅延し、queryごとのparseを禁止する
+- [x] App.js / TreeView.js 1,000行未満、別Coordinator / View / Serviceへの責務分離をgateとする
+- [x] GPX / `trailbook.json` / shared settingsへDiscovery dataを書かない
+- [x] Mobile、Track editing、GPX saveをOut of Scopeとする
+
+### Planned Static Tests
+
+- valid / invalid `metadata.time`、first valid TrackPoint time、File.lastModified、filename fallback、Unknown Date
+- timezone / local date grouping、invalid calendar date、date range inclusive boundary
+- multi-Track / Segment、empty Segment、point count、Segment境界を跨がないdistance
+- start / end / duration、partial / missing time、partial / missing elevation
+- one path / one summary、duplicate request / parse / cache writeなし
+- geometry + summary cache hit、old schema、source change、corrupt / quota / unavailable fallback
+- basic Searchはindex buildなし、advanced filterはReady後memory queryだけ
+- Date Tree lazy DOM、keyboard、ARIA、activate、individual checkbox、Folder Tree state維持
+- selected Track InfoでMap / visibility / selection / focusを変更しない
+- partial parse failure、cancel、Library switch、stale generation、old Library result破棄
+- production module graph、missing import、cycle、App / TreeView 1,000行未満、`git diff --check`
+
+### Planned Browser and Performance Gates
+
+- Chrome / Edge、empty / 1 / normal / approximately 806 GPX Library
+- Folder Library openとbasic SearchにRelease 1.3から明確な回帰がない
+- 806前後のwarm Discovery Index中央値約5秒以内、最低3回、Waypoint OFF
+- cold index中もFolder Tree、Map pan / zoom、Search、Cancelが操作可能
+- Date TreeとFolder Treeの切替、selection / checkbox同期、Library switch
+- Track Infoの値を既知GPX fixtureまたは人間確認可能なreferenceと照合する
+- GPX / `trailbook.json`の内容とtimestamp不変、Console error / unnecessary logなし
+
+### Planning Risks
+
+- current Geometry Cache schemaはmetadata / time / elevation summaryを持たず、schema更新後の初回indexは再parseが必要
+- browser local timezone変更でDate Tree groupが変わり得る
+- File.lastModifiedが利用可能な通常環境ではfilename fallbackが使われる機会は少ない
+- 806 GPX cold indexは時間がかかるため、progress / cancelとUI responsivenessを実測する必要がある
+- SearchView、App.js、TreeView.jsへ責務を集中させるとfile size gateを超えるため、新規Coordinator / Viewを優先する
+
+### Unit 2 Library Discovery Index Foundation
+
+Unit 2 Implementation Status: Completed
+
+Unit 2 Static Test Status: Completed
+
+Unit 2 Browser Acceptance Status: Completed
+
+Unit 2 Status: Completed
+
+Unit 3 Status: Completed
+
+Implementation result:
+
+- 1 GPX relative pathにつき1 immutable `TrackDiscoveryEntry`を生成する
+- date priority、Unknown Date、display name、Track name dedupe、point / time / duration / Segment内distance / elevation / File identityをcompact summaryへ集約する
+- Geometry Cache schema version 2へsummaryを追加し、同一parse resultからgeometryとsummaryを一回だけ生成する
+- `GPXGeometryLoader`のdisplay / summary要求を同じpath inflight bundleでdeduplicateする
+- `LibraryDiscoveryIndexService`は明示`build()`までidleで、concurrency 2、duplicate path排除、progress、partial failure継続、cancel / generation guardを持つ
+- invalid GPXはerror status entryへfallbackし、他GPXのindexを継続する
+- App / TreeView、Date Tree、Track Info、Filter UIは変更または実装しない
+
+Static result:
+
+| Check | Result | Notes |
+|---|---|---|
+| Discovery Index test | Pass | 70 assertions。date priority、calendar validation、metrics、cache、lazy build、partial failure、generation、806 entry contract |
+| View State / Geometry Cache regression | Pass | 263 assertions |
+| Shared settings read / save / recovery | Pass | 121 / 136 / 103 assertions |
+| Production modules | Pass | 53 modules、missing import 0、cycle 0。52 modulesはmainからreachable、Index ServiceはUnit 2で意図的にUI未接続 |
+| File size | Pass | App 919、TreeView 997、Entry 162、Summary Builder 229、Index Service 199 lines |
+| Config / schema | Pass | Config `1.3.0`、Geometry Cache 2、parser 1、DisplaySettingsStore 1、shared settings 1、View State 1 |
+| Data protection | Pass | new production filesに`createWritable`、readwrite permission、GPX / `trailbook.json` writeなし |
+| `git diff --check` | Pass | whitespace errorなし |
+
+#### Unit 2 Browser Acceptance Result
+
+約806 GPX、Waypoint OFFで、明示Build開始から全entry ready / error確定までを最低3回測定した。coldとvalid cached summaryを使うwarmを分離し、static testの実行時間はBrowser性能値に使用していない。
+
+| Measurement | Run 1 | Run 2 | Run 3 | Median | Result |
+|---|---:|---:|---:|---:|---|
+| Cold Discovery Index build | 21 sec | 22 sec | 20 sec | 21 sec | Pass — 初回buildの非blocking結果 |
+| Warm Discovery Index build | 3 sec | 3 sec | 3 sec | 3 sec | Pass — 約5秒目標達成 |
+
+| Browser check | Result | Notes |
+|---|---|---|
+| cache hit | Pass | valid cached summaryを利用 |
+| duplicate parse | Pass | 発生なし |
+| UI responsiveness | Pass | build中のUI停止なし |
+| Map pan / zoom | Pass | 正常 |
+| Cancel | Pass | 正常 |
+| Library switch | Pass | 旧Library結果の混在なし |
+| Console | Pass | アプリ由来errorなし |
+| Data protection | Pass | GPX / `trailbook.json`への書き込みなし |
+
+Cold中央値21秒は初回buildの記録であり、UIをblockしないためUnit 2のblocking issueとしない。warm中央値3秒でperformance gateをPassし、Unit 2のImplementation / Static Test / Browser AcceptanceをCompletedとする。
+
+### Unit 3 Date Tree
+
+Unit 3 Implementation Status: Completed
+
+Unit 3 Static Test Status: Completed
+
+Unit 3 Browser Acceptance Status: Completed
+
+Unit 3 Status: Completed
+
+Unit 4 Status: In Progress
+
+Track Alpha Blending Implementation Status: Completed
+
+Track Alpha Blending Static Test Status: Completed
+
+Track Alpha Blending Browser Acceptance Status: Completed
+
+Track Alpha Blending Status: Completed
+
+Implementation result:
+
+- `DateTreeBuilder`がlocal calendarの年 / 月 / 日、Unknown Dateを構築し、新しい順とstable Track sortを保証する
+- `DateTreeView`はtop-level groupだけを初期DOMへ生成し、月 / 日 / Trackを段階的にlazy renderする
+- `TrackDiscoveryCoordinator`がFolder / Date mode、Date表示時だけのIndex build、progress / Cancel、Library generationを担当する
+- Date Track activate / checkboxは既存selection / display EventBusへ接続し、DisplayState / SelectionStateを正本としてFolder Treeと同期する
+- year / month / day group checkboxはDiscovery Index descendantをDisplayState.checkedで集約し、既存bulk event 1回でlazy未展開Trackを含めてON / OFFする
+- bulk中のDate DOM同期はmicrotaskへcoalesceし、既存ViewStateCoordinatorの750ms save queueを維持する
+- `trailbook.discoveryView` schema version 1はFolder / Date modeだけをdevice-localに保存する
+- Track Alpha Blendingは`TrackStyleService`の通常opacityを0.55へ集約し、selected main 1.0、outline 0.95、Track color、Waypoint、zoom weightを維持する
+- Track Infoとadvanced Filterは実装しない
+
+Static result:
+
+| Check | Result | Notes |
+|---|---|---|
+| Date Tree test | Pass | 53 assertions。date grouping / sort、Unknown、806-entry lazy DOM、activate、individual / year-month-day bulk checkbox、tri-state、single bulk event、Map refocus suppression、selection preservation、keyboard / ARIA、selection / checked / Track Info同期、summary再loadなし、mode storage、lazy Index build、Library clear |
+| Track Alpha Blending test | Pass | 19 assertions。normal opacity 0.55、zoom 8 / 9 / 12 / 15 weight、color不変、selected opacity 1.0、outline opacity 0.95 / non-interactive、fallback一貫性 |
+| Discovery Index regression | Pass | 70 assertions |
+| View State / Geometry Cache regression | Pass | 263 assertions |
+| Shared settings read / save / recovery | Pass | 121 / 136 / 103 assertions |
+| Production modules | Pass | 58 / 58 main reachable、missing import 0、cycle 0 |
+| File size | Pass | App 973、TreeView 997、DateTreeView 514、Coordinator 225、Visibility Index 81 lines |
+| Data protection | Pass | GPX / `trailbook.json` write、readwrite permission、`createWritable`追加なし |
+| `git diff --check` | Pass | whitespace errorなし |
+
+#### Unit 3 Date Tree Browser Acceptance Result
+
+| Browser check | Result | Notes |
+|---|---|---|
+| Folder / Date切替 | Pass | 切替だけではMapと表示状態を変更しない |
+| Discovery Index開始条件 | Pass | Date表示時だけbuild開始 |
+| 年 / 月 / 日 / Track階層 | Pass | Unknown Dateは末尾、日付は新しい順 |
+| lazy DOM | Pass | 未展開Trackを一括生成しない |
+| Track selection | Pass | Folder Tree、Mapの既存selectionと同期 |
+| 年 / 月 / 日bulk ON / OFF | Pass | checked / unchecked / indeterminateを反映 |
+| lazy未展開Trackのbulk | Pass | Discovery Index descendant全件を対象 |
+| Folder Tree visibility同期 | Pass | DisplayStateを共通の正本として維持 |
+| selection / Map | Pass | selectionとMap center / zoomを維持 |
+| discovery view mode | Pass | device-local設定を保持 |
+| 約807 GPX | Pass | UI停止なし、localStorage writeの異常増加なし |
+| Console | Pass | アプリ由来errorなし |
+| Data protection | Pass | GPX / `trailbook.json`への書き込みなし |
+
+#### Track Alpha Blending Browser Acceptance Result
+
+通常Track opacity 0.55を正式採用する。Date TreeのBrowser AcceptanceとUnit 3全体もCompletedである。
+
+| Browser check | Result | Notes |
+|---|---|---|
+| 異色Track重複 | Pass | 通常alpha合成で混色して表示 |
+| 同色Track重複 | Pass | 重複部分を濃く表示 |
+| selected Track / outline | Pass | selected opacity 1.0、outline正常 |
+| zoom変更 | Pass | bucket変更後もnormal opacity 0.55を維持 |
+| Folder / Date切替 | Pass | 表示入口に依存せず同じstyleを維持 |
+| Monochrome Map | Pass | 背景tile filterと共存 |
+| Waypoint | Pass | opacity変更の影響なし |
+| 約807 Track性能 | Pass | 明確な性能回帰なし |
+| Console | Pass | アプリ由来errorなし |
+
+Unit 3 Date TreeのImplementation / Static Test / Browser AcceptanceはCompletedである。Unit 4 Track Infoへ進み、Search / FilterはNot startedのまま維持する。
+
+### Unit 4 Track Info
+
+Unit 4 Implementation Status: Completed
+
+Unit 4 Static Test Status: Completed
+
+Unit 4 Track Info Browser Acceptance Status: Completed
+
+Unit 4 Sidebar Usability Browser Acceptance Status: Completed
+
+Unit 4 GPX Encoding Browser Acceptance Status: Completed
+
+Unit 4 Status: Completed
+
+Unit 5 Status at Unit 4 completion: Not started
+
+Implementation result:
+
+- `TrackInfoView`はsidebar内の常設read-only panelとしてempty / loading / ready / partial failure / unavailableを文字で表示する
+- `TrackInfoCoordinator`は`selection:changed`から最新pathだけを投影し、Library generationとrequest IDでstale resultを破棄する
+- `LibraryDiscoveryIndexService.loadEntry()`は既存entryを即時再利用し、未構築pathだけをshared loaderへ要求する。同一path requestをdeduplicateし、full Index buildを開始しない
+- Folder / Date / Search / Mapのselection originに依存せずSelectionState eventを共用し、Map pan / zoom / fit、visibility、selection自体を変更しない
+- distanceはm / km、durationは時間 / 分 / 秒、elevationはm、日時はbrowser locale、欠損値は`—`、root Folderは`Library root`で表示する
+- error summaryでは判明している名前 / Folder / date sourceだけを維持し、未取得metricsは`—`とする
+- Sidebar shellは固定control、独立scrollするFolder / Date Track list、下部固定Track Infoへ分ける。Track Infoが高すぎる場合はpanel内部だけをscrollする
+- desktopの`SidebarResizeHandle`は220〜520px、default 260pxでpointer / keyboard resizeを提供し、drag終了時にMap layoutを再評価する。幅はLibrary単位のoptional `sidebar.width`として既存view-state save queueへ統合する
+- desktopの`TrackInfoResizeHandle`はTrack list / Track Info境界を上下resizeし、Track Info 120〜420px、default 220px、Track list最小100pxを維持する。高さはoptional `sidebar.trackInfoHeight`として同じsave queueへ統合する
+- `GPXLoader`はBOM / XML declarationをbyte列から判定し、UTF-8、UTF-16、Shift_JIS / Windows-31J aliasをparse前にdecodeする。unsupported / 判定不能時はnon-fatal UTF-8 fallbackでViewerを継続する
+- Geometry Cache schema version 3と`textDecoderSchemaVersion: 1`でschema 2およびdecode markerのない過渡的schema 3 summaryを該当path単位でinvalidにし、既存parse fallbackから正しいgeometry / Discovery summaryを再生成する。DB全体clearは行わない
+
+Static result:
+
+| Check | Result | Notes |
+|---|---|---|
+| Track Info / GPX decode test | Pass | 50 assertions。Track Info 44項目に加え、UTF-8 / UTF-16 BOM、Windows-31J、宣言なしShift_JIS、unsupported declaration fallback、decoded summary projection |
+| Date Tree integration | Pass | 57 assertions。selection eventからTrack Info同期、準備済みsummaryの再loadなし、Sidebar shell / list scroll / fixed Track Info構造を含む |
+| Track Alpha Blending regression | Pass | 19 assertions |
+| Discovery Index regression | Pass | 73 assertions。cache missのshared GPX decode path、cache / decoder schema markerを含む |
+| View State / Geometry Cache regression | Pass | 312 assertions。optional Sidebar width / Track Info height、pointer / keyboard / ARIAに加え、schema 2の実loader fallback、record単位delete、schema 3再保存、decode marker欠落recordのinvalid化を含む |
+| Shared settings read / save / recovery | Pass | 121 / 136 / 103 assertions |
+| Production modules | Pass | 62 / 62 main reachable、missing import 0、cycle 0 |
+| File size | Pass | App 983、TreeView 997、TrackInfoCoordinator 103、TrackInfoView 188、SidebarResizeHandle 185、TrackInfoResizeHandle 184、GPXLoader 114、Index Service 262 lines |
+| Data protection | Pass | GPX / `trailbook.json` write、readwrite permission、`createWritable`追加なし |
+| `git diff --check` | Pass | whitespace errorなし |
+
+#### Unit 4 Track Info Browser Acceptance Result
+
+Track Infoの表示内容は人間によるBrowser AcceptanceでPassした。全fieldと人間向けformat、欠損表示を含むread-only表示を採用する。selectionとMapの既存契約は変更しない。
+
+#### Unit 4 Sidebar Usability Completion Scope
+
+Unit 4 completion approvalによりStatusをCompletedとする。以下の実装契約は維持するが、この依頼では個別のSidebar browser resultは新規提示されていない。
+
+- Track listだけがscrollし、Track InfoがSidebar下部へ固定されること
+- Track Infoが利用可能高を超えた場合にpanel内部をscrollできること
+- Chrome / Edge desktopでpointer drag、220 / 520px境界、Map追従、drag終了時の`invalidateSize`を確認すること
+- keyboardのArrow Left / Right、Home / End、separator ARIA、focus、drag中の誤selection抑止を確認すること
+- widthのLibrary別保存 / 復元、Sidebar open / closed、Map center / zoom、selection、visibilityとの共存を確認すること
+- Mobile / coarse pointerでresize handleを表示しないこと
+- Track list / Track Info境界の上下drag、120 / 420px境界、Track list最小高、Info内部scrollを確認すること
+- Arrow Up / Down、Home / End、horizontal separator ARIA、高さのLibrary別保存 / 復元を確認すること
+
+#### Unit 4 GPX Encoding Browser Acceptance Result
+
+- 旧cache相当recordから手動clearなしで該当GPXだけを再parseし、文字化けTrack名が正常表示されることをPassした
+- schema 2 entryとdecoder markerのないschema 3 entryを使用せず、他GPX cacheを維持することをPassした
+- Folder / Date / Track Infoで同じ正しい名前を表示し、Console errorがないことをPassした
+- GPX / `trailbook.json`への書き込みがないことをPassした
+
+Track Info表示内容、Sidebar usability、GPX decode / cache invalidationのBrowser AcceptanceはCompletedである。Unit 4をCompletedとし、Search / FilterはNot startedのまま維持する。
+
+### Unit 5 Search / Filter
+
+Unit 5 Implementation Status: Completed
+
+Unit 5 Static Test Definition Status: Completed
+
+Unit 5 Static Validation Status: Completed
+
+Unit 5 Static Test Page Execution Status: Not run in the local Codex environment — Browser Acceptance completed; non-blocking
+
+Unit 5 Browser Acceptance Status: Completed
+
+Unit 5 Status: Completed
+
+Unit 6 Status: Completed
+
+Implementation result:
+
+- 既存Search欄へTrack / Folder path text、From / To、Clearを追加し、150ms debounceを共用する
+- filter明示入力時だけ`LibraryDiscoveryIndexService.build()`を開始し、ready後は`DiscoveryFilterService`のmemory queryだけを行う
+- textはNFKC / case-insensitiveでdisplay name、全Track name、relative Folder pathを検索する。dateはlocal calendarのinclusive rangeで、date指定時はUnknown Dateを除外する
+- `FolderTreeFilterProjection`はmatching pathと祖先FolderだけをTreeViewのlazy DOMへ投影し、Date Treeは同じmatching entry集合を年 / 月 / 日へ投影する
+- 最大100件のSearch resultとtotal count、activate、checkbox、Arrow Up / Down、Home / End、Enter、Escape、Space、ARIA live regionを維持する
+- filter自体はDisplayState.checked、SelectionState、Map visibility、center / zoomを変更しない。Clearは両Treeを全entryへ戻す
+- filterはLibrary ID別device-local `trailbook.discoveryView` schema 1へ保存し、別Libraryへ混在させない。FileHandle、summary、geometry、GPX XMLは保存しない
+- AppはSearch result activate / checkboxの既存event接続だけを維持し、filter / Index / projection責務は`TrackDiscoveryCoordinator`へ置く
+
+Static result:
+
+| Check | Result | Notes |
+|---|---|---|
+| Search / Filter test definition | Added | 29 assertions。NFKC、case-insensitive、日本語、Track name / Folder path、Unknown Date、inclusive / reversed date、0 / 100 / 806件、Library別state、lazy Folder projection、Index reuse、visibility不変、Clear、150ms debounce、broken Track name fallback |
+| Test page execution | Not run / Non-blocking | local Codex環境ではDOM test pageを実行していない。人間によるBrowser Acceptanceと静的検証はCompleted |
+| Production module graph | Pass | 65 modules、missing import 0、cycle 0 |
+| File size | Pass | App 954、TreeView 997 lines |
+| Data protection | Pass | Unit 5追加fileにGPX / `trailbook.json` write、readwrite permission、`createWritable`なし |
+| `git diff --check` | Pass | whitespace errorなし |
+
+#### Unit 5 Browser Acceptance Result
+
+| Browser check | Result | Notes |
+|---|---|---|
+| Track名 / Folder path検索 | Pass | 両対象を同じDiscovery Indexから検索 |
+| 日本語 / case-insensitive / NFKC | Pass | 正規化済みqueryで一致 |
+| Fromのみ / Toのみ / From〜To | Pass | 境界日を含むinclusive date range |
+| Unknown Date | Pass | date range指定時は除外、text only時は対象 |
+| Folder / Date Tree結果 | Pass | 同じ候補集合とancestor projectionを使用 |
+| result上限 / total count | Pass | 最大100件表示と総一致件数を維持 |
+| Clear | Pass | 全件表示へ復帰 |
+| Library別filter state | Pass | Library間でfilter stateを混在させない |
+| selection / visibility | Pass | filter前後で状態を維持 |
+| Map center / zoom | Pass | filter操作による変更なし |
+| 約807 GPX | Pass | UI停止なし |
+| Console | Pass | アプリ由来errorなし |
+| Data protection | Pass | GPX / `trailbook.json`への書き込みなし |
+
+Unit 5のImplementationとBrowser AcceptanceはCompletedである。DOM static test pageはlocal Codex環境では未実行だが、test定義を維持し、静的検証と人間によるBrowser Acceptanceを完了したためrelease gateを妨げない。
+
+#### Broken Internal Track Name Fallback
+
+- 原因はdecode / Parser後の非empty Track nameにU+FFFDが含まれていても、`TrackSummaryBuilder`が正常なfilenameより優先していたこと
+- usable metadata name、最初のusable Track name、relative path由来filenameの共通priorityを採用する
+- 空、U+FFFD、C0 / DEL制御文字を含む内部名は`trackNames`と`displayName`候補から除外する
+- Search result、Date Tree、Track Infoは補正済みの同一Discovery entryを使用し、View単位の文字列補正を行わない
+- schema 3は維持し、broken cached summaryだけをrecord単位で削除して再parse / 再保存する。他GPX cacheとDB全体は維持する
+- static fixtureへdecode XML → GPXParser → summary filename fallback、mixed valid / broken Track name、Search label、cache path単位invalid化を追加した
+- current test definitionsはDiscovery Index 82 assertions、Track Info / decode 54 assertions、Search / Filter 29 assertions。DOM test pageはlocal Codex環境では未実行だが、Unit 5 Browser Acceptance完了後のnon-blocking確認項目として定義を維持する
+- Browser Acceptance Status: Completed / Accepted
+
+| Browser check | Result | Notes |
+|---|---|---|
+| Search表示名 | Pass | filename fallbackを表示 |
+| Track Info表示名 | Pass | Searchと同じDiscovery entry |
+| Date Tree表示名 | Pass | Search / Track Infoと一致 |
+| broken Track name検索除外 | Pass | U+FFFDを含む内部名をindex対象外とした |
+| filename fallback | Pass | relative path由来filenameを採用 |
+| cache recovery | Pass | 手動clear不要。該当GPXだけを再生成し、他GPX cacheを維持 |
+| Console | Pass | アプリ由来errorなし |
+| Data protection | Pass | GPX / `trailbook.json`への書き込みなし |
+
+文字化けfallback修正はAcceptedである。残りのtext / date / combined filter確認もPassしたため、Unit 5全体をCompletedとする。
+
+### Unit 6 Integration Acceptance and Release Finalization
+
+Unit 6 Integration Acceptance Status: Completed
+
+Unit 6 Documentation Status: Completed
+
+Unit 6 Static Validation Status: Completed
+
+Unit 6 Status: Completed
+
+Release 1.4 Status: Ready for final commit and tag
+
+既存のChrome / Edge Browser Acceptance結果をRelease 1.4全体として統合した。新しいBrowser自動操作や同条件の数値再測定は行わず、各Unitで記録済みの人間確認を正本とする。
+
+| Integrated check | Result | Notes |
+|---|---|---|
+| Library Discovery Index | Pass | 1 GPX 1 entry、partial failure、cancel、generation guard |
+| Folder / Date切替 | Pass | Date表示時だけIndex build、Tree切替でMap状態不変 |
+| 年 / 月 / 日bulk visibility | Pass | lazy未展開Trackを含みDisplayStateと同期 |
+| selection / visibility同期 | Pass | Folder / Date / Search / Mapで既存Stateを正本として維持 |
+| Search / Filter結果同期 | Pass | text、Folder path、NFKC、日本語、inclusive date range、ancestor projection |
+| Track Info | Pass | selection変更で更新し、欠損値とpartial summaryを安全に表示 |
+| Track Alpha Blending | Pass | normal 0.55、selected 1.0、outline / zoom / Monochrome / Waypoint維持 |
+| Sidebar horizontal resize | Pass | Library別width復元、open / close、Map center維持 |
+| Track List / Track Info vertical resize | Pass | Library別height復元、両領域の最小高と内部scroll維持 |
+| GPX encoding decode | Pass | UTF-8 / UTF-16 BOM / Shift_JIS / Windows-31Jとsafe fallback |
+| broken Track.name fallback | Pass | Search / Date / Track Infoでfilenameへ統一fallback |
+| Geometry Cache連携 | Pass | schema / decoder marker不一致は該当GPXだけ再生成、通常parse fallback |
+| Previous Library / View State共存 | Pass | Map、Sidebar、visible / selected Trackを混在なく復元 |
+| Library切り替え | Pass | Index、filter、resize、selection、visibilityをLibrary間で混在させない |
+| Map / duplicate処理 | Pass | pan / zoom正常、duplicate parse / renderなし |
+| Console | Pass | Browser Acceptanceでアプリ由来errorなし |
+| Data protection | Pass | GPX / `trailbook.json`への意図しない書き込みなし |
+
+Performance:
+
+- 約806 GPX warm Discovery Indexは3秒、3秒、3秒、中央値3秒で約5秒目標をPassした。
+- cold Discovery Index中央値21秒は初回buildのnon-blocking結果として維持する。
+- 約807 visible Track warm restoreはRelease 1.3の3秒中央値をaccepted baselineとして維持し、Release 1.4の各Browser Acceptanceで明確な回帰、UI停止、duplicate parse / renderを確認していない。Unit 6では同条件の数値再測定を繰り返していない。
+
+Static finalization:
+
+| Check | Result | Notes |
+|---|---|---|
+| Config version | Pass | `1.4.0` |
+| Existing static records | Pass | Discovery Index、Date Tree、Track Alpha、Track Info / decode、view state、shared settingsの記録済みassertionsを維持 |
+| Search / Filter static definition | Completed / Not rerun | 29 assertions定義。人間Browser AcceptanceはCompleted |
+| Production module graph | Pass | 65 / 65 reachable、missing import 0、cycle 0 |
+| File size | Pass | App 954、TreeView 997 lines |
+| Decision | Pass | Decision 0041〜0044はAccepted、ID重複なし |
+| Data protection | Pass | GPX / `trailbook.json`への意図しない書き込みなし |
+| `git diff --check` | Pass | whitespace errorなし |
+
+Release blockerはない。Mobile UI、大量LibraryでのWaypoint ON、local timezoneによるDate group差、origin-local state / cache、同名root Library identity衝突は既知制限として維持する。v1.4.0はfinal commit / tag可能である。

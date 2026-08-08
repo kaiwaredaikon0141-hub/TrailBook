@@ -1,13 +1,21 @@
+import TrackSummaryBuilder from "./TrackSummaryBuilder.js";
+
 /**
  * Loads display geometry from IndexedDB before falling back to GPX parsing.
  */
 export default class GPXGeometryLoader {
 
-    constructor({ parser, repository, fileLoader = null }) {
+    constructor({
+        parser,
+        repository,
+        fileLoader = null,
+        summaryBuilder = new TrackSummaryBuilder()
+    }) {
 
         this.parser = parser;
         this.repository = repository;
         this.fileLoader = fileLoader;
+        this.summaryBuilder = summaryBuilder;
         this.namespace = null;
         this.inflight = new Map();
         this.stats = this.#createStats();
@@ -24,6 +32,22 @@ export default class GPXGeometryLoader {
 
     load(path, fileHandle) {
 
+        const request = this.#request(path, fileHandle);
+
+        request.result ||= request.bundle.then(value => value.result);
+        return request.result;
+    }
+
+    loadSummary(path, fileHandle) {
+
+        const request = this.#request(path, fileHandle);
+
+        request.summary ||= request.bundle.then(value => value.summary);
+        return request.summary;
+    }
+
+    #request(path, fileHandle) {
+
         const requestKey = JSON.stringify([this.namespace, path]);
         const existing = this.inflight.get(requestKey);
 
@@ -32,10 +56,18 @@ export default class GPXGeometryLoader {
             return existing;
         }
 
-        const request = this.#load(path, fileHandle)
-            .finally(() => this.inflight.delete(requestKey));
+        const bundle = this.#load(path, fileHandle);
+        const request = {
+            bundle,
+            result: null,
+            summary: null
+        };
 
         this.inflight.set(requestKey, request);
+        void bundle.then(
+            () => this.inflight.delete(requestKey),
+            () => this.inflight.delete(requestKey)
+        );
         return request;
     }
 
@@ -51,7 +83,7 @@ export default class GPXGeometryLoader {
             : await fileHandle.getFile();
 
         if (this.namespace) {
-            const cached = await this.repository.get(
+            const cached = await this.repository.getWithSummary(
                 this.namespace,
                 path,
                 file
@@ -64,23 +96,28 @@ export default class GPXGeometryLoader {
         }
 
         this.stats.misses += 1;
+        const text = this.fileLoader?.decode
+            ? await this.fileLoader.decode(file)
+            : await file.text();
         const result = this.parser.parse(
-            await file.text(),
+            text,
             fileHandle.name
         );
+        const summary = this.summaryBuilder.build(path, file, result);
 
         if (this.namespace) {
             const stored = await this.repository.set(
                 this.namespace,
                 path,
                 file,
-                result
+                result,
+                summary
             );
 
             this.stats[stored ? "writes" : "writeFailures"] += 1;
         }
 
-        return result;
+        return { result, summary };
     }
 
     #createStats() {

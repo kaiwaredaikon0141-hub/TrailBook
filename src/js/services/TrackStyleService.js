@@ -2,6 +2,8 @@
  * Calculates normal track styles from configuration and the current zoom.
  * This service has no knowledge of paths, folders, UI state, or Leaflet.
  */
+const DEFAULT_NORMAL_OPACITY = 0.55;
+
 export default class TrackStyleService {
 
     constructor(config = {}) {
@@ -63,7 +65,7 @@ export default class TrackStyleService {
             && this.config.lineOpacity >= 0
             && this.config.lineOpacity <= 1
             ? this.config.lineOpacity
-            : 0.85;
+            : DEFAULT_NORMAL_OPACITY;
 
         return {
             color: resolvedColor,

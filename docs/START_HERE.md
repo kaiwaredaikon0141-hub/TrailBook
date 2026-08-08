@@ -4,10 +4,10 @@ TrailBookの開発を始める人とAIのための入口です。
 
 ## Current Status
 
-- Current Version: `1.3.0`
-- Current Release: Previous View Restoration
-- Completed: Release 0.1からRelease 1.3
-- Next Release: Not scheduled（Future Candidatesから別途承認する）
+- Current Version: `1.4.0`
+- Current Release: Library Browsing / Track Discovery
+- Completed: Release 0.1からRelease 1.4
+- Next Release: Not defined
 - Branch: `main`
 
 Gitの状態は作業開始時に必ず再確認する。
@@ -27,13 +27,13 @@ GPXを独自形式へ取り込むのではなく、ユーザーのGPX資産を�
 3. `ARCHITECTURE.md` — 現在の責務分割とデータフロー
 4. `CODING_RULES.md` — 実装規約
 5. `ROADMAP.md` — 完了Releaseと将来候補
-6. `UI_SPEC.md` — Release 1.3までの確定UI仕様
+6. `UI_SPEC.md` — Release 1.4までの確定UI仕様
 7. `DECISIONS.md` — 採用済み設計判断と理由
 8. `AI_GUIDE.md` — AIとの開発手順
 9. `CONTRIBUTING.md` — 作業規約
 10. `GLOSSARY.md` — 用語
 11. リポジトリルートの`README.md`、`CHANGELOG.md` — 公開概要とリリース履歴
-12. `RELEASE_CHECKLIST.md` — Release 1.0〜1.3のbaseline / 完了記録
+12. `RELEASE_CHECKLIST.md` — Release 1.0〜1.4のbaseline / 完了記録
 
 ## Current Architecture
 
@@ -61,7 +61,9 @@ GPXを独自形式へ取り込むのではなく、ユーザーのGPX資産を�
 
 Release 1.3 Unit 1〜7はCompletedであり、v1.3.0はfinal commit / tag可能な状態である。Unit 5は約807 visible Trackの既存再parse中央値25秒によりIndexedDB geometry cacheを採用し、導入後中央値3秒で約5秒Performance GateをPassした。Unit 6はselected Trackをsystem sourceで復元し、Tree / Search / highlight / ARIAを通常selection経路へ同期する。Unit 4はDirectoryHandleとopaque cache namespaceをorigin-local IndexedDBへ保存し、granted時の自動openとprompt / denied時の明示操作を既存Library lifecycleへ接続する。既存DisplaySettingsStore / shared settings schema、DisplayState、SelectionState、GPXDisplayQueueを正本として維持する。
 
-## Implemented Through Release 1.3
+Release 1.4 Library Browsing / Track DiscoveryのUnit 1〜6はCompletedである。Discovery Index、Date Tree、年月日bulk visibility、Track Info、Track Alpha Blending、Sidebar resize、GPX encoding decode、broken Track name fallback、Track名 / Folder / date range Search・Filterを実装した。Library openとbasic Searchはeager parseせず、Geometry Cacheと共有loaderから同じGPXを一度だけ解析する。
+
+## Implemented Through Release 1.4
 
 Release 1.0 Stable Viewerは完了している。Release 0.9までのFolder Library、GPX Parser、複数GPX表示、Folder / root一括表示、Waypoint option、Searchを維持し、個人利用向けの起動・互換性UX、品質整理、文書、licenseと第三者表記を確定した。
 
@@ -80,7 +82,7 @@ Release 1.2 Shared Library SettingsはCompletedである。Library root直下の
 - Folder構造とGPXファイルをデータの正本とする。
 - SQLite、IndexedDBなどをFolder / GPXに代わるLibrary正本として持たない。一時的なセッションcacheは独自DBに含めない。
 - Release 1.3追加設計はDecision 0039 / 0040により、IndexedDBをprevious DirectoryHandleと、性能gate不達時の再生成可能geometry cacheにだけ使用可能とする。これはLibrary正本ではなく、削除・失敗時にViewerが継続できるorigin-local補助である。
-- 現行production 1.3はMap表示modeとlegacy Folder色fallbackに加え、専用keyへ再生成可能なdevice-local Map / sidebar / visible / selected Track stateを`localStorage`へ保存する。Folder色はvalidなshared JSONがある場合に項目単位でlegacy値を混ぜない。DirectoryHandleはorigin-local IndexedDBだけへ保存し、localStorage / `trailbook.json`へ保存しない。GPX内容とLeaflet Layerは永続化しない。
+- 現行production 1.4はMap表示modeとlegacy Folder色fallbackに加え、専用keyへ再生成可能なdevice-local Map / sidebar / visible / selected Track / Discovery UI stateを`localStorage`へ保存する。Folder色はvalidなshared JSONがある場合に項目単位でlegacy値を混ぜない。DirectoryHandleはorigin-local IndexedDBだけへ保存し、localStorage / `trailbook.json`へ保存しない。GPX内容とLeaflet Layerは永続化しない。
 - `trailbook.json`への書き込みはSave、migration、明示Overwriteだけに限定し、permissionの永続化を前提にしない。
 - Framework、TypeScript、Node.jsを追加しない。
 - UI同士を直接接続せず、EventBusとAppの調停を使用する。

@@ -1,3 +1,6 @@
+import TrackDiscoveryEntry from "../models/TrackDiscoveryEntry.js";
+import { isUsableDiscoveryName } from "../utils/DiscoveryName.js";
+
 class IndexedDBGeometryAdapter {
 
     constructor(config, indexedDBFactory) {
@@ -187,6 +190,44 @@ export default class GeometryCacheRepository {
 
     async get(namespace, path, file) {
 
+        const bundle = await this.getWithSummary(namespace, path, file);
+
+        return bundle?.result || null;
+    }
+
+    async getSummary(namespace, path, file) {
+
+        const key = this.#key(namespace, path);
+
+        if (!key || !this.#isFileIdentity(file)) {
+            return null;
+        }
+
+        try {
+            const record = await this.adapter.get(key);
+
+            if (!this.#isValidRecord(record, namespace, path, file)) {
+                if (record) {
+                    await this.#deleteQuietly(key);
+                }
+                return null;
+            }
+
+            const summary = TrackDiscoveryEntry.fromRecord(record.summary);
+
+            if (!this.#isValidSummary(summary, path, file)) {
+                await this.#deleteQuietly(key);
+                return null;
+            }
+
+            return summary;
+        } catch {
+            return null;
+        }
+    }
+
+    async getWithSummary(namespace, path, file) {
+
         const key = this.#key(namespace, path);
 
         if (!key || !this.#isFileIdentity(file)) {
@@ -210,34 +251,55 @@ export default class GeometryCacheRepository {
                 return null;
             }
 
+            const summary = TrackDiscoveryEntry.fromRecord(record.summary);
+
+            if (!this.#isValidSummary(summary, path, file)) {
+                await this.#deleteQuietly(key);
+                return null;
+            }
+
             return {
-                metadata: null,
-                tracks: geometry.tracks,
-                waypoints: geometry.waypoints,
-                warnings: []
+                result: {
+                    metadata: null,
+                    tracks: geometry.tracks,
+                    waypoints: geometry.waypoints,
+                    warnings: []
+                },
+                summary
             };
         } catch {
             return null;
         }
     }
 
-    async set(namespace, path, file, result) {
+    async set(namespace, path, file, result, summary) {
 
         const key = this.#key(namespace, path);
         const geometry = copyGeometry(result);
+        const summaryRecord = summary instanceof TrackDiscoveryEntry
+            ? summary.toRecord()
+            : TrackDiscoveryEntry.fromRecord(summary)?.toRecord();
 
-        if (!key || !this.#isFileIdentity(file) || !geometry) {
+        if (
+            !key ||
+            !this.#isFileIdentity(file) ||
+            !geometry ||
+            !summaryRecord ||
+            summaryRecord.relativePath !== path
+        ) {
             return false;
         }
 
         const record = {
             cacheSchemaVersion: this.config.cacheSchemaVersion,
             parserSchemaVersion: this.config.parserSchemaVersion,
+            textDecoderSchemaVersion: this.config.textDecoderSchemaVersion,
             namespace,
             path,
             size: file.size,
             lastModified: file.lastModified,
-            geometry
+            geometry,
+            summary: summaryRecord
         };
 
         try {
@@ -275,10 +337,24 @@ export default class GeometryCacheRepository {
             record &&
             record.cacheSchemaVersion === this.config.cacheSchemaVersion &&
             record.parserSchemaVersion === this.config.parserSchemaVersion &&
+            record.textDecoderSchemaVersion ===
+                this.config.textDecoderSchemaVersion &&
             record.namespace === namespace &&
             record.path === path &&
             record.size === file.size &&
             record.lastModified === file.lastModified
+        );
+    }
+
+    #isValidSummary(summary, path, file) {
+
+        return Boolean(
+            summary &&
+            summary.relativePath === path &&
+            summary.fileSize === file.size &&
+            summary.lastModified === file.lastModified &&
+            isUsableDiscoveryName(summary.displayName) &&
+            summary.trackNames.every(isUsableDiscoveryName)
         );
     }
 

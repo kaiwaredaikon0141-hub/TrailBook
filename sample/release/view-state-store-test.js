@@ -7,6 +7,7 @@ import DisplaySettingsStore from "../../src/js/services/DisplaySettingsStore.js"
 import GeometryCacheRepository from "../../src/js/services/GeometryCacheRepository.js";
 import GPXDisplayQueue from "../../src/js/services/GPXDisplayQueue.js";
 import GPXGeometryLoader from "../../src/js/services/GPXGeometryLoader.js";
+import TrackSummaryBuilder from "../../src/js/services/TrackSummaryBuilder.js";
 import PreviousLibraryStore from "../../src/js/services/PreviousLibraryStore.js";
 import ViewStateStore from "../../src/js/services/ViewStateStore.js";
 import DisplayState from "../../src/js/state/DisplayState.js";
@@ -172,7 +173,11 @@ function testIdentityAndSchema() {
                 map: { lat: 35, lng: 135, zoom: 11 },
                 visibleTracks: ["car/a.gpx", "car/a.gpx", "bike/b.gpx"],
                 selectedTrack: "car/a.gpx",
-                sidebar: { open: false },
+                sidebar: {
+                    open: false,
+                    width: 384,
+                    trackInfoHeight: 300
+                },
                 futureField: true
             }
         }
@@ -182,6 +187,10 @@ function testIdentityAndSchema() {
     assert(normalized.libraries["root-name:GPX"].map.zoom === 11, "Map lost");
     assert(normalized.libraries["root-name:GPX"].visibleTracks.length === 2, "duplicate path retained");
     assert(normalized.libraries["root-name:GPX"].sidebar.open === false, "sidebar lost");
+    assert(normalized.libraries["root-name:GPX"].sidebar.width === 384,
+        "sidebar width lost");
+    assert(normalized.libraries["root-name:GPX"].sidebar.trackInfoHeight === 300,
+        "Track Info height lost");
     assert(!Object.hasOwn(normalized.libraries["root-name:GPX"], "futureField"), "unknown Library field retained");
 
     const invalidTopLevels = [
@@ -211,6 +220,9 @@ function testIdentityAndSchema() {
     assert(partial.visibleTracks.length === 0, "invalid visible list partially adopted");
     assert(partial.selectedTrack === null, "invalid selection adopted");
     assert(partial.sidebar.open === true, "invalid sidebar did not default open");
+    assert(partial.sidebar.width === 260, "invalid sidebar width did not default");
+    assert(partial.sidebar.trackInfoHeight === 220,
+        "invalid Track Info height did not default");
 
     for (const map of [
         { lat: NaN, lng: 0, zoom: 1 },
@@ -368,10 +380,22 @@ function createCoordinatorFixture({
     const selectionState = new SelectionState();
     const controls = {
         open: true,
+        width: 260,
+        trackInfoHeight: 220,
         hasState: false,
         setLibrary({ hasState }) { this.hasState = hasState; },
         setSidebarOpen(open) { this.open = open; },
         isSidebarOpen() { return this.open; },
+        setSidebarWidth(width) {
+            if (Number.isFinite(width)) this.width = width;
+        },
+        getSidebarWidth() { return this.width; },
+        getDefaultSidebarWidth() { return 260; },
+        setTrackInfoHeight(height) {
+            if (Number.isFinite(height)) this.trackInfoHeight = height;
+        },
+        getTrackInfoHeight() { return this.trackInfoHeight; },
+        getDefaultTrackInfoHeight() { return 220; },
         setStoredStateAvailable(value) { this.hasState = value; },
         confirmReset() { return confirmReset; }
     };
@@ -454,10 +478,20 @@ async function testCoordinator() {
     fixture.mapView.current = { lat: 36, lng: 136, zoom: 12 };
     fixture.eventBus.emit("view-state:sidebar-toggled", { open: false });
     fixture.controls.open = false;
+    fixture.controls.width = 384;
+    fixture.eventBus.emit("view-state:sidebar-width-changed", { width: 384 });
+    fixture.controls.trackInfoHeight = 300;
+    fixture.eventBus.emit("view-state:track-info-height-changed", {
+        height: 300
+    });
     assert(fixture.timers.size === 1, "multiple timers active");
     fixture.runTimer();
     assert(fixture.store.getLibraryState(a).map.zoom === 12, "latest Map not saved");
     assert(fixture.store.getLibraryState(a).sidebar.open === false, "latest sidebar not saved");
+    assert(fixture.store.getLibraryState(a).sidebar.width === 384,
+        "latest sidebar width not saved");
+    assert(fixture.store.getLibraryState(a).sidebar.trackInfoHeight === 300,
+        "latest Track Info height not saved");
     assert(fixture.storage.writes.length === 1, "coalesced events wrote more than once");
 
     fixture.mapView.current = { lat: 37, lng: 137, zoom: 13 };
@@ -465,7 +499,7 @@ async function testCoordinator() {
     fixture.setGeneration(2);
     fixture.store.setLibraryState(b, state({
         map: { lat: 40, lng: 140, zoom: 8 },
-        sidebar: { open: true }
+        sidebar: { open: true, width: 448, trackInfoHeight: 360 }
     }));
     assert(await fixture.coordinator.restoreLibrary({
         libraryId: b,
@@ -478,6 +512,9 @@ async function testCoordinator() {
     assert(fixture.mapView.restored.value.zoom === 8, "new Map not restored");
     assert(fixture.mapView.restored.options.animate === false, "restore animated");
     assert(fixture.controls.open === true, "sidebar not restored");
+    assert(fixture.controls.width === 448, "sidebar width not restored");
+    assert(fixture.controls.trackInfoHeight === 360,
+        "Track Info height not restored");
     assert(fixture.coordinator.getStatus().pendingSave === false, "old timer survived switch");
 
     fixture.eventBus.emit("view-state:reset-requested");
@@ -883,23 +920,68 @@ async function testGeometryCache() {
         leafletLayer: "not cached",
         queueState: "not cached"
     };
-    const file = { size: 1234, lastModified: 5678 };
+    const file = { name: "a.gpx", size: 1234, lastModified: 5678 };
+    const summary = new TrackSummaryBuilder().build(
+        "folder/a.gpx",
+        file,
+        parsed
+    );
 
-    assert(await repository.set("namespace-a", "folder/a.gpx", file, parsed),
+    assert(await repository.set(
+        "namespace-a",
+        "folder/a.gpx",
+        file,
+        parsed,
+        summary
+    ),
         "geometry cache write failed");
     const stored = [...adapter.values.values()][0];
     const serialized = JSON.stringify(stored);
 
-    assert(stored.cacheSchemaVersion === 1, "cache schema missing");
+    assert(stored.cacheSchemaVersion === 3, "cache schema missing");
     assert(stored.parserSchemaVersion === 1, "parser schema missing");
+    assert(stored.textDecoderSchemaVersion === 1,
+        "text decoder schema missing");
     assert(serialized.includes("latitude") && serialized.includes("longitude"),
         "drawing geometry missing");
-    assert(!serialized.includes("metadata") && !serialized.includes("warnings"),
-        "non-geometry GPX result cached");
-    assert(!serialized.includes("elevation") && !serialized.includes("time"),
-        "non-drawing point data cached");
-    assert(!serialized.includes("secret.gpx") && !serialized.includes("not cached"),
-        "GPX XML, runtime state, or metadata cached");
+    assert(stored.summary.relativePath === "folder/a.gpx",
+        "compact discovery summary missing");
+    assert(Object.keys(stored.geometry.tracks[0].segments[0].points[0]).length === 2,
+        "non-drawing point data cached in geometry");
+    assert(!serialized.includes("rawXML") && !serialized.includes("queueState") &&
+        !serialized.includes("<gpx>"),
+    "GPX XML or runtime state cached");
+
+    const oldKey = JSON.stringify(["namespace-old", "folder/a.gpx"]);
+    adapter.values.set(oldKey, {
+        ...structuredClone(stored),
+        cacheSchemaVersion: 2,
+        namespace: "namespace-old"
+    });
+    assert(await repository.getSummary(
+        "namespace-old",
+        "folder/a.gpx",
+        file
+    ) === null, "schema 2 mojibake summary was accepted");
+    assert(!adapter.values.has(oldKey), "schema 2 cache was not invalidated");
+
+    const transitionalKey = JSON.stringify([
+        "namespace-transitional",
+        "folder/a.gpx"
+    ]);
+    const transitionalRecord = {
+        ...structuredClone(stored),
+        namespace: "namespace-transitional"
+    };
+    delete transitionalRecord.textDecoderSchemaVersion;
+    adapter.values.set(transitionalKey, transitionalRecord);
+    assert(await repository.getSummary(
+        "namespace-transitional",
+        "folder/a.gpx",
+        file
+    ) === null, "pre-decoder schema 3 summary was accepted");
+    assert(!adapter.values.has(transitionalKey),
+        "pre-decoder schema 3 cache was not invalidated");
 
     const hit = await repository.get(
         "namespace-a",
@@ -909,6 +991,13 @@ async function testGeometryCache() {
     assert(hit.tracks[0].segments[0].points.length === 2,
         "cached Track geometry not restored");
     assert(hit.waypoints.length === 1, "cached Waypoint geometry not restored");
+    const summaryHit = await repository.getSummary(
+        "namespace-a",
+        "folder/a.gpx",
+        file
+    );
+    assert(summaryHit.relativePath === "folder/a.gpx",
+        "cached discovery summary not restored");
     assert(await repository.get("namespace-b", "folder/a.gpx", file) === null,
         "cache crossed Library namespace");
 
@@ -967,14 +1056,23 @@ async function testGeometryCache() {
         "changed GPX did not invalidate cache");
 
     const cacheKey = JSON.stringify(["loader-namespace", "a.gpx"]);
-    adapter.values.get(cacheKey).cacheSchemaVersion = 999;
+    adapter.values.get(cacheKey).cacheSchemaVersion = 2;
+    delete adapter.values.get(cacheKey).textDecoderSchemaVersion;
+    const deletesBeforeSchemaFallback = adapter.deletes;
     await loader.load("a.gpx", fileHandle);
     assert(parseCalls === beforeConcurrentParse + 3,
         "schema mismatch did not fallback to parse");
+    assert(adapter.deletes === deletesBeforeSchemaFallback + 1,
+        "schema 2 entry was not deleted individually");
+    assert(adapter.values.get(cacheKey).cacheSchemaVersion === 3,
+        "schema mismatch was not rewritten as schema 3");
+    assert(adapter.values.get(cacheKey).textDecoderSchemaVersion === 1,
+        "schema mismatch rewrite omitted decoder schema");
 
     adapter.values.set(cacheKey, {
         cacheSchemaVersion: config.cacheSchemaVersion,
         parserSchemaVersion: config.parserSchemaVersion,
+        textDecoderSchemaVersion: config.textDecoderSchemaVersion,
         namespace: "loader-namespace",
         path: "a.gpx",
         size: sourceFile.size,
@@ -1004,20 +1102,32 @@ function testSidebarControls() {
     const fixture = document.getElementById("fixture");
     const workspace = document.createElement("main");
     const sidebar = document.createElement("aside");
+    const trackList = document.createElement("div");
+    const trackInfo = document.createElement("section");
     const treeMarker = document.createElement("span");
     const toolbar = new Toolbar("1.3.0");
     const eventBus = new EventBus();
     const events = [];
+    const widthEvents = [];
+    const heightEvents = [];
+    const layoutEvents = [];
     const controls = new ViewStateControls(eventBus, {
         requestFrame: callback => callback(),
-        confirmAction: () => true
+        confirmAction: () => true,
+        isDesktop: () => true
     });
 
     treeMarker.textContent = "tree-state";
-    sidebar.append(treeMarker);
+    trackList.className = "sidebar";
+    trackInfo.className = "track-info";
+    trackList.append(treeMarker);
+    sidebar.append(trackList, trackInfo);
     workspace.append(sidebar, document.createElement("section"));
     fixture.replaceChildren(toolbar.element, workspace, controls.element);
     eventBus.on("view-state:sidebar-toggled", data => events.push(data));
+    eventBus.on("view-state:sidebar-width-changed", data => widthEvents.push(data));
+    eventBus.on("view-state:track-info-height-changed", data => heightEvents.push(data));
+    eventBus.on("view-state:sidebar-layout-changed", data => layoutEvents.push(data));
     controls.attach({ toolbar, workspace, sidebar });
 
     assert(controls.isSidebarOpen(), "sidebar not default open");
@@ -1031,12 +1141,140 @@ function testSidebarControls() {
     toolbar.sidebarToggleButton.click();
     assert(controls.isSidebarOpen() && !sidebar.hidden, "sidebar did not reopen");
     assert(events.length === 2, "sidebar event count");
+    assert(controls.resizeHandle.element.getAttribute("role") === "separator",
+        "resize separator role missing");
+    assert(controls.resizeHandle.element.tabIndex === 0,
+        "resize separator not keyboard reachable");
+    assert(controls.getSidebarWidth() === 260, "default sidebar width");
+    controls.resizeHandle.element.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "ArrowRight",
+        bubbles: true
+    }));
+    assert(controls.getSidebarWidth() === 276, "keyboard resize step");
+    assert(widthEvents.at(-1).width === 276, "keyboard width event missing");
+    controls.resizeHandle.element.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "End",
+        bubbles: true
+    }));
+    assert(controls.getSidebarWidth() === 520, "keyboard maximum width");
+    controls.resizeHandle.element.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "Home",
+        bubbles: true
+    }));
+    assert(controls.getSidebarWidth() === 220, "keyboard minimum width");
+    assert(controls.resizeHandle.element.getAttribute("aria-valuenow") === "220",
+        "resize ARIA value not updated");
+
+    workspace.getBoundingClientRect = () => ({ left: 0 });
+    const handle = controls.resizeHandle.element;
+    handle.dispatchEvent(new PointerEvent("pointerdown", {
+        pointerId: 1,
+        button: 0,
+        clientX: 220,
+        bubbles: true
+    }));
+    handle.dispatchEvent(new PointerEvent("pointermove", {
+        pointerId: 1,
+        clientX: 340,
+        bubbles: true
+    }));
+    assert(controls.getSidebarWidth() === 340, "pointer resize preview");
+    const widthEventsBeforeEnd = widthEvents.length;
+    handle.dispatchEvent(new PointerEvent("pointerup", {
+        pointerId: 1,
+        clientX: 340,
+        bubbles: true
+    }));
+    assert(widthEvents.length === widthEventsBeforeEnd + 1,
+        "pointer resize did not commit once");
+    assert(!document.body.classList.contains("is-sidebar-resizing"),
+        "resize selection guard remained active");
+    assert(layoutEvents.length > 0, "resize did not request Map layout update");
+
+    sidebar.getBoundingClientRect = () => ({ bottom: 600, height: 600 });
+    const splitHandle = controls.trackInfoResizeHandle.element;
+    assert(splitHandle.getAttribute("role") === "separator",
+        "Track Info separator role missing");
+    assert(splitHandle.getAttribute("aria-orientation") === "horizontal",
+        "Track Info separator orientation missing");
+    assert(controls.getTrackInfoHeight() === 220,
+        "default Track Info height");
+    splitHandle.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "ArrowUp",
+        bubbles: true
+    }));
+    assert(controls.getTrackInfoHeight() === 236,
+        "Track Info keyboard resize step");
+    assert(heightEvents.at(-1).height === 236,
+        "Track Info keyboard event missing");
+    splitHandle.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "Home",
+        bubbles: true
+    }));
+    assert(controls.getTrackInfoHeight() === 120,
+        "Track Info minimum height");
+    splitHandle.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "End",
+        bubbles: true
+    }));
+    assert(controls.getTrackInfoHeight() === 420,
+        "Track Info maximum height");
+    splitHandle.dispatchEvent(new PointerEvent("pointerdown", {
+        pointerId: 2,
+        button: 0,
+        clientY: 180,
+        bubbles: true
+    }));
+    splitHandle.dispatchEvent(new PointerEvent("pointermove", {
+        pointerId: 2,
+        clientY: 300,
+        bubbles: true
+    }));
+    assert(controls.getTrackInfoHeight() === 300,
+        "Track Info pointer resize preview");
+    const heightEventsBeforeEnd = heightEvents.length;
+    splitHandle.dispatchEvent(new PointerEvent("pointerup", {
+        pointerId: 2,
+        clientY: 300,
+        bubbles: true
+    }));
+    assert(heightEvents.length === heightEventsBeforeEnd + 1,
+        "Track Info pointer resize did not commit once");
+    assert(!document.body.classList.contains("is-track-info-resizing"),
+        "Track Info resize selection guard remained active");
 
     controls.setLibrary({ name: "A", hasState: true });
     assert(!controls.element.hidden, "Reset panel unavailable");
     assert(!controls.resetButton.disabled, "Reset disabled with state");
     controls.setStoredStateAvailable(false);
     assert(controls.resetButton.disabled, "Reset enabled without state");
+
+    const mobileWorkspace = document.createElement("main");
+    const mobileSidebar = document.createElement("aside");
+    const mobileTrackList = document.createElement("div");
+    const mobileTrackInfo = document.createElement("section");
+    const mobileControls = new ViewStateControls(new EventBus(), {
+        requestFrame: callback => callback(),
+        isDesktop: () => false
+    });
+
+    mobileTrackList.className = "sidebar";
+    mobileTrackInfo.className = "track-info";
+    mobileSidebar.append(mobileTrackList, mobileTrackInfo);
+    mobileWorkspace.append(mobileSidebar, document.createElement("section"));
+    mobileControls.attach({
+        toolbar: new Toolbar("1.3.0"),
+        workspace: mobileWorkspace,
+        sidebar: mobileSidebar
+    });
+    assert(mobileControls.resizeHandle.element.hidden,
+        "resize handle visible outside desktop pointer environment");
+    assert(mobileWorkspace.classList.contains("is-sidebar-resize-unavailable"),
+        "non-desktop workspace retained resize grid column");
+    assert(mobileControls.trackInfoResizeHandle.element.hidden,
+        "Track Info resize handle visible outside desktop environment");
+    assert(mobileSidebar.classList.contains("is-track-info-resize-unavailable"),
+        "non-desktop Sidebar retained Track Info resize row");
 }
 
 async function testPreviousLibraryStore() {
@@ -1277,8 +1515,19 @@ try {
     assert(Config.viewState.debounceMs === 750, "Config debounce");
     assert(Config.viewState.maxVisibleTracks === 5000, "visible limit");
     assert(Config.viewState.maxSerializedBytes === 1048576, "size limit");
-    assert(Config.geometryCache.cacheSchemaVersion === 1, "cache schema changed");
+    assert(Config.viewState.sidebarDefaultWidth === 260, "sidebar default width");
+    assert(Config.viewState.sidebarMinWidth === 220, "sidebar minimum width");
+    assert(Config.viewState.sidebarMaxWidth === 520, "sidebar maximum width");
+    assert(Config.viewState.trackInfoDefaultHeight === 220,
+        "Track Info default height");
+    assert(Config.viewState.trackInfoMinHeight === 120,
+        "Track Info minimum height");
+    assert(Config.viewState.trackInfoMaxHeight === 420,
+        "Track Info maximum height");
+    assert(Config.geometryCache.cacheSchemaVersion === 3, "cache schema changed");
     assert(Config.geometryCache.parserSchemaVersion === 1, "parser schema changed");
+    assert(Config.geometryCache.textDecoderSchemaVersion === 1,
+        "text decoder schema changed");
     assert(typeof App === "function", "App module import failed");
 
     testIdentityAndSchema();

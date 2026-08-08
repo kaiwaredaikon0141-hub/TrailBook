@@ -6,14 +6,15 @@ import GPXParser from "../services/GPXParser.js";
 import GPXDisplayQueue from "../services/GPXDisplayQueue.js";
 import GeometryCacheRepository from "../services/GeometryCacheRepository.js";
 import GPXGeometryLoader from "../services/GPXGeometryLoader.js";
-import SearchService from "../services/SearchService.js";
 import TrackStyleService from "../services/TrackStyleService.js";
 import DisplaySettingsStore from "../services/DisplaySettingsStore.js";
 import ViewStateStore from "../services/ViewStateStore.js";
 import PreviousLibraryStore from "../services/PreviousLibraryStore.js";
+import DiscoveryViewStateStore from "../services/DiscoveryViewStateStore.js";
 import LibrarySettingsCoordinator from "./LibrarySettingsCoordinator.js";
 import ViewStateCoordinator from "./ViewStateCoordinator.js";
 import PreviousLibraryCoordinator from "./PreviousLibraryCoordinator.js";
+import TrackDiscoveryCoordinator from "./TrackDiscoveryCoordinator.js";
 import DisplayState from "../state/DisplayState.js";
 import SelectionState from "../state/SelectionState.js";
 import FolderColorState from "../state/FolderColorState.js";
@@ -64,7 +65,6 @@ export default class App {
                 this.config.geometryCache
             )
         });
-        this.searchService = new SearchService();
         this.trackStyleService = new TrackStyleService(
             this.config.map.trackStyle
         );
@@ -74,6 +74,9 @@ export default class App {
         this.viewStateStore = new ViewStateStore(this.config.viewState);
         this.previousLibraryStore = new PreviousLibraryStore(
             this.config.previousLibrary
+        );
+        this.discoveryViewStateStore = new DiscoveryViewStateStore(
+            this.config.discoveryView
         );
         this.folderColorState = new FolderColorState({
             store: this.displaySettingsStore,
@@ -93,6 +96,12 @@ export default class App {
         this.displayState = new DisplayState();
         this.selectionState = new SelectionState();
         this.displayQueue = new GPXDisplayQueue(2);
+        this.trackDiscoveryCoordinator = new TrackDiscoveryCoordinator({
+            eventBus: this.eventBus,
+            loader: this.gpxGeometryLoader,
+            displayState: this.displayState,
+            modeStore: this.discoveryViewStateStore
+        });
         this.currentTrackZoomBucket = this.trackStyleService.getZoomBucket(
             this.config.map.initialZoom
         ).name;
@@ -130,7 +139,17 @@ export default class App {
             this.eventBus,
             this.config.map.trackStyle.lineColor
         );
-        this.viewStateControls = new ViewStateControls(this.eventBus);
+        this.viewStateControls = new ViewStateControls(this.eventBus, {
+            sidebarDefaultWidth: this.config.viewState.sidebarDefaultWidth,
+            sidebarMinWidth: this.config.viewState.sidebarMinWidth,
+            sidebarMaxWidth: this.config.viewState.sidebarMaxWidth,
+            sidebarKeyboardStep: this.config.viewState.sidebarKeyboardStep,
+            trackInfoDefaultHeight: this.config.viewState.trackInfoDefaultHeight,
+            trackInfoMinHeight: this.config.viewState.trackInfoMinHeight,
+            trackInfoMaxHeight: this.config.viewState.trackInfoMaxHeight,
+            trackListMinHeight: this.config.viewState.trackListMinHeight,
+            trackInfoKeyboardStep: this.config.viewState.trackInfoKeyboardStep
+        });
     }
 
     createLayout() {
@@ -146,12 +165,16 @@ export default class App {
             this.viewStateControls.element,
             this.searchView.element
         );
+        const sidebar = this.trackDiscoveryCoordinator.attach({
+            folderTree: this.treeView.element.querySelector(".tree-root"),
+            searchView: this.searchView
+        });
 
-        this.workspace.append(this.treeView.element, this.mapView.element);
+        this.workspace.append(sidebar, this.mapView.element);
         this.viewStateControls.attach({
             toolbar: this.toolbar,
             workspace: this.workspace,
-            sidebar: this.treeView.element
+            sidebar
         });
         this.viewStateCoordinator = new ViewStateCoordinator({
             eventBus: this.eventBus,
@@ -172,7 +195,10 @@ export default class App {
             canSwitchLibrary: () =>
                 this.librarySettingsCoordinator.canSwitchLibrary(),
             flushViewState: () => this.viewStateCoordinator.flush(),
-            beforeLoad: () => this.clearSelection("library-switch"),
+            beforeLoad: () => {
+                this.clearSelection("library-switch");
+                this.trackDiscoveryCoordinator.clearLibrary();
+            },
             applyLibrary: (library, context) =>
                 this.handleLibraryLoaded(library, context),
             getCurrentLibrary: () => this.currentLibrary
@@ -223,10 +249,6 @@ export default class App {
 
         this.librarySettingsCoordinator.bindEvents(this.eventBus);
 
-        this.eventBus.on("search:query-changed", ({ query }) => {
-            this.handleSearchQuery(query);
-        });
-
         this.eventBus.on("search:result-activated", ({ path }) => {
             this.treeView.activateSearchResult(path);
         });
@@ -276,6 +298,7 @@ export default class App {
         );
 
         this.mapView.initialize();
+        this.trackDiscoveryCoordinator.bindEvents();
     }
 
     async handleLibraryLoaded(
@@ -298,7 +321,6 @@ export default class App {
         this.clearSelection("library-switch");
         this.displayQueue.clear();
         clearTimeout(this.#searchRefreshTimer);
-        this.searchService.clear();
         this.searchView.setAvailable(false);
         this.mapView.clear();
         this.mapView.resetView({ silent: true });
@@ -311,11 +333,6 @@ export default class App {
             return false;
         }
 
-        this.searchService.setEntries(
-            library.gpxFileCount === 0
-                ? []
-                : this.treeView.getSearchSourceEntries()
-        );
         this.searchView.setAvailable(true);
 
         this.currentLibrary = library;
@@ -355,34 +372,22 @@ export default class App {
             generation,
             isCurrent
         });
+        this.trackDiscoveryCoordinator.setLibrary({
+            namespace: cacheNamespace,
+            libraryId: this.currentLibraryId,
+            fileEntries: this.treeView.getFileEntries(),
+            generation,
+            isCurrent
+        });
 
         return true;
-    }
-
-    handleSearchQuery(query) {
-
-        const searchResult = this.searchService.search(query);
-        const results = searchResult.results.map(entry => ({
-            ...entry,
-            ...this.treeView.getSearchResultState(entry.path),
-            selected: this.selectionState.isSelected(entry.path)
-        }));
-
-        this.searchView.showResults(
-            { totalCount: searchResult.totalCount, results },
-            query
-        );
     }
 
     scheduleSearchRefresh() {
 
         clearTimeout(this.#searchRefreshTimer);
         this.#searchRefreshTimer = setTimeout(() => {
-            const query = this.searchView.getActiveQuery();
-
-            if (query) {
-                this.handleSearchQuery(query);
-            }
+            this.eventBus.emit("search:results-refresh-requested");
         }, 0);
     }
 
@@ -469,7 +474,13 @@ export default class App {
         return true;
     }
 
-    handleDisplayToggled({ path, fileHandle, checked }) {
+    handleDisplayToggled({
+        path,
+        fileHandle,
+        checked,
+        preserveMapView = false,
+        preserveSelection = false
+    }) {
 
         const display = this.displayState.getDisplay(path);
 
@@ -481,14 +492,22 @@ export default class App {
         this.treeView.setDisplayChecked(path, checked);
 
         if (!checked) {
-            this.stopDisplay(path);
+            this.stopDisplay(path, {
+                refocus: !preserveMapView,
+                preserveSelection
+            });
             return;
         }
 
-        this.startDisplay(path, fileHandle);
+        this.startDisplay(path, fileHandle, { refocus: !preserveMapView });
     }
 
-    handleFolderDisplayToggled({ fileEntries, checked }) {
+    handleFolderDisplayToggled({
+        fileEntries,
+        checked,
+        preserveMapView = false,
+        preserveSelection = false
+    }) {
 
         fileEntries.forEach(({ path, fileHandle }) => {
 
@@ -512,13 +531,19 @@ export default class App {
                 return;
             }
 
-            this.handleDisplayToggled({ path, fileHandle, checked });
+            this.handleDisplayToggled({
+                path,
+                fileHandle,
+                checked,
+                preserveMapView,
+                preserveSelection
+            });
         });
 
         this.updateDisplayStatus();
     }
 
-    startDisplay(path, fileHandle) {
+    startDisplay(path, fileHandle, { refocus = true } = {}) {
 
         const display = this.displayState.getDisplay(path);
         const cachedResult = this.displayState.getCachedResult(path);
@@ -534,7 +559,7 @@ export default class App {
                 { showWaypoints: this.#displayOptions.showWaypoints }
             );
             this.applySelectionHighlight(path);
-            this.scheduleRefocus();
+            if (refocus) this.scheduleRefocus();
             this.updateDisplayStatus();
             this.scheduleSearchRefresh();
             return;
@@ -559,7 +584,8 @@ export default class App {
                 path,
                 result,
                 generation,
-                requestId
+                requestId,
+                { refocus }
             ),
             onFailure: error => this.handleDisplayFailed(
                 path,
@@ -570,7 +596,13 @@ export default class App {
         });
     }
 
-    handleDisplayParsed(path, result, generation, requestId) {
+    handleDisplayParsed(
+        path,
+        result,
+        generation,
+        requestId,
+        { refocus = true } = {}
+    ) {
 
         const display = this.displayState.getDisplay(path);
 
@@ -600,7 +632,7 @@ export default class App {
             { showWaypoints: this.#displayOptions.showWaypoints }
         );
         this.applySelectionHighlight(path);
-        this.scheduleRefocus();
+        if (refocus) this.scheduleRefocus();
         this.updateDisplayStatus();
         this.scheduleSearchRefresh();
     }
@@ -632,7 +664,10 @@ export default class App {
         this.scheduleSearchRefresh();
     }
 
-    stopDisplay(path) {
+    stopDisplay(
+        path,
+        { refocus = true, preserveSelection = false } = {}
+    ) {
 
         const display = this.displayState.getDisplay(path);
 
@@ -640,7 +675,7 @@ export default class App {
             return;
         }
 
-        if (this.selectionState.isSelected(path)) {
+        if (!preserveSelection && this.selectionState.isSelected(path)) {
             this.clearSelection("hidden");
         }
 
@@ -653,7 +688,7 @@ export default class App {
             this.treeView.setDisplayIdle(path);
         }
 
-        this.scheduleRefocus();
+        if (refocus) this.scheduleRefocus();
         this.updateDisplayStatus();
         this.scheduleSearchRefresh();
     }

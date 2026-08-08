@@ -582,6 +582,66 @@ Consequences: cacheはGPXから再生成可能で正本ではない。source情�
 
 Implementation Note: 約807 visible Tracks、Waypoint OFF、scan / permission除外の既存再parse warm restoreは24秒、25秒、25秒、中央値25秒であり、約5秒gateに不達だった。Release 1.3 Unit 5はorigin-local IndexedDB geometry cacheを採用し、cache / parser schema、`File.size`、`File.lastModified`が一致するTrack / Waypoint座標だけを復元する。cache導入後は3秒、3秒、3秒、中央値3秒となり、約8倍高速化してgateをPassした。cache miss / invalid時は既存parseへfallbackし、cacheは削除・再生成可能な派生データとして正式採用する。
 
+## Decision 0041 — Release 1.4 Uses One Derived Discovery Index
+
+Date: 2026-08
+Status: Accepted
+Scope: Release 1.4
+
+Decision Proposal: Date Tree、Track Info、Track name / date filterは、GPX relative pathをidentityとする1つのLibrary Discovery Indexを共有する。index summaryは既存Geometry Cacheのsource validationと同じderived recordから取得し、cache miss時は1回のGPX parse resultから描画geometryとsummaryを同時生成する。Library openと空Searchはmetadata-onlyのまま維持し、Discovery IndexはDate modeまたはtext / date filterの明示操作まで構築しない。
+
+Unit 5 Refinement: 既存Search欄はTrack discovery filterの単一入口へ拡張する。空欄のLibrary openではIndexを構築せず、textまたはdate filterの明示入力時だけ遅延buildする。textはDiscovery summaryの`displayName` / Track nameとFolder pathを対象とし、date rangeとAND結合する。Library open時のeager parse禁止と1つのDiscovery Indexを共有するDecision本体は維持する。
+
+Reason: Date、Track名、距離、時刻、elevationを各UIが個別解析すると806 GPXでread / parse / cache writeが重複し、Release 1.3のinflight deduplicationとwarm restoreを損なう。1 GPX 1 summaryならDate Tree、Info、Filterが同じ事実を参照でき、Folder / GPX正本とDisplayStateを変更しない。
+
+Consequences: date sourceはvalid `metadata.time`、document順の最初のvalid TrackPoint time、`File.lastModified`、厳密なoriginal filename dateの順とする。summaryはTrackPoint配列を保持せず、path、名前、recordedAt / source、point count、Segment内distance、start / end / duration、elevation min / maxに限定する。Geometry Cache schema更新時はold entryを再生成し、cache failureはmemory indexと通常parseへfallbackする。AppとTreeViewへDiscovery責務を追加せず、Coordinator、Service、DateTreeView、TrackInfoPanelへ分離する。GPX、`trailbook.json`、shared settingsへDiscovery dataを書かない。
+
+Implementation Note: Release 1.4 Unit 2〜5は1つのpath-keyed Discovery IndexをDate Tree、Track Info、Search / Filterで共有し、Geometry Cacheと同じsource identity / inflight parse結果を再利用した。warm Index中央値3秒、duplicate parse / renderなし、Library isolation、data protectionのBrowser AcceptanceをPassし、Unit 6 finalizationでDecisionをAcceptedとする。
+
+Alternatives: UIごとにGPXをparseする、Library open時に全GPXをeager parseする、Date Treeを実Folderへ書き戻す、TrackPoint全体をDiscovery Indexへ複製する。
+
+## Decision 0042 — Sidebar Width Is Device-local View State
+
+Date: 2026-08
+Status: Accepted
+Scope: Release 1.4 Unit 4
+
+Decision: Track InfoはSidebar下部へ固定し、Folder / DateのTrack listだけを独立scroll領域とする。desktopのSidebar / Map境界はpointerとkeyboardでresize可能とし、幅はLibrary単位のdevice-local `trailbook.viewState`へ保存する。`sidebar.width`はschema version 1のoptional fieldとして追加し、220〜520px、default 260pxとする。
+
+Reason: Track listをscrollしてもselected Trackの情報を確認でき、Libraryごとに必要なlist幅を再利用できる。幅は端末と画面に依存するためLibrary共有設定の`trailbook.json`へ含めない。既存view-state save queueへ統合することでbulk操作やMap stateとは別の永続化経路を増やさない。
+
+Consequences: Track Info自身が高すぎる場合はpanel内部をscrollする。drag中は誤selectionを抑止し、終了時にMapをsilentに`invalidateSize`するが、Map center / zoom、selection、visibilityは変更しない。Sidebar open / closedと共存し、旧payloadのmissing widthはdefaultへfallbackする。Mobile / coarse pointerへresize UIを表示せず、GPX、`trailbook.json`、shared settingsを書き換えない。
+
+Extended from: Decision 0036のRelease 1.3 view-state境界。Release 1.3ではFuture CandidateだったSidebar widthをRelease 1.4でoptional fieldとして追加する。
+
+## Decision 0043 — GPX Encoding Is Resolved Before XML Parsing
+
+Date: 2026-08
+Status: Accepted
+Scope: Release 1.4 Unit 4
+
+Decision: GPX byte列は`GPXLoader`でBOMとXML declarationを確認してUnicode文字列へdecodeし、その一つの文字列を`GPXParser`へ渡す。UTF-8を標準とし、UTF-16 BOM、Shift_JIS、Windows-31J / CP932 aliasをallowlistで扱う。宣言なしではstrict UTF-8を先に試し、invalid byte列の場合だけShift_JISへfallbackする。
+
+Reason: `File.text()`は常にUTF-8としてdecodeするため、Windows-31J等を宣言した既存GPXのTrack名がreplacement characterへ変わっていた。Viewごとの文字列補正ではGeometry Cache、Discovery Index、Date Tree、Track Infoの値が一致せず、元byte列も復元できない。
+
+Consequences: unsupported declarationまたはdecode failureはUTF-8 replacement decodeでViewerを継続する。Geometry Cache schemaを3へ更新し、`textDecoderSchemaVersion: 1`を必須record markerとする。schema 2とmarkerのない過渡的schema 3 summaryは該当pathだけを削除し、既存parse fallbackで再生成・schema 3保存する。DB全体、GPX、timestamp、`trailbook.json`を書き換えず、encoding変換fileも作成しない。
+
+Implementation Note: decode後のGPX内部`metadata.name`または`trk/name`がU+FFFD replacement character、制御文字、空文字を含む場合は明らかに壊れた表示名として採用しない。優先順位はusable metadata name、最初のusable Track name、relative path由来filenameとする。cache内のbroken display / Track nameはrecord単位でinvalidにし、そのGPXだけを再parseして同じschema 3へ再保存する。schema bumpやDB全体clearは行わない。
+
+Acceptance Note: Unit 5 Browser AcceptanceでSearch、Date Tree、Track Infoの表示名、broken Track nameの検索除外、filename fallback、手動clearなしのpath単位cache再生成を確認し、このfallback規則をAcceptedとする。他GPX cache、Console、GPX / `trailbook.json`への書き込みに問題はない。
+
+## Decision 0044 — Track Info Split Height Is Device-local View State
+
+Date: 2026-08
+Status: Accepted
+Scope: Release 1.4 Unit 4
+
+Decision: Track list / Track Info境界をdesktopのhorizontal separatorとし、pointerとkeyboardでTrack Info高を変更できるようにする。高さはLibrary単位のdevice-local `trailbook.viewState`へoptional `sidebar.trackInfoHeight`として保存する。120〜420px、default 220px、Track list最小100pxとする。
+
+Reason: selected Track情報の必要高は画面と利用者によって異なる一方、Track listとInfoのどちらも潰さず同時に利用できる必要がある。端末layout固有値であるためLibrary共有設定へ含めない。
+
+Consequences: Track Info内部scrollを維持し、Sidebar横resize / open / closeと同じschema version 1、750ms save queueを使用する。drag中の誤selectionを抑止するが、Map center / zoom、selection、visibilityは変更しない。Mobile / coarse pointerへseparatorを表示せず、GPXと`trailbook.json`を書き換えない。
+
 ## Decision Status
 
 - Accepted: 正式採用
