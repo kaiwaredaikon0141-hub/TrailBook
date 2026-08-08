@@ -1,9 +1,6 @@
 import Config from "./Config.js";
 import EventBus from "./EventBus.js";
-import FolderScanner, {
-    getFolderPickerSupport,
-    pickFolder
-} from "../services/FolderScanner.js";
+import FolderScanner from "../services/FolderScanner.js";
 import GPXLoader from "../services/GPXLoader.js";
 import GPXParser from "../services/GPXParser.js";
 import GPXDisplayQueue from "../services/GPXDisplayQueue.js";
@@ -11,8 +8,10 @@ import SearchService from "../services/SearchService.js";
 import TrackStyleService from "../services/TrackStyleService.js";
 import DisplaySettingsStore from "../services/DisplaySettingsStore.js";
 import ViewStateStore from "../services/ViewStateStore.js";
+import PreviousLibraryStore from "../services/PreviousLibraryStore.js";
 import LibrarySettingsCoordinator from "./LibrarySettingsCoordinator.js";
 import ViewStateCoordinator from "./ViewStateCoordinator.js";
+import PreviousLibraryCoordinator from "./PreviousLibraryCoordinator.js";
 import DisplayState from "../state/DisplayState.js";
 import SelectionState from "../state/SelectionState.js";
 import FolderColorState from "../state/FolderColorState.js";
@@ -37,8 +36,6 @@ export default class App {
     #refocusTimer = null;
 
     #searchRefreshTimer = null;
-
-    #libraryLoadGeneration = 0;
 
     #displayOptions = {
         showWaypoints: false
@@ -68,6 +65,9 @@ export default class App {
             this.config.uiSettings
         );
         this.viewStateStore = new ViewStateStore(this.config.viewState);
+        this.previousLibraryStore = new PreviousLibraryStore(
+            this.config.previousLibrary
+        );
         this.folderColorState = new FolderColorState({
             store: this.displaySettingsStore,
             pathColorResolver: path => resolvePathHashColor(
@@ -98,8 +98,8 @@ export default class App {
 
         this.createComponents();
         this.createLayout();
-        this.configureFolderAccess();
         this.bindEvents();
+        void this.previousLibraryCoordinator.initialize();
     }
 
     createComponents() {
@@ -155,6 +155,20 @@ export default class App {
             displayQueue: this.displayQueue,
             debounceMs: this.config.viewState.debounceMs
         });
+        this.previousLibraryCoordinator = new PreviousLibraryCoordinator({
+            store: this.previousLibraryStore,
+            scanner: this.folderScanner,
+            toolbar: this.toolbar,
+            accessPanel: this.libraryAccessPanel,
+            statusBar: this.statusBar,
+            canSwitchLibrary: () =>
+                this.librarySettingsCoordinator.canSwitchLibrary(),
+            flushViewState: () => this.viewStateCoordinator.flush(),
+            beforeLoad: () => this.clearSelection("library-switch"),
+            applyLibrary: (library, context) =>
+                this.handleLibraryLoaded(library, context),
+            getCurrentLibrary: () => this.currentLibrary
+        });
 
         app.replaceChildren(
             this.toolbar.element,
@@ -164,54 +178,12 @@ export default class App {
         );
     }
 
-    configureFolderAccess() {
-
-        const support = getFolderPickerSupport();
-        let disabledReason = "";
-
-        if (support.reason === "insecure-context") {
-            disabledReason = "安全な接続で開いてください";
-            this.libraryAccessPanel.showInsecureContext();
-            this.statusBar.showUnsupportedEnvironment();
-        } else if (support.reason === "missing-api") {
-            disabledReason = "このbrowserではFolder選択を利用できません";
-            this.libraryAccessPanel.showUnsupportedBrowser();
-            this.statusBar.showUnsupportedEnvironment();
-        } else if (support.isMobile) {
-            this.libraryAccessPanel.showUnverifiedMobile();
-            this.statusBar.showInitial();
-        } else {
-            this.libraryAccessPanel.showInitial();
-            this.statusBar.showInitial();
-        }
-
-        this.toolbar.setFolderPickerState({
-            disabled: !support.available,
-            descriptionId: this.libraryAccessPanel.descriptionId,
-            disabledReason
-        });
-    }
-
     bindEvents() {
 
-        this.eventBus.on("folder:open-requested", () => this.loadLibrary());
-
-        this.eventBus.on("library:loaded", ({ library, generation }) => {
-            void this.handleLibraryLoaded(library, generation);
-        });
-
-        this.eventBus.on("library:load-failed", ({ error }) => {
-            console.error("Failed to load library.", error);
-            if (
-                error.name === "NotAllowedError" ||
-                error.name === "SecurityError"
-            ) {
-                this.libraryAccessPanel.showPermissionFailure();
-            } else {
-                this.libraryAccessPanel.showLoadFailure();
-            }
-            this.statusBar.showError();
-        });
+        this.eventBus.on(
+            "folder:open-requested",
+            () => void this.previousLibraryCoordinator.openManual()
+        );
 
         this.eventBus.on("gpx:selection-requested", data => {
             this.handleSelectionRequest(data);
@@ -298,71 +270,14 @@ export default class App {
         this.mapView.initialize();
     }
 
-    async loadLibrary() {
-
-        if (!this.librarySettingsCoordinator.canSwitchLibrary()) {
-            return;
-        }
-
-        try {
-            const support = getFolderPickerSupport();
-
-            if (!support.available) {
-                this.configureFolderAccess();
-                return;
-            }
-
-            const handle = await pickFolder();
-
-            if (!handle) {
-                return;
-            }
-
-            this.viewStateCoordinator.flush();
-
-            const generation = ++this.#libraryLoadGeneration;
-
-            this.clearSelection("library-switch");
-            this.libraryAccessPanel.showLoading(handle.name);
-            this.statusBar.showLibraryLoading(handle.name);
-            const library = await this.folderScanner.scan(handle);
-            this.eventBus.emit("library:loaded", { library, generation });
-
-        } catch (error) {
-            if (error.name === "AbortError") {
-                this.restoreLibraryAccessState();
-                return;
-            }
-
-            this.eventBus.emit("library:load-failed", { error });
-        }
-    }
-
-    restoreLibraryAccessState() {
-
-        if (this.currentLibrary) {
-            if (this.currentLibrary.gpxFileCount === 0) {
-                this.libraryAccessPanel.showEmpty(this.currentLibrary.name);
-            } else {
-                this.libraryAccessPanel.hide();
-            }
-            this.statusBar.showLibraryLoaded(this.currentLibrary);
-            return;
-        }
-
-        this.configureFolderAccess();
-    }
-
     async handleLibraryLoaded(
         library,
-        generation = this.#libraryLoadGeneration
+        { generation, isCurrent }
     ) {
 
-        if (generation !== this.#libraryLoadGeneration) {
+        if (!isCurrent()) {
             return false;
         }
-
-        const isCurrent = () => generation === this.#libraryLoadGeneration;
         const settingsLoad = await this.librarySettingsCoordinator.load(
             library.rootFolder.handle,
             { generation, isCurrent }

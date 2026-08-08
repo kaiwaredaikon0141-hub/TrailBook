@@ -8,7 +8,7 @@
 - Completed: Release 0.1からRelease 1.2
 - Next Release: Release 1.3 Previous View Restoration（In Progress）
 
-Release 1.2 Shared Library SettingsはCompletedです。Library rootの`trailbook.json`によるFolder色共有、明示Save、legacy migration、manual Reload、Conflict / Invalid JSON recoveryを実装し、Chrome / Edge / Google Drive同期Folderの統合受け入れを完了しています。Release 1.3 Unit 1〜3はCompletedです。Unit 3は少数Trackと807 visible TrackのBrowser Acceptanceに合格しています。
+Release 1.2 Shared Library SettingsはCompletedです。Library rootの`trailbook.json`によるFolder色共有、明示Save、legacy migration、manual Reload、Conflict / Invalid JSON recoveryを実装し、Chrome / Edge / Google Drive同期Folderの統合受け入れを完了しています。Release 1.3 Unit 1〜4はCompletedです。Unit 5 Fast Restore Performance GateはNot startedです。
 
 ## Read Order
 
@@ -81,7 +81,7 @@ Release 1.3 Unit roles:
 
 ## Current Release and Future Features
 
-Release 1.2 Shared Library SettingsはCompletedです。TrailBookはGoogle Drive APIや同期statusを使用せず、同期後のmanual ReloadまたはLibrary再選択を利用します。Release 1.3 Previous View RestorationはIn Progressです。Unit 3でvisible Trackのdevice-local保存・復元とBrowser Acceptanceまで完了しました。追加設計としてprevious DirectoryHandleのIndexedDB保存とpermission UX、806前後のwarm restore約5秒のperformance gate、gate不達時だけの再生成可能geometry cacheを後続Unitへ分離しています。selected Track復元は未実装で、shared JSON、browser間共有、Search / Tree navigation復元は対象外です。
+Release 1.2 Shared Library SettingsはCompletedです。TrailBookはGoogle Drive APIや同期statusを使用せず、同期後のmanual ReloadまたはLibrary再選択を利用します。Release 1.3 Previous View RestorationはIn Progressです。Unit 3のvisible Track復元とUnit 4のprevious DirectoryHandle復元はChrome / Edge Browser AcceptanceまでCompletedです。806前後のwarm restore約5秒Performance Gateと条件付きgeometry cache、selected Track復元は未実装です。
 
 sidebar width、Search / Tree navigation復元、Stable Library Identity / Aliasに加え、Statistics、Replay、HeatMap、GPX Metadata Index、日付表示、vehicle metadata、GPX編集、GPX size reduction、Cloud Sync、Mobile Viewer UX、Waypoint性能最適化、数値性能再測定、Plugin、AI Searchなども未実装の将来候補です。
 

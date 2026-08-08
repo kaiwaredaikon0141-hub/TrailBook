@@ -1769,12 +1769,12 @@ Current runtime contract: `DisplayState.checked`が表示意図、loading / load
 | 1 | Scope、Architecture、Decisions、schema、identity、restore order、performance / test plan | Completed |
 | 2 | ViewStateStore / schema、Map state、desktop sidebar、Reset基盤 | Completed |
 | 3 | visible Track restore、existing Queue、bulk coalescing、stale guard | Completed |
-| 4 | Previous Library Handle Store / Coordinator、permission UX、自動 / 手動open | Not started |
+| 4 | Previous Library Handle Store / Coordinator、permission UX、自動 / 手動open | Completed |
 | 5 | 806 GPX warm restore performance gate、条件付きgeometry cache | Not started |
 | 6 | selected Track restore、Reset UI、error / lifecycle integration | Not started |
 | 7 | Chrome / Edge、806 GPX、documentation、Release finalization | Not started |
 
-Production Implementation Status: Unit 3 Completed
+Production Implementation Status: Unit 4 Completed
 
 ### Frozen Planning Scope
 
@@ -1783,8 +1783,8 @@ Production Implementation Status: Unit 3 Completed
 - [ ] visibleかつloadedなselected TrackだけをSelectionStateへ復元する
 - [ ] desktop sidebar open / closedを保存・復元する。widthは保存しない
 - [ ] current Libraryの保存済みprevious view stateだけを消すconfirmation付きResetを提供する
-- [ ] 最後に正常に開いたDirectoryHandleだけをIndexedDBへ保存し、localStorage / shared JSONへHandleを書かない
-- [ ] permission `granted`時の自動openと、`prompt` / `denied`時の`前回のLibraryを開く` / manual pickerを提供する
+- [x] 最後に正常に開いたDirectoryHandleだけをIndexedDBへ保存し、localStorage / shared JSONへHandleを書かない
+- [x] permission `granted`時の自動openと、`prompt` / `denied`時の`前回のLibraryを開く` / manual pickerを提供する
 - [ ] `trailbook.json`、GPX、Folder、Leaflet Layer、Queueへview stateを書かない。geometry cacheは5秒gate不達時だけ再生成可能な補助として検討する
 - [ ] existing Queue concurrency 2、cache上限100、Waypoint初期OFF、Search / Folder bulk契約を維持する
 
@@ -1816,7 +1816,7 @@ Validation gates:
 - [x] recognized Library entryはMap、visibleTracks、selectedTrack、sidebarをfield単位でfallback
 - [x] pathはroot-relative、`/`、case-sensitive。absolute、backslash、control、empty / `.` / `..` segment、dangerous keyを拒否
 - [x] duplicate pathをstable dedupeする。stale pathのcurrent metadata解決はUnit 3で行う
-- [x] Map finite / range / zoom、sidebar booleanを検証する。selected-is-visible-and-loadedはUnit 4で検証する
+- [x] Map finite / range / zoom、sidebar booleanを検証する。selected-is-visible-and-loadedはUnit 6で検証する
 - [x] raw document 1,048,576 bytes、raw `visibleTracks` 5,000件をdefensive capとして固定する
 - [x] invalid stored valueを暗黙修復・自動上書きせず、session fallbackでViewerを継続する
 
@@ -1836,7 +1836,7 @@ Known limitation: 同名root Folderは同じdevice-local view stateを共有し�
 
 - [x] Map `moveend`後だけ保存し、pan / zoom中と`zoomend`との二重writeを避ける
 - [x] individual / Search checkbox、Folder / root bulk、Clearの完了後にchecked path snapshotを取る
-- [x] clearとvisible Track変更をMap / sidebarと同じdebounce queueへ接続する。selectionはUnit 4で接続する
+- [x] clearとvisible Track変更をMap / sidebarと同じdebounce queueへ接続する。selectionはUnit 6で接続する
 - [x] delayを750msへ固定し、Map / sidebar操作を一つのtimerへcoalesceする
 - [x] restore中はsave suspend、Library switch前はold Library pending snapshotをflushする
 - [x] unloadだけへ依存せず、background interval、parse完了ごとのwrite、shared JSON writeを行わない
@@ -1939,7 +1939,7 @@ Implemented foundation:
 - invalid / unknown / malformed / oversize storageのfail closedとsession fallback
 - raw document 1,048,576 bytes、raw `visibleTracks` 5,000件のdefensive cap
 
-Unit 2は`visibleTracks`と`selectedTrack`をschema上でvalidation・保持するが、runtimeからの収集、Queue投入、selection復元を行わない。これらはUnit 3 / 4の対象である。
+Unit 2は`visibleTracks`と`selectedTrack`をschema上でvalidation・保持するが、runtimeからの収集、Queue投入、selection復元を行わない。visible TrackはUnit 3、selectionはUnit 6の対象である。
 
 Static result:
 
@@ -1970,11 +1970,10 @@ Browser用`sample/release/view-state-store-test.html`と`view-state-store-test.j
 | storage fallback | Pass | read / write / quota failureでViewer継続、session fallback、破壊的修復なし |
 | Existing Viewer regression | Pass | shared settings、Track selection、Folder color、Monochrome、Search、bulk、Waypointに問題なし |
 | Data protection | Pass | `trailbook.viewState`以外、shared JSON、GPX、timestamp、handle、geometryを変更・保存しない |
-| visible / selected Track restore | Not implemented as planned | Unit 3 / 4 Scope |
+| visible / selected Track restore | Not implemented as planned | Unit 3 / 6 Scope |
 
-### Open Validation After Unit 3
+### Open Validation After Unit 4 Browser Acceptance
 
-- Previous Library Restore（Unit 4）
 - 806前後のwarm restore約5秒目標と条件付きgeometry cache（Unit 5）
 - selected Track restore（Unit 6）
 
@@ -1988,7 +1987,7 @@ Unit 3 Browser Acceptance Status: Completed
 
 Unit 3 Status: Completed
 
-Unit 4 Previous Library Restore Status: Not started
+Unit 4 Previous Library Restore Status: Completed
 
 Unit 5 Fast Restore Performance Gate Status: Not started
 
@@ -2040,7 +2039,7 @@ Unit 3はCompletedである。806前後のwarm restore約5秒目標はUnit 5で�
 
 Planning Addendum Status: Completed
 
-Production Implementation Status: Not started for Previous Library / geometry cache
+Production Implementation Status: Previous Library Restore Completed。geometry cacheはNot started
 
 - [x] previous DirectoryHandleはIndexedDBだけへ保存し、HandleをlocalStorage / shared JSONへ保存しない設計とした
 - [x] startupはread permission `granted`時だけ自動openし、`prompt` / `denied`は利用者gestureの`前回のLibraryを開く`へ分離した
@@ -2049,4 +2048,59 @@ Production Implementation Status: Not started for Previous Library / geometry ca
 - [x] 806前後のwarm restore中央値約5秒をperformance gateとし、cold loadと分離した
 - [x] geometry cacheはgate不達時だけ採用し、Library namespace + relative path、parser / cache schema、size、lastModifiedでvalidationする
 - [x] cache miss / invalid / failureはexisting Queueへfallbackし、duplicate parse / renderを禁止する
-- [x] Unit 3はBrowser AcceptanceまでCompleted。Previous Library RestoreとPerformance GateはNot startedのまま維持した
+- [x] Unit 3 / 4はBrowser AcceptanceまでCompleted。Performance GateはNot started
+
+### Unit 4 Previous Library Restore
+
+Unit 4 Implementation Status: Completed
+
+Unit 4 Static Test Status: Completed
+
+Unit 4 Browser Acceptance Status: Completed
+
+Unit 4 Status: Completed
+
+Unit 5 Fast Restore Performance Gate Status: Not started
+
+Implementation result:
+
+- origin-local IndexedDB `trailbook.runtime` version 1、object store `previousLibrary`、key `last`へ最後に正常に開いたDirectoryHandleだけを保存する
+- startupはread permissionをqueryし、`granted`だけを既存Library load lifecycleへ自動接続する
+- `prompt` / `denied`ではstartup permission requestを行わず、native `前回のLibraryを開く` buttonの明示操作時だけread permissionをrequestする
+- manual picker成功時はcurrent generationでLibrary apply完了後だけlast Handleを更新する
+- stale `NotFoundError`は保存recordを破棄し、IndexedDB / permission / read failureでは通常pickerとViewerを継続する
+- Appからsupport、picker、scan、generation、access UI調停を`PreviousLibraryCoordinator`へ抽出し、Map / Sidebar / visible Trackは既存`handleLibraryLoaded()` / `ViewStateCoordinator`を再利用する
+- HandleをlocalStorage / `trailbook.json` / Consoleへ保存せず、GPXとshared JSONへ書き込まない
+
+Static result:
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| View State / Previous Library test page | Pass | 202 assertions |
+| Handle save / load / clear | Pass | injected IndexedDB adapter、invalid record discard |
+| granted startup auto restore | Pass | query 1回、permission request 0回、existing apply callback |
+| prompt / denied | Pass | startup request 0回、明示操作時だけread request |
+| stale Handle | Pass | `NotFoundError`でrecord clear、manual picker維持 |
+| IndexedDB failure | Pass | load / save failureでViewer loadとmanual pickerをblockしない |
+| manual picker / Library switch | Pass | 成功Handleをlast recordへ更新し、latest generationを適用 |
+| Existing view restoration regression | Pass | Unit 1〜3 Store / Map / Sidebar / visible Track assertionsを維持 |
+| Production module graph | Pass | 48 modules、missing import 0、cycle 0 |
+| App / TreeView size | Pass | 914 / 997 lines |
+| Config / schema | Pass | Config `1.2.0`、DisplaySettingsStore 1、shared settings 1、View State 1 |
+| Data protection static scan | Pass | Previous Library modulesにlocalStorage、`trailbook.json`、`createWritable`、File System readwrite permissionなし |
+
+#### Unit 4 Browser Acceptance Result
+
+| Environment / Check | Result | Notes |
+|---|---|---|
+| Chrome previous Library auto restore | Pass | 前回正常に開いたLibraryを起動時に復元 |
+| Chrome granted permission | Pass | permission promptなしで自動open |
+| Chrome prompt / denied permission | Pass | 明示的な「前回のLibraryを開く」操作からだけpermissionを要求 |
+| Chrome denied / stale handle fallback | Pass | Viewerを停止せず通常pickerを利用可能 |
+| Chrome manual selection lifecycle | Pass | 正常に選択したLibraryを次回起動時の復元対象へ更新 |
+| Chrome restoration coexistence | Pass | Map center / zoom、Sidebar、visible Tracks復元と共存 |
+| Edge major scenarios | Pass | Chromeと同等の主要項目を確認 |
+| Console | Pass | アプリ由来errorなし |
+| Data protection | Pass | localStorage、`trailbook.json`、GPXへの追加書き込みなし |
+
+Unit 4のChrome / Edge Browser AcceptanceはCompletedである。Unit 5 Fast Restore Performance GateはNot startedのまま維持する。

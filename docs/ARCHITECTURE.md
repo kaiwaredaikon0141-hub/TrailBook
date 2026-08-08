@@ -812,7 +812,7 @@ File System Access APIのpermissionとwrite lifecycleは[Chrome File System Acce
 
 ## Release 1.3 Architecture — Previous View Restoration
 
-Status: In Progress。Current Releaseは1.2.0のままである。Unit 1〜3はCompleted、Unit 4 Previous Library RestoreとUnit 5 Fast Restore Performance GateはNot startedである。
+Status: In Progress。Current Releaseは1.2.0のままである。Unit 1〜4はCompleted、Unit 5 Fast Restore Performance GateはNot startedである。
 
 ### Data Boundary
 
@@ -901,9 +901,9 @@ Release 1.3は`ViewStateStore`用に既存`createLibraryId(rootFolderName)`の`r
 - restore generation、pending target、restore中のfield別user override、refocus抑止、restore完了を管理する
 - `DisplayState`、`SelectionState`、Map / Sidebar UIの正本を置き換えず、callbackとEventBusを通じて既存処理へ接続する
 
-Planned `PreviousLibraryStore` / `PreviousLibraryCoordinator`:
+`PreviousLibraryStore` / `PreviousLibraryCoordinator`:
 
-- IndexedDBのversioned object storeへ最後に正常に開いた`FileSystemDirectoryHandle`とopaque cache namespaceだけを保存し、localStorageとshared settingsを参照しない
+- IndexedDBのversioned object storeへ最後に正常に開いた`FileSystemDirectoryHandle`だけを保存し、localStorageとshared settingsを参照しない。opaque cache namespaceはUnit 5でgeometry cacheを実際に採用する場合だけ追加検討する
 - 起動時は`queryPermission({ mode: "read" })`だけを行い、`granted`なら既存Library load callbackへ接続する。`prompt` / `denied`では自動promptを出さず、利用者gestureによる`requestPermission({ mode: "read" })`と手動pickerを維持する
 - IndexedDB unavailable / corrupt、stale / missing handle、permission failureをnon-fatalにし、AppへIndexedDB transaction、permission分岐、cache policyを直接追加しない
 - originのscheme / host / port変更、site data削除、private browsing終了ではrecordを共有または保証しない
@@ -954,15 +954,24 @@ HandleのIndexedDB保存とpermission lifecycleは[Chrome File System Access doc
 ### Release 1.3 Additional Restoration Plan
 
 - Unit 3は少数Trackと807 visible TrackのBrowser Acceptanceを完了した。stale path、Map center / zoom、Sidebar、duplicate表示、UI応答性、data protectionに問題はなく、復元速度は通常のcold表示とほぼ同等だった。約5秒warm restoreはUnit 5の別Performance Gateとし、Unit 3へprogress UIを追加しない。
-- Unit 4で`PreviousLibraryStore` / Coordinator、permission UX、自動 / 手動open、stale handle recoveryを実装する。
+- Unit 4は`PreviousLibraryStore` / Coordinator、permission UX、自動 / 手動open、stale handle recoveryのImplementation / Static TestとChrome / Edge Browser Acceptanceを完了した。
 - Unit 5で806前後のvisible Trackを同一条件で最低3回測定し、Library scan後からterminalまでのwarm中央値約5秒をgateとする。既存再parse方式が達成すればgeometry cacheを実装しない。不達の場合だけ上記cacheを実装して再測定する。
 - Unit 6でselected Track restoreと残るlifecycle / Reset統合、Unit 7でChrome / Edge、cold / warm、origin制限、data protection、finalizationを確認する。
+
+### Unit 4 Previous Library Restore Implementation
+
+- `PreviousLibraryStore`はversioned IndexedDB `trailbook.runtime`の`previousLibrary` object storeへ、固定key `last`で最後に正常に開いたDirectoryHandleだけをstructured cloneする。storage unavailable / blocked / corrupt / clone failureはnon-fatalである。
+- `PreviousLibraryCoordinator`はsupport判定、manual picker、Folder scan、Library generation、read permission、last Handle更新を担当する。Appから既存picker / scan lifecycleを抽出し、AppはCoordinator生成と既存`handleLibraryLoaded()` callbackだけを提供する。
+- startupは保存Handleへ`queryPermission({ mode: "read" })`だけを行う。`granted`なら既存Library lifecycleへ自動接続し、`prompt` / `denied`では`前回のLibraryを開く`を表示する。`requestPermission({ mode: "read" })`はそのnative buttonの明示操作時だけ行う。
+- manual picker成功後、scan、shared settings、Tree / Search、DisplayState登録までcurrent generationで正常完了した場合だけlast Handleを更新する。Map / Sidebar / visible Trackは同じ`ViewStateCoordinator.restoreLibrary()`を通る。
+- `NotFoundError`のstale Handleはrecordを破棄する。IndexedDB failure、permission deny、その他read failureではViewerを停止せず、通常pickerを維持する。一時的provider failureをstaleと推測して自動削除しない。
+- HandleをlocalStorage / `trailbook.json` / Consoleへ保存または出力せず、GPXとshared JSONへ書き込まない。Appは914行、TreeViewは997行である。
 
 ### Save Timing
 
 - Mapは`moveend`でfinal center / zoomを取得し、pan / zoom中は書かない。`zoomend`と二重保存しない。
 - individual / Search checkbox、Folder / root bulk、Clearの既存処理完了後に`DisplayState.checked`のpath集合をsnapshotとする。bulk内部のpath件数だけwriteしない。
-- Unit 3はMap moveend、sidebar toggle、individual / Search checkbox、Folder / root bulk、Clearを同じ750ms debounce queueへ送る。selectionはUnit 4で接続する。
+- Unit 3はMap moveend、sidebar toggle、individual / Search checkbox、Folder / root bulk、Clearを同じ750ms debounce queueへ送る。selectionはUnit 6で接続する。
 - 一つのLibraryに対するpending saveは常に最新full snapshot一件へ置換し、partial patchと複数timerを作らない。
 - restore投影中はsaveをsuspendし、完了直後のprogrammatic Map / selection / sidebar eventで保存値を書き戻さない。
 - Library switch前にold Libraryのpending snapshotを同期flushし、active identity変更後にold timerがnew Libraryへ書かないようgenerationを確認する。

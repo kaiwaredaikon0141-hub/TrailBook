@@ -422,7 +422,7 @@ Release 1.3は`ViewStateStore`のLibrary keyとして既存の`root-name:<encode
 1. Scope、Architecture、Decisions、schema、identity、save / restore order、performance / test plan（Completed）
 2. `ViewStateStore` / pure schema、Map state、desktop sidebar open / closed、Reset基盤（Completed）
 3. visible Track snapshot / restore、existing Queue統合、bulk coalescing、stale path / generation（Completed。少数Trackと807 visible TrackのBrowser Acceptance済み）
-4. Previous Library Handle Store / Coordinator、permission UX、自動 / 手動open、stale handle recovery（Not started）
+4. Previous Library Handle Store / Coordinator、permission UX、自動 / 手動open、stale handle recovery（Completed）
 5. 806 GPX warm restore performance gate。約5秒を満たせない場合だけderived geometry cacheを実装（Not started）
 6. selected Track restore、Reset UI、error recovery、Library lifecycle統合（Not started）
 7. Chrome / Edge統合受け入れ、0 / 1 / 50 / 200 / 806 GPX性能、文書、Release finalization（Not started）

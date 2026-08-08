@@ -833,7 +833,7 @@ Folder color dialogのApplyは画面とsession / local fallbackへ反映して`U
 
 # 22. Release 1.3 UI — Previous View Restoration
 
-Status: In Progress。Release 1.2の確定UIを維持する。Unit 1〜3はCompleted、Unit 4 Previous Library RestoreとUnit 5 Fast Restore Performance GateはNot startedである。
+Status: In Progress。Release 1.2の確定UIを維持する。Unit 1〜4はCompleted、Unit 5 Fast Restore Performance GateはNot startedである。
 
 ## Restored State
 
@@ -878,7 +878,7 @@ Unit 2ではこのReset基盤とdevice-local状態表示を実装した。Reset�
 - duplicate / stale pathは画面上の架空項目を作らず無視する。invalid Map / sidebar / selectionは該当fieldだけdefaultへ戻す。
 - body scrollなし、sidebar内scroll、MapView固定、Tree / Search keyboard、roving tabindex、existing ARIAを維持する。
 
-## Previous Library Restore — Planned
+## Previous Library Restore — Completed
 
 - 起動時に保存済みDirectoryHandleのread permissionが`granted`なら、既存Library load表示を使って前回Libraryを自動で開く。別のTree / Search / Map pipelineは作らない。
 - permissionが`prompt` / `denied`、Handleが利用不能、またはIndexedDBが利用できない場合も初回案内と通常の`ライブラリを開く`を維持する。
@@ -902,5 +902,5 @@ Unit 2ではこのReset基盤とdevice-local状態表示を実装した。Reset�
 - Static validation: Completed
 - Chrome / Edge Browser Acceptance: Completed
 - Unit 3: Completed
-- Unit 4: Previous Library RestoreはNot started
+- Unit 4: Previous Library RestoreはCompleted
 - Unit 5: Fast Restore performance gate / conditional cacheはNot started
