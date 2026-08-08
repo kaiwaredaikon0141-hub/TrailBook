@@ -137,6 +137,20 @@ body{
     cursor:not-allowed;
 }
 
+.toolbar-actions{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:8px;
+}
+
+.view-state-reset{
+
+    margin-top:8px;
+}
+
 .search-view{
 
     margin-bottom:12px;

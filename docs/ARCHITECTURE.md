@@ -810,9 +810,9 @@ TrailBookは、ユーザーの明示的な保存操作なしにGPXやLibrary設�
 
 File System Access APIのpermissionとwrite lifecycleは[Chrome File System Access documentation](https://developer.chrome.com/docs/capabilities/web-apis/file-system-access)、[File System Access specification](https://wicg.github.io/file-system-access/)、[MDN `createWritable()`](https://developer.mozilla.org/en-US/docs/Web/API/FileSystemFileHandle/createWritable)を設計根拠とする。
 
-## Release 1.3 Proposed Architecture — Previous View Restoration
+## Release 1.3 Architecture — Previous View Restoration
 
-Status: Planning。Current Releaseは1.2.0のままであり、以下はUnit 1の設計案である。production implementationは開始していない。
+Status: In Progress。Current Releaseは1.2.0のままである。Unit 1とUnit 2はCompleted、Unit 3はNot startedである。
 
 ### Data Boundary
 
@@ -834,7 +834,7 @@ previous view stateはLibrary内容ではなく、同じbrowser origin上の端�
 
 ```json
 {
-  "schemaVersion": 1,
+  "version": 1,
   "libraries": {
     "root-name:GPXLog": {
       "map": {
@@ -855,15 +855,15 @@ previous view stateはLibrary内容ではなく、同じbrowser origin上の端�
 }
 ```
 
-- top-levelは`schemaVersion`と`libraries`だけを受理し、plain object、prototype-free dictionary、dangerous key拒否を維持する。
+- top-levelは`version`と`libraries`だけを受理し、plain object、prototype-free dictionary、dangerous key拒否を維持する。unknown Library state fieldはUnit 2では無視し、normalized snapshotと次回stable serializationへ保持しない。
 - unknown schema、malformed JSON、不正top-level、設定した最大serialized size超過はStore全体をfail closedとする。raw valueを自動修復・自動上書きせず、同一sessionではmemory fallbackを使う。
 - recognized schemaのLibrary entryはfield単位で検証する。invalid MapはMapだけ、invalid sidebarはsidebarだけ、invalid selected Trackはselectionだけをdefaultへ戻す。`visibleTracks`内に構文上invalidなpathが一つでもあればlist全体を採用しない。
 - root-relative GPX pathは`/`区切り、case-sensitive、非emptyとし、absolute path、backslash、control character、empty / `.` / `..` segment、dangerous keyを拒否する。duplicateは最初の出現を残して除去する。
 - current Tree metadataに存在しないstale pathはrestore時に無視する。保存documentは単なる候補であり、架空Tree nodeを作らない。利用者の次の明示的なview変更まで自動cleanupしない。
-- Mapはfinite number、latitude -90〜90、longitude -180〜180、zoomは整数かつcurrent Leaflet Mapのmin / max範囲で検証する。invalidまたはmissingなら既存default / fitBoundsを使う。
+- Mapはfinite number、latitude -90〜90、longitude -180〜180、zoomはcurrent Leaflet Mapのmin / max範囲で検証する。invalidまたはmissingなら既存default / fitBoundsを使う。
 - `selectedTrack`はvalid pathでもresolved visible targetに含まれなければ復元しない。
 - `sidebar.open`はbooleanだけを受理し、invalid / missingはopenをdefaultとする。widthはschemaへ含めない。
-- raw document sizeとraw `visibleTracks`件数にはconfigurable defensive capを設ける。exact値は806件snapshotの実測後にUnit 2で固定し、少なくとも同一806 GPX Libraryの全pathをlossなく保存できる値とする。current metadata解決後のtarget数はcurrent GPX件数を超えない。
+- raw documentは1,048,576 bytes、raw `visibleTracks`は5,000件をdefensive capとする。current metadata解決後のtarget数はcurrent GPX件数を超えない。Unit 2はfieldを安全に保持するだけで、visible / selected Trackのsave / restoreを行わない。
 
 ### Library Identity
 
@@ -899,26 +899,36 @@ Release 1.3は既存`createLibraryId(rootFolderName)`の`root-name:<encoded root
 - restore generation、pending target、restore中のfield別user override、refocus抑止、restore完了を管理する
 - `DisplayState`、`SelectionState`、Map / Sidebar UIの正本を置き換えず、callbackとEventBusを通じて既存処理へ接続する
 
-`SidebarView`:
+`ViewStateControls`:
 
-- 現行TreeViewの`aside`を開閉するdesktop専用toggle、`aria-controls`、`aria-expanded`、focus維持を担当する
+- 現行TreeViewの`aside`を開閉するToolbarのdesktop専用toggle、`aria-controls`、`aria-pressed`、focus維持とdevice-local Reset panelを担当する
 - width、drawer、touch layoutを持たない。TreeView.jsは997行のためsidebar責務を追加しない
 - layout変更後にMapViewへsize再評価を要求する
 
 `MapView`:
 
-- `getViewState()`、validation済みstateをanimationなしで一回投影する`restoreViewState()`、sidebar layout後の`invalidateSize()`を提供する
+- `getViewState()`、`isValidViewState()`、validation済みstateをanimationなしで一回投影する`setViewState()`、sidebar layout後の`invalidateSize()`を提供する
 - Leaflet `moveend`後にcenter / zoom snapshot eventを発行し、既存`zoomend`のTrack style eventと責務を混ぜない
 
-`DisplayState`はchecked / loading / loaded / errorとLibrary generationのruntime source of truth、`SelectionState`は単一selectionのsource of truth、`GPXDisplayQueue`は最大2件並列の唯一のparse Queueを維持する。専用`RestoreQueue`は作らない。AppはCoordinator生成とLibrary lifecycle callbackの接続だけを行い、974行のAppへschema、debounce、restore順序を直接追加しない。
+`DisplayState`はchecked / loading / loaded / errorとLibrary generationのruntime source of truth、`SelectionState`は単一selectionのsource of truth、`GPXDisplayQueue`は最大2件並列の唯一のparse Queueを維持する。専用`RestoreQueue`は作らない。AppはCoordinator生成とLibrary lifecycle callbackの接続だけを行い、schema、debounce、restore順序を直接持たない。Unit 2完了時のAppは995行、TreeViewは997行である。
 
-依存方向は`App → ViewStateCoordinator → ViewStateStore / ViewStateSchema`、`App → MapView / SidebarView / DisplayState / SelectionState / GPXDisplayQueue`とする。Store / SchemaからApp、UI、runtime Stateへの逆参照を禁止する。
+依存方向は`App → ViewStateCoordinator → ViewStateStore / ViewStateSchema`、`App → MapView / ViewStateControls / DisplayState / SelectionState / GPXDisplayQueue`とする。Store / SchemaからApp、UI、runtime Stateへの逆参照を禁止する。Library identityはstate-freeな`LibraryIdentity`へ抽出し、DisplaySettingsStoreとViewStateStoreの重複実装を避ける。path hash colorもstate-freeな`PathColor`へ抽出してAppの純粋計算責務を減らす。
+
+### Unit 2 Implementation
+
+- Configはstorage key `trailbook.viewState`、schema version 1、debounce 750ms、visibleTracks 5,000件、serialized document 1,048,576 bytes、zoom 0〜19を定義する。Config versionは1.2.0のまま変更しない。
+- `ViewStateStore`はread / normalized write / current Library delete、stable Library key ordering、unknown / malformed / oversize fail closed、quota / security failure時のsession memory fallbackを担当する。invalid raw storageを自動上書きしない。
+- `ViewStateCoordinator`はMap moveendとSidebar toggleを一つの750ms timerへcoalesceし、write時に最新のMap / sidebar runtime snapshotを取得する。Library picker確定後、generation変更前にold Library pending stateをflushする。
+- Library loadではshared settingsとTree / DisplayState初期化後にSidebar、Map layout、Map center / zoomの順で復元する。Map restore / silent reset / invalidateSizeのprogrammatic moveendは保存しない。
+- `ViewStateControls`はToolbarの「サイドバー」buttonと独立したDevice-local view panelを提供する。sidebar closeはDOM stateを破棄せず、workspaceを1 columnへ変更してMap sizeを再評価する。
+- Resetはconfirmation後にcurrent Library entryだけを削除し、runtime Map / sidebar、Map mode、Folder colors、shared JSON、GPX、他Library stateを維持する。programmatic eventでは再保存せず、次のuser Map / sidebar操作で保存を再開する。
+- Unit 2はexisting `visibleTracks` / `selectedTrack` fieldをnormalized snapshot内で保持するが、値の収集・復元は行わない。
 
 ### Save Timing
 
 - Mapは`moveend`でfinal center / zoomを取得し、pan / zoom中は書かない。`zoomend`と二重保存しない。
 - individual / Search checkbox、Folder / root bulk、Clearの既存処理完了後に`DisplayState.checked`のpath集合をsnapshotとする。bulk内部のpath件数だけwriteしない。
-- selection change / clearとsidebar toggleも同じdebounce queueへ送る。500〜1000msのexact delayはUnit 2 testで固定する。
+- Unit 2はMap moveendとsidebar toggleを同じ750ms debounce queueへ送る。selection / clearはUnit 4、visible Track / bulkはUnit 3で接続する。
 - 一つのLibraryに対するpending saveは常に最新full snapshot一件へ置換し、partial patchと複数timerを作らない。
 - restore投影中はsaveをsuspendし、完了直後のprogrammatic Map / selection / sidebar eventで保存値を書き戻さない。
 - Library switch前にold Libraryのpending snapshotを同期flushし、active identity変更後にold timerがnew Libraryへ書かないようgenerationを確認する。

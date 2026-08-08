@@ -1,7 +1,7 @@
 # TrailBook Release Checklist
 
 Version: 1.0.0 / 1.1.0 release records / 1.2.0 ready for final commit and tag
-Status: Release 1.0 / 1.1 Completed / Release 1.2 Ready for final commit and tag
+Status: Release 1.0 / 1.1 / 1.2 Completed / Release 1.3 In Progress
 Baseline: v1.1.0 for Release 1.2
 
 ## Purpose
@@ -1741,9 +1741,9 @@ Final commit / tag / push: Pending
 
 Release 1.2はfinal commitとtagを作成できる状態である。commit、tag、pushはこのUnitでは実行しない。
 
-## Release 1.3 Previous View Restoration — Planning
+## Release 1.3 Previous View Restoration — In Progress
 
-Release Status: Planning
+Release Status: In Progress
 
 Current Release: `1.2.0`。Release 1.2 Unit 1〜5のCompleted記録、v1.2.0 baseline、shared settings schema version 1を変更しない。
 
@@ -1752,8 +1752,8 @@ Current Release: `1.2.0`。Release 1.2 Unit 1〜5のCompleted記録、v1.2.0 bas
 | Check | Result | Notes |
 | --- | --- | --- |
 | working tree before planning edit | Pass | clean |
-| branch / remote | Pass | `main` = `origin/main` = `d441923` |
-| release tag | Pass | HEADに`v1.2.0` |
+| branch / remote | Pass | Unit 2開始時に`main` = `origin/main` = `972bfef` |
+| release tag | Pass | production baseline `v1.2.0`は`d441923`。Unit 1 planning commitは`972bfef` |
 | Config version | Pass | `1.2.0` |
 | production module baseline | Pass | v1.2.0 acceptance record 40 / 40。current graph 40 modules、missing import 0、cycle 0 |
 | App / TreeView size | Pass | 974 / 997 lines |
@@ -1766,13 +1766,13 @@ Current runtime contract: `DisplayState.checked`が表示意図、loading / load
 
 | Unit | Scope | Status |
 | --- | --- | --- |
-| 1 | Scope、Architecture、Decisions、schema、identity、restore order、performance / test plan | Ready for human approval |
-| 2 | ViewStateStore / schema、Map state、desktop sidebar、Reset基盤 | Not started |
+| 1 | Scope、Architecture、Decisions、schema、identity、restore order、performance / test plan | Completed |
+| 2 | ViewStateStore / schema、Map state、desktop sidebar、Reset基盤 | Completed |
 | 3 | visible Track restore、existing Queue、bulk coalescing、stale guard、performance | Not started |
 | 4 | selected Track restore、Reset UI、error / lifecycle integration | Not started |
 | 5 | Chrome / Edge、806 GPX、documentation、Release finalization | Not started |
 
-Production Implementation Status: Not started
+Production Implementation Status: Unit 2 Completed
 
 ### Frozen Planning Scope
 
@@ -1794,7 +1794,7 @@ Schema version: 1（dedicated Store）。`trailbook.uiSettings` schema version 1
 
 ```json
 {
-  "schemaVersion": 1,
+  "version": 1,
   "libraries": {
     "root-name:GPXLog": {
       "map": { "lat": 35.0123, "lng": 135.6789, "zoom": 11 },
@@ -1808,13 +1808,13 @@ Schema version: 1（dedicated Store）。`trailbook.uiSettings` schema version 1
 
 Validation gates:
 
-- [ ] malformed JSON / unknown schema / invalid top-level / oversize raw dataはStore全体をfail closed
-- [ ] recognized Library entryはMap、visibleTracks、selectedTrack、sidebarをfield単位でfallback
-- [ ] pathはroot-relative、`/`、case-sensitive。absolute、backslash、control、empty / `.` / `..` segment、dangerous keyを拒否
-- [ ] duplicate pathをstable dedupeし、stale pathはcurrent metadata解決時に無視する
-- [ ] Map finite / range / zoom、sidebar boolean、selected-is-visible-and-loadedを検証する
-- [ ] 806 pathをlossなく保存できるraw size / count capをUnit 2の実測後に固定する
-- [ ] invalid stored valueを暗黙修復・自動上書きせず、session fallbackでViewerを継続する
+- [x] malformed JSON / unknown schema / invalid top-level / oversize raw dataはStore全体をfail closed
+- [x] recognized Library entryはMap、visibleTracks、selectedTrack、sidebarをfield単位でfallback
+- [x] pathはroot-relative、`/`、case-sensitive。absolute、backslash、control、empty / `.` / `..` segment、dangerous keyを拒否
+- [x] duplicate pathをstable dedupeする。stale pathのcurrent metadata解決はUnit 3で行う
+- [x] Map finite / range / zoom、sidebar booleanを検証する。selected-is-visible-and-loadedはUnit 4で検証する
+- [x] raw document 1,048,576 bytes、raw `visibleTracks` 5,000件をdefensive capとして固定する
+- [x] invalid stored valueを暗黙修復・自動上書きせず、session fallbackでViewerを継続する
 
 ### Library Identity Review
 
@@ -1829,13 +1829,13 @@ Known limitation: 同名root Folderは同じdevice-local view stateを共有し�
 
 ### Save Timing Plan
 
-- [ ] Map `moveend`後だけ保存し、pan / zoom中と`zoomend`との二重writeを避ける
+- [x] Map `moveend`後だけ保存し、pan / zoom中と`zoomend`との二重writeを避ける
 - [ ] individual / Search checkbox、Folder / root bulk、Clearの完了後にchecked path snapshotを取る
-- [ ] selection / clearとsidebar toggleを同じdebounce queueへ集約する
-- [ ] 500〜1000ms候補からUnit 2 testでdelayを固定し、bulk一操作を一writeへcoalesceする
-- [ ] restore中はsave suspend、Library switch前はold Library pending snapshotをflushする
-- [ ] unloadだけへ依存せず、background interval、parse完了ごとのwrite、shared JSON writeを行わない
-- [ ] quota / SecurityErrorでsession memoryへfallbackし、Viewerを停止しない
+- [ ] selection / clearとvisible Track変更はUnit 3 / 4で同じdebounce queueへ接続する。sidebar toggleはUnit 2で接続済み
+- [x] delayを750msへ固定し、Map / sidebar操作を一つのtimerへcoalesceする
+- [x] restore中はsave suspend、Library switch前はold Library pending snapshotをflushする
+- [x] unloadだけへ依存せず、background interval、parse完了ごとのwrite、shared JSON writeを行わない
+- [x] quota / SecurityErrorでsession memoryへfallbackし、Viewerを停止しない
 
 ### Restore Order Plan
 
@@ -1902,12 +1902,66 @@ Mobile Viewer UXは既存の非対応 / 未確認結果を維持し、Release 1.
 
 Initial policyは既存root bulk相当の一括enqueueである。806件で再現可能なUI blockまたは重大回帰がある場合だけ、既存Queueへのchunked enqueueとprogressを検討する。hard limit、200件confirmation、別RestoreQueueはUnit 1で採用しない。
 
-### Open Validation Before Unit 2
+### Unit 2 Implementation and Static Result
 
-- exact debounce delay
-- raw storage size / visibleTracks defensive cap
-- Toolbar sidebar toggleの最終labelと配置
-- restore terminal判定とStatusBar progressが806件で必要か
-- user Map操作があったrestoreでsaved Mapをskipするstatic / browser検証方法
+Unit 1 Status: Completed
 
-Unit 1は設計review待ちである。承認前にproduction JavaScript、CSS、HTML、Config versionを変更せず、Unit 2を開始しない。
+Unit 2 Implementation Status: Completed
+
+Unit 2 Static Test Status: Completed
+
+Unit 2 Browser Acceptance Status: Completed
+
+Unit 2 Status: Completed
+
+Unit 3 Status: Not started
+
+Implemented foundation:
+
+- dedicated `trailbook.viewState`、schema `version: 1`
+- Library単位のMap center / zoomとdesktop sidebar open / closedの保存・復元
+- Toolbarのkeyboard操作可能なSidebar toggleとcurrent Library state Reset
+- Map `moveend`とSidebar toggleを共通750ms debounceへ集約
+- Library switch前のold Library pending snapshot flush
+- restore / programmatic projection中のsave suppression
+- invalid / unknown / malformed / oversize storageのfail closedとsession fallback
+- raw document 1,048,576 bytes、raw `visibleTracks` 5,000件のdefensive cap
+
+Unit 2は`visibleTracks`と`selectedTrack`をschema上でvalidation・保持するが、runtimeからの収集、Queue投入、selection復元を行わない。これらはUnit 3 / 4の対象である。
+
+Static result:
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| ViewState schema / Store / Coordinator non-DOM checks | Pass | 24 assertions |
+| old Library pending snapshot isolation | Pass | generation切替後もold Library IDでflushし、new Library timerを残さない |
+| production module import | Pass | 46 / 46。`main.js`は最小`window.addEventListener` stubで評価 |
+| missing relative import | Pass | 0 |
+| circular dependency | Pass | 0 |
+| App / TreeView size | Pass | 995 / 997 lines。ともに1,000行未満 |
+| Config version | Pass | `1.2.0` |
+| existing schemas | Pass | DisplaySettingsStore 1 / shared settings 1を変更しない |
+| GPX / shared JSON write | Pass | View stateは`localStorage` / session memoryだけを使用 |
+
+Browser用`sample/release/view-state-store-test.html`と`view-state-store-test.js`を作成した。人間によるChrome / Edge Browser AcceptanceでMap / Sidebar / Reset、storage fallback、既存Viewer回帰、keyboard / ARIA、data protectionを確認し、Unit 2をCompletedとする。
+
+#### Unit 2 Browser Acceptance Result
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| Library初回open | Pass | view stateがない場合は既存default behavior |
+| Library再選択後のMap center / zoom | Pass | animationなしで復元し、fit behaviorによる後続上書きなし |
+| page reload直後 | Pass | Library未選択のため自動復元せず、同じLibrary再選択時に復元 |
+| Sidebar open / closed | Pass | 再選択・reload後に復元。layout、Map center、Tree / Search stateを維持 |
+| Save queue / Library switch | Pass | 750ms coalescing、old pending flush、Library間state分離、stale restoreなし |
+| Reset | Pass | current Libraryだけを削除し、runtimeと他設定を維持。明示操作後に保存再開 |
+| storage fallback | Pass | read / write / quota failureでViewer継続、session fallback、破壊的修復なし |
+| Existing Viewer regression | Pass | shared settings、Track selection、Folder color、Monochrome、Search、bulk、Waypointに問題なし |
+| Data protection | Pass | `trailbook.viewState`以外、shared JSON、GPX、timestamp、handle、geometryを変更・保存しない |
+| visible / selected Track restore | Not implemented as planned | Unit 3 / 4 Scope |
+
+### Open Validation After Unit 2
+
+- restore terminal判定とStatusBar progressが806件で必要か（Unit 3）
+- user Map操作があったvisible Track restore中にsaved Mapをskipするstatic / browser検証（Unit 3）
+- 0 / 1 / 50 / 200 / 806 Trackのrestore性能（Unit 3）

@@ -6,9 +6,9 @@
 
 - Current Release: `1.2.0` Shared Library Settings
 - Completed: Release 0.1からRelease 1.2
-- Next Release: Release 1.3 Previous View Restoration（Planning）
+- Next Release: Release 1.3 Previous View Restoration（In Progress）
 
-Release 1.2 Shared Library SettingsはCompletedです。Library rootの`trailbook.json`によるFolder色共有、明示Save、legacy migration、manual Reload、Conflict / Invalid JSON recoveryを実装し、Chrome / Edge / Google Drive同期Folderの統合受け入れを完了しています。Release 1.3はdevice-localな前回表示状態復元の設計中で、production implementationは未着手です。
+Release 1.2 Shared Library SettingsはCompletedです。Library rootの`trailbook.json`によるFolder色共有、明示Save、legacy migration、manual Reload、Conflict / Invalid JSON recoveryを実装し、Chrome / Edge / Google Drive同期Folderの統合受け入れを完了しています。Release 1.3 Unit 1とUnit 2はCompletedです。Unit 2ではdevice-local Store、Map、desktop sidebar、Reset基盤を実装し、Browser Acceptanceを完了しています。
 
 ## Read Order
 
@@ -44,7 +44,7 @@ Release 1.2 Unit roles:
 4. Migration、manual Reload、Conflict recovery
 5. Integrated acceptance、documentation、Release finalization
 
-Release 1.3 planned Unit roles:
+Release 1.3 Unit roles:
 
 1. Scope、Architecture、Decisions、schema、identity、restore / test plan
 2. ViewStateStore、Map center / zoom、desktop sidebar、Reset基盤
@@ -79,7 +79,7 @@ Release 1.3 planned Unit roles:
 
 ## Current Release and Future Features
 
-Release 1.2 Shared Library SettingsはCompletedです。TrailBookはGoogle Drive APIや同期statusを使用せず、同期後のmanual ReloadまたはLibrary再選択を利用します。Release 1.3 Previous View RestorationはPlanningで、Map center / zoom、visible / selected Track、desktop sidebar open / closedをLibrary単位の専用device-local Storeへ保存する設計です。shared JSON、browser間共有、Search / Tree navigation復元は対象外です。
+Release 1.2 Shared Library SettingsはCompletedです。TrailBookはGoogle Drive APIや同期statusを使用せず、同期後のmanual ReloadまたはLibrary再選択を利用します。Release 1.3 Previous View RestorationはIn Progressです。Unit 2でMap center / zoomとdesktop sidebar open / closedのdevice-local保存・復元、Reset基盤まで実装し、visible / selected Track復元はまだ開始していません。shared JSON、browser間共有、Search / Tree navigation復元は対象外です。
 
 sidebar width、Search / Tree navigation復元、Stable Library Identity / Aliasに加え、Statistics、Replay、HeatMap、GPX Metadata Index、日付表示、vehicle metadata、GPX編集、GPX size reduction、Cloud Sync、Mobile Viewer UX、Waypoint性能最適化、数値性能再測定、Plugin、AI Searchなども未実装の将来候補です。
 

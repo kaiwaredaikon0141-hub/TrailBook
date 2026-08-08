@@ -38,6 +38,8 @@ export default class MapView {
 
         this.mapDisplayMode = DEFAULT_MAP_DISPLAY_MODE;
 
+        this.programmaticViewChangeDepth = 0;
+
         this.handleZoomEnd = () => {
             this.eventBus.emit("map:zoom-ended", {
                 zoom: this.getZoom()
@@ -46,6 +48,13 @@ export default class MapView {
 
         this.handleMapClick = () => {
             this.eventBus.emit("map:background-clicked");
+        };
+
+        this.handleMoveEnd = () => {
+            this.eventBus.emit("map:view-changed", {
+                viewState: this.getViewState(),
+                programmatic: this.programmaticViewChangeDepth > 0
+            });
         };
     }
 
@@ -101,6 +110,7 @@ export default class MapView {
             );
 
             this.map.on("zoomend", this.handleZoomEnd);
+            this.map.on("moveend", this.handleMoveEnd);
             this.map.on("click", this.handleMapClick);
 
             this.showEmpty();
@@ -227,6 +237,66 @@ export default class MapView {
         return this.config.map.initialZoom;
     }
 
+    getViewState() {
+
+        if (
+            typeof this.map?.getCenter !== "function" ||
+            typeof this.map?.getZoom !== "function"
+        ) {
+            return null;
+        }
+
+        const center = this.map.getCenter();
+
+        return {
+            lat: center.lat,
+            lng: center.lng,
+            zoom: this.map.getZoom()
+        };
+    }
+
+    isValidViewState({ lat, lng, zoom } = {}) {
+
+        const minZoom = this.map?.getMinZoom?.() ?? 0;
+        const maxZoom = this.map?.getMaxZoom?.() ?? this.config.map.tileMaxZoom;
+
+        return Number.isFinite(lat) && lat >= -90 && lat <= 90 &&
+            Number.isFinite(lng) && lng >= -180 && lng <= 180 &&
+            Number.isFinite(zoom) && zoom >= minZoom && zoom <= maxZoom;
+    }
+
+    setViewState(viewState, { animate = false, silent = false } = {}) {
+
+        if (!this.map || !this.isValidViewState(viewState)) {
+            return false;
+        }
+
+        this.#runViewChange(
+            () => this.map.setView(
+                [viewState.lat, viewState.lng],
+                viewState.zoom,
+                { animate }
+            ),
+            silent
+        );
+
+        return true;
+    }
+
+    invalidateSize({ silent = false } = {}) {
+
+        if (typeof this.map?.invalidateSize !== "function") {
+            return false;
+        }
+
+        this.#runViewChange(
+            () => this.map.invalidateSize({ pan: false, animate: false }),
+            silent
+        );
+
+        return true;
+    }
+
     updateTrackWeights(weight) {
 
         return this.layerManager?.updateTrackWeights(weight) ?? 0;
@@ -311,17 +381,34 @@ export default class MapView {
      *
      * @returns {void}
      */
-    resetView() {
+    resetView({ silent = false } = {}) {
 
         if (this.map) {
-
-            this.map.setView(
-                [
-                    this.config.map.center.latitude,
-                    this.config.map.center.longitude
-                ],
-                this.config.map.initialZoom
+            this.#runViewChange(
+                () => this.map.setView(
+                    [
+                        this.config.map.center.latitude,
+                        this.config.map.center.longitude
+                    ],
+                    this.config.map.initialZoom
+                ),
+                silent
             );
+        }
+    }
+
+    #runViewChange(callback, silent) {
+
+        if (silent) {
+            this.programmaticViewChangeDepth += 1;
+        }
+
+        try {
+            callback();
+        } finally {
+            if (silent) {
+                this.programmaticViewChangeDepth -= 1;
+            }
         }
     }
 

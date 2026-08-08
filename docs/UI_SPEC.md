@@ -833,7 +833,7 @@ Folder color dialogのApplyは画面とsession / local fallbackへ反映して`U
 
 # 22. Release 1.3 UI — Previous View Restoration
 
-Status: Planning。Release 1.2の確定UIを維持し、production implementationはUnit 1では開始しない。
+Status: In Progress。Release 1.2の確定UIを維持する。Unit 1 PlanningとUnit 2はCompleted、Unit 3はNot startedである。
 
 ## Restored State
 
@@ -843,9 +843,9 @@ view stateがないLibraryでは、現在の起動挙動を維持する。Track�
 
 ## Sidebar Toggle
 
-現行sidebarは常時openであり開閉APIを持たないため、Release 1.3でdesktop用の最小toggleを追加する。
+Unit 2はdesktop用の最小toggleをToolbarへ追加した。sidebar DOMと内部状態はclosed時も維持する。
 
-- toggleはLibrary未選択時とclosed時にも到達できるToolbar内へ置き、native button、`aria-controls`、`aria-expanded`、状態を表すaccessible nameを持つ。
+- toggleはLibrary未選択時とclosed時にも到達できるToolbar内へ置き、native button、`aria-controls`、`aria-pressed`、状態を表すaccessible nameを持つ。
 - open / closedでkeyboard focusを奪わず、sidebar内にfocusがある状態で閉じる場合はtoggle buttonへfocusを戻す。
 - closed後もMapとToolbarを操作でき、再open手段を常に残す。layout変更後はLeaflet Map sizeを再評価する。
 - width resize、drawer、bottom sheet、touch gesture、Mobile responsive layoutは追加しない。
@@ -869,6 +869,8 @@ current Libraryのdevice-local previous view stateだけを消す`前回の表�
 - Map mode、Folder colors、`trailbook.json`、GPX、他Libraryのview stateは削除しない。
 - Library未選択、stateなし、storage unavailableではdisabled理由または`保存状態なし`を文字で示す。
 
+Unit 2ではこのReset基盤とdevice-local状態表示を実装した。Resetは保存済みcurrent Library stateだけを削除し、現在のMapとsidebarを変更しない。visible Trackとselected Trackの保存・復元はUnit 3以降であり、Unit 2では実装していない。
+
 ## Accessibility and Error Presentation
 
 - save / restore / storage failureは既存StatusBarまたはcompactなstate textで通知し、色だけに依存しない。raw localStorage、完全path、GPX内容、stackを利用者向け表示へ出さない。
@@ -879,3 +881,10 @@ current Libraryのdevice-local previous view stateだけを消す`前回の表�
 ## Release 1.3 Scope Boundary
 
 `trailbook.json`へのview state保存、browser間共有、Google Drive同期、FileHandle永続化、Search / Tree navigation復元、sidebar width、Mobile sidebar、GPX編集、Folder操作は実装しない。
+
+## Unit 2 Acceptance Status
+
+- Implementation: Completed
+- Static validation: Completed
+- Chrome / Edge Browser Acceptance: Completed
+- Unit 3: Not started

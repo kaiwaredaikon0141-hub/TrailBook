@@ -1,6 +1,10 @@
+import {
+    createLibraryId,
+    isValidLibraryId
+} from "../utils/LibraryIdentity.js";
+
 const DEFAULT_STORAGE_KEY = "trailbook.uiSettings";
 const DEFAULT_SCHEMA_VERSION = 1;
-const EMPTY_ROOT_NAME = "unnamed";
 const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 const HEX_COLOR_PATTERN = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/;
@@ -28,13 +32,6 @@ function isSafeKey(value) {
     return typeof value === "string" &&
         !DANGEROUS_KEYS.has(value) &&
         !CONTROL_CHARACTER_PATTERN.test(value);
-}
-
-function isValidLibraryId(libraryId) {
-
-    return isSafeKey(libraryId) &&
-        libraryId.startsWith("root-name:") &&
-        libraryId.length > "root-name:".length;
 }
 
 function isValidFolderPath(folderPath) {
@@ -154,15 +151,7 @@ function getDefaultStorage() {
 /**
  * Creates the Release 1.1 Library identity without filesystem access.
  */
-export function createLibraryId(rootFolderName) {
-
-    const trimmedName = typeof rootFolderName === "string"
-        ? rootFolderName.trim()
-        : "";
-    const normalizedName = trimmedName || EMPTY_ROOT_NAME;
-
-    return `root-name:${encodeURIComponent(normalizedName)}`;
-}
+export { createLibraryId } from "../utils/LibraryIdentity.js";
 
 /**
  * Persists regenerable UI settings while retaining an in-memory fallback.

@@ -7,7 +7,7 @@ TrailBookの開発を始める人とAIのための入口です。
 - Current Version: `1.2.0`
 - Current Release: Shared Library Settings
 - Completed: Release 0.1からRelease 1.2
-- Next Release: Release 1.3 Previous View Restoration（Planning）
+- Next Release: Release 1.3 Previous View Restoration（In Progress）
 - Branch: `main`
 
 Gitの状態は作業開始時に必ず再確認する。
@@ -59,7 +59,7 @@ GPXを独自形式へ取り込むのではなく、ユーザーのGPX資産を�
 - `LibrarySettingsCoordinator`がload、explicit save、migration、manual Reload、Conflict recoveryを調停する。
 - `LibrarySettingsPanel`と`SettingsConflictDialog`がstatusとReload / Overwrite / Cancel操作を担当する。
 
-Release 1.3 Planningでは、Map center / zoom、visible / selected Track、desktop sidebar open / closedをLibrary単位のdevice-local stateとして復元する。専用`ViewStateStore`とCoordinatorを設計し、既存DisplaySettingsStore / shared settings schema、DisplayState、SelectionState、GPXDisplayQueueを正本として維持する。production implementationはまだ開始していない。
+Release 1.3 Unit 1 PlanningとUnit 2はCompletedである。Unit 2は専用`ViewStateStore`、Map center / zoom、desktop sidebar open / closed、Reset基盤を実装し、Browser Acceptanceを完了した。visible / selected Track restoreはUnit 3 / 4の対象で未実装。既存DisplaySettingsStore / shared settings schema、DisplayState、SelectionState、GPXDisplayQueueを正本として維持する。
 
 ## Implemented Through Release 1.2
 
@@ -80,7 +80,7 @@ Release 1.2 Shared Library SettingsはCompletedである。Library root直下の
 - Folder構造とGPXファイルをデータの正本とする。
 - SQLite、IndexedDBなどの独自DBを持たない。一時的なセッションcacheは独自DBに含めない。
 - 独自DBを持たない方針を変更する場合は、新しいDecisionを必要とする。
-- 現行production 1.2ではMap表示modeとlegacy Folder色fallbackだけを`localStorage`へ保存する。Release 1.3は専用keyへ再生成可能なdevice-local view stateだけを追加するPlanningである。Folder色はvalidなshared JSONがある場合に項目単位でlegacy値を混ぜない。GPX内容、解析結果、FileHandle、FolderHandle、cacheの永続化は禁止する。
+- 現行production 1.2ではMap表示modeとlegacy Folder色fallbackだけを`localStorage`へ保存する。Release 1.3 Unit 2は専用keyへ再生成可能なdevice-local Map / sidebar stateを追加し、Browser AcceptanceまでCompletedである。Folder色はvalidなshared JSONがある場合に項目単位でlegacy値を混ぜない。GPX内容、解析結果、FileHandle、FolderHandle、cacheの永続化は禁止する。
 - `trailbook.json`への書き込みはSave、migration、明示Overwriteだけに限定し、permissionの永続化を前提にしない。
 - Framework、TypeScript、Node.jsを追加しない。
 - UI同士を直接接続せず、EventBusとAppの調停を使用する。

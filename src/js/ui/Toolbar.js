@@ -9,6 +9,9 @@ export default class Toolbar {
         this.pickFolderButton =
             this.element.querySelector("#pick-folder");
 
+        this.sidebarToggleButton =
+            this.element.querySelector("#toggle-sidebar");
+
         this.folderPickerState = {
             disabled: false,
             descriptionId: "",
@@ -29,6 +32,9 @@ export default class Toolbar {
             </div>
 
             <div class="toolbar-actions">
+                <button id="toggle-sidebar" type="button" aria-pressed="true">
+                    サイドバー
+                </button>
                 <button id="pick-folder" type="button">
                     📁 ライブラリを開く
                 </button>
@@ -66,6 +72,14 @@ export default class Toolbar {
             disabled: true,
             disabledReason: "Library設定を保存中です"
         });
+    }
+
+    setSidebarOpen(open) {
+
+        this.sidebarToggleButton.setAttribute("aria-pressed", String(open));
+        this.sidebarToggleButton.title = open
+            ? "サイドバーを閉じます"
+            : "サイドバーを開きます";
     }
 
     #applyFolderPickerState({ disabled, descriptionId, disabledReason }) {

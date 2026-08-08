@@ -3,7 +3,7 @@
 Version: 1.2 Completed
 Status: Official
 Current Release: 1.2.0 Shared Library Settings
-Next Release: Release 1.3 Previous View Restoration（Planning）
+Next Release: Release 1.3 Previous View Restoration（In Progress）
 
 ## Version Policy
 
@@ -371,7 +371,7 @@ Unit 1 Planning、Unit 2 read-only loader、Unit 3 explicit save、Unit 4 migrat
 
 ## Next Release — Release 1.3 Previous View Restoration
 
-Status: Planning
+Status: In Progress
 
 Goal: Libraryを再度開いた時に、端末ごとの前回表示状態を安全かつ軽量に復元し、日常利用の再開操作を減らす。Release 1.2のshared settings、GPX read-only、既存表示Queueとselection契約は変更しない。
 
@@ -413,13 +413,11 @@ Release 1.3は既存の`root-name:<encoded root folder name>`を継続する。`
 
 ### Units
 
-1. Scope、Architecture、Decisions、schema、identity、save / restore order、performance / test plan
-2. `ViewStateStore` / pure schema、Map state、desktop sidebar open / closed、Reset基盤
-3. visible Track snapshot / restore、existing Queue統合、bulk coalescing、stale path / generation、806 GPX性能
-4. selected Track restore、Reset UI、error recovery、Library lifecycle統合
-5. Chrome / Edge統合受け入れ、0 / 1 / 50 / 200 / 806 GPX性能、文書、Release finalization
-
-Unit 1はPlanningであり、人間の設計承認前にUnit 2を開始しない。
+1. Scope、Architecture、Decisions、schema、identity、save / restore order、performance / test plan（Completed）
+2. `ViewStateStore` / pure schema、Map state、desktop sidebar open / closed、Reset基盤（Completed）
+3. visible Track snapshot / restore、existing Queue統合、bulk coalescing、stale path / generation、806 GPX性能（Not started）
+4. selected Track restore、Reset UI、error recovery、Library lifecycle統合（Not started）
+5. Chrome / Edge統合受け入れ、0 / 1 / 50 / 200 / 806 GPX性能、文書、Release finalization（Not started）
 
 ### Out of Scope
 
@@ -491,7 +489,7 @@ Release 0.9では、車両情報の読み込み、保存、編集、色変更を
 
 ## Future Candidates
 
-Release 1.2 Shared Library SettingsはCompletedであり、Release 1.3 Previous View RestorationはPlanningである。以下はRelease 1.3より後の候補であり、設計承認時にRelease番号を決定する。
+Release 1.2 Shared Library SettingsはCompletedであり、Release 1.3 Previous View RestorationはIn Progressである。以下はRelease 1.3より後の候補であり、設計承認時にRelease番号を決定する。
 
 - GPX Metadata Index
 - Date-based Display

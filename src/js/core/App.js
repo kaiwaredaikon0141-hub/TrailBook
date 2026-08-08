@@ -10,11 +10,14 @@ import GPXDisplayQueue from "../services/GPXDisplayQueue.js";
 import SearchService from "../services/SearchService.js";
 import TrackStyleService from "../services/TrackStyleService.js";
 import DisplaySettingsStore from "../services/DisplaySettingsStore.js";
+import ViewStateStore from "../services/ViewStateStore.js";
 import LibrarySettingsCoordinator from "./LibrarySettingsCoordinator.js";
+import ViewStateCoordinator from "./ViewStateCoordinator.js";
 import DisplayState from "../state/DisplayState.js";
 import SelectionState from "../state/SelectionState.js";
 import FolderColorState from "../state/FolderColorState.js";
 import { folderPathFromFilePath } from "../utils/PathUtils.js";
+import { resolvePathHashColor } from "../utils/PathColor.js";
 import Toolbar from "../ui/Toolbar.js";
 import TreeView from "../ui/TreeView.js";
 import FolderColorControl from "../ui/FolderColorControl.js";
@@ -23,6 +26,7 @@ import SearchView from "../ui/SearchView.js";
 import StatusBar from "../ui/StatusBar.js";
 import LibraryAccessPanel from "../ui/LibraryAccessPanel.js";
 import LibrarySettingsPanel from "../ui/LibrarySettingsPanel.js";
+import ViewStateControls from "../ui/ViewStateControls.js";
 import MapView from "../ui/MapView.js";
 
 /**
@@ -63,6 +67,7 @@ export default class App {
         this.displaySettingsStore = new DisplaySettingsStore(
             this.config.uiSettings
         );
+        this.viewStateStore = new ViewStateStore(this.config.viewState);
         this.folderColorState = new FolderColorState({
             store: this.displaySettingsStore,
             pathColorResolver: path => this.getPathHashColor(path),
@@ -115,6 +120,7 @@ export default class App {
             this.eventBus,
             this.config.map.trackStyle.lineColor
         );
+        this.viewStateControls = new ViewStateControls(this.eventBus);
     }
 
     createLayout() {
@@ -127,10 +133,23 @@ export default class App {
         this.treeView.element.querySelector("h3").after(
             this.libraryAccessPanel.element,
             this.librarySettingsPanel.element,
+            this.viewStateControls.element,
             this.searchView.element
         );
 
         this.workspace.append(this.treeView.element, this.mapView.element);
+        this.viewStateControls.attach({
+            toolbar: this.toolbar,
+            workspace: this.workspace,
+            sidebar: this.treeView.element
+        });
+        this.viewStateCoordinator = new ViewStateCoordinator({
+            eventBus: this.eventBus,
+            store: this.viewStateStore,
+            mapView: this.mapView,
+            controls: this.viewStateControls,
+            debounceMs: this.config.viewState.debounceMs
+        });
 
         app.replaceChildren(
             this.toolbar.element,
@@ -294,6 +313,8 @@ export default class App {
                 return;
             }
 
+            this.viewStateCoordinator.flush();
+
             const generation = ++this.#libraryLoadGeneration;
 
             this.clearSelection("library-switch");
@@ -352,7 +373,7 @@ export default class App {
         this.searchService.clear();
         this.searchView.setAvailable(false);
         this.mapView.clear();
-        this.mapView.resetView();
+        this.mapView.resetView({ silent: true });
         this.displayState.setLibrary(library.rootFolder.handle);
 
         await this.treeView.render(library);
@@ -398,6 +419,13 @@ export default class App {
         } else {
             this.libraryAccessPanel.hide();
         }
+
+        this.viewStateCoordinator.restoreLibrary({
+            libraryId: this.currentLibraryId,
+            libraryName: library.name,
+            generation,
+            isCurrent
+        });
 
         return true;
     }
@@ -894,14 +922,7 @@ export default class App {
 
     getPathHashColor(path) {
 
-        const palette = this.config.map.displayPalette;
-        let hash = 0;
-
-        for (let index = 0; index < path.length; index += 1) {
-            hash = ((hash << 5) - hash + path.charCodeAt(index)) | 0;
-        }
-
-        return palette[Math.abs(hash) % palette.length];
+        return resolvePathHashColor(path, this.config.map.displayPalette);
     }
 
     createTrackStyle(color) {

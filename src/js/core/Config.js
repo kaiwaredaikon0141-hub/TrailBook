@@ -11,6 +11,16 @@ const Config = {
         schemaVersion: 1
     },
 
+    viewState: {
+        storageKey: "trailbook.viewState",
+        schemaVersion: 1,
+        debounceMs: 750,
+        maxVisibleTracks: 5000,
+        maxSerializedBytes: 1048576,
+        minZoom: 0,
+        maxZoom: 19
+    },
+
     sharedLibrarySettings: {
         fileName: "trailbook.json",
         schemaVersion: 1,

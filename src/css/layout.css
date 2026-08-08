@@ -46,6 +46,11 @@ body{
         1fr;
 }
 
+.workspace.is-sidebar-closed{
+
+    grid-template-columns:1fr;
+}
+
 .map-view{
 
     min-width:0;
