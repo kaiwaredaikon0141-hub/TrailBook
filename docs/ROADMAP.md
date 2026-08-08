@@ -390,7 +390,7 @@ sidebar width、Search query、Tree expanded paths、Tree scroll、Tree focusは
 
 ### Shared and Device-local Boundary
 
-`trailbook.json`はFolder colors等のLibrary共有設定の正本であり、previous view stateを保存しない。Map、visible / selected Track、sidebarはbrowser originと端末に限定した`localStorage`へ保存する。最後に選択した`FileSystemDirectoryHandle`だけはprevious Library再開用にIndexedDBへstructured cloneで保存するが、localStorage、`trailbook.json`、Consoleへ出さない。GPX XMLとLeaflet Layerは永続化しない。parsed geometryは5秒性能目標を既存再parse方式で満たせない場合だけ、再生成可能なIndexedDB cacheとして採用を判断する。
+`trailbook.json`はFolder colors等のLibrary共有設定の正本であり、previous view stateを保存しない。Map、visible / selected Track、sidebarはbrowser originと端末に限定した`localStorage`へ保存する。最後に選択した`FileSystemDirectoryHandle`とcache専用opaque namespaceはprevious Library再開用のIndexedDB recordへstructured cloneで保存するが、localStorage、`trailbook.json`、Consoleへ出さない。GPX XMLとLeaflet Layerは永続化しない。parsed geometryは5秒性能目標の不達により、再生成可能な別IndexedDB cacheとして採用する。
 
 Release 1.3は専用storage keyとschema version 1を持つ`ViewStateStore`を採用する。既存`DisplaySettingsStore` schema version 1とshared settings schema version 1は変更せず、schema migrationやFolder color / Map modeとの結合を発生させない。
 
@@ -415,7 +415,7 @@ Release 1.3は`ViewStateStore`のLibrary keyとして既存の`root-name:<encode
 
 既存Queueの並列数2、session cache上限100、path identity、通常のbulk表示pipelineを再利用する。0 / 1 / 50 / 200 / 806 Trackで、UI応答性、復元時間、Queue重複、localStorage size、Waypoint OFF / ONの既知制限を測定する。806前後のprevious visible Trackは、Library scanとpermission処理を分けたwarm restoreを同一PC / browser / origin、Waypoint OFF、最低3回の中央値で約5秒以内とする性能目標を追加する。初回cold loadは従来速度を許容する。
 
-既存GPX再parse方式が目標を満たすかを先に計測する。満たせない場合だけ、IndexedDBへparser / cache schema version、Library cache namespace、relative path、`File.size`、`File.lastModified`とparsed geometry DTOを保存するcacheを実装候補とする。source情報が一致するentryだけを使用し、変更時はそのGPXだけを無効化して既存Queueで再parseする。cache read / validation / write failureは既存Queueへfallbackし、Leaflet Layer、GPX XML、Queue状態を保存せず、同じpathをparseまたはrenderへ二重投入しない。
+既存GPX再parse方式を約807 visible Tracksで測定した結果は24秒、25秒、25秒、中央値25秒で、約5秒目標に不達だった。このため、IndexedDBへparser / cache schema version、Library cache namespace、relative path、`File.size`、`File.lastModified`と描画用Track / Waypoint座標を保存するcacheを採用する。source情報が一致するentryだけを使用し、変更時はそのGPXだけを無効化して既存Queueで再parseする。cache read / validation / write failureは既存Queueへfallbackし、Leaflet Layer、GPX XML、Queue状態を保存せず、同じpathをparseまたはrenderへ二重投入しない。
 
 ### Units
 
@@ -423,7 +423,7 @@ Release 1.3は`ViewStateStore`のLibrary keyとして既存の`root-name:<encode
 2. `ViewStateStore` / pure schema、Map state、desktop sidebar open / closed、Reset基盤（Completed）
 3. visible Track snapshot / restore、existing Queue統合、bulk coalescing、stale path / generation（Completed。少数Trackと807 visible TrackのBrowser Acceptance済み）
 4. Previous Library Handle Store / Coordinator、permission UX、自動 / 手動open、stale handle recovery（Completed）
-5. 806 GPX warm restore performance gate。約5秒を満たせない場合だけderived geometry cacheを実装（Not started）
+5. 806 GPX warm restore performance gate、derived geometry cache（Completed。中央値25秒から3秒へ改善）
 6. selected Track restore、Reset UI、error recovery、Library lifecycle統合（Not started）
 7. Chrome / Edge統合受け入れ、0 / 1 / 50 / 200 / 806 GPX性能、文書、Release finalization（Not started）
 

@@ -175,6 +175,7 @@ export default class PreviousLibraryCoordinator {
 
         const generation = ++this.generation;
         const isCurrent = () => generation === this.generation;
+        const cacheNamespace = await this.#resolveCacheNamespace(handle);
 
         this.beforeLoad();
         this.accessPanel.showLoading(handle.name);
@@ -189,7 +190,8 @@ export default class PreviousLibraryCoordinator {
 
             const applied = await this.applyLibrary(library, {
                 generation,
-                isCurrent
+                isCurrent,
+                cacheNamespace
             });
 
             if (!applied || !isCurrent()) {
@@ -198,7 +200,7 @@ export default class PreviousLibraryCoordinator {
 
             this.previousHandle = handle;
             if (remember) {
-                await this.store.save(handle);
+                await this.store.save(handle, { cacheNamespace });
             }
             return true;
         } catch (error) {
@@ -227,6 +229,19 @@ export default class PreviousLibraryCoordinator {
             return await handle.requestPermission(READ_PERMISSION);
         } catch {
             return "denied";
+        }
+    }
+
+    async #resolveCacheNamespace(handle) {
+
+        if (typeof this.store.resolveCacheNamespace !== "function") {
+            return null;
+        }
+
+        try {
+            return await this.store.resolveCacheNamespace(handle);
+        } catch {
+            return null;
         }
     }
 

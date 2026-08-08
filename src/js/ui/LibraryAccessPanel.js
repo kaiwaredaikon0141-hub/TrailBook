@@ -8,6 +8,13 @@ export default class LibraryAccessPanel {
     constructor() {
 
         this.element = this.#create();
+        this.previousLibraryButton = this.element.querySelector(
+            ".previous-library-open"
+        );
+        this.previousLibraryAction = null;
+        this.previousLibraryButton.addEventListener("click", () => {
+            this.previousLibraryAction?.();
+        });
     }
 
     get descriptionId() {
@@ -64,6 +71,31 @@ export default class LibraryAccessPanel {
         );
     }
 
+    showPreviousLibrary(folderName, permission = "prompt") {
+
+        const denied = permission === "denied";
+
+        this.#show(
+            "前回のLibraryがあります",
+            denied
+                ? `${folderName}へのアクセスは許可されていません。` +
+                    "明示的に開き直すか、通常のLibraryを選択できます。"
+                : `${folderName}を開くにはアクセスの確認が必要です。` +
+                    "通常のLibrary選択も引き続き利用できます。",
+            denied ? "error" : "info"
+        );
+        this.previousLibraryButton.hidden = false;
+        this.previousLibraryButton.setAttribute(
+            "aria-label",
+            `前回のLibrary ${folderName} を開く`
+        );
+    }
+
+    setPreviousLibraryAction(action) {
+
+        this.previousLibraryAction = action;
+    }
+
     showPermissionFailure() {
 
         this.#show(
@@ -109,6 +141,9 @@ export default class LibraryAccessPanel {
         section.innerHTML = `
             <h4 class="library-access-title"></h4>
             <p class="library-access-message"></p>
+            <button class="previous-library-open" type="button" hidden>
+                前回のLibraryを開く
+            </button>
         `;
 
         return section;
@@ -116,6 +151,7 @@ export default class LibraryAccessPanel {
 
     #show(title, message, state = "info") {
 
+        this.previousLibraryButton.hidden = true;
         this.element.dataset.state = state;
         this.element.querySelector(".library-access-title").textContent = title;
         this.element.querySelector(".library-access-message").textContent = message;

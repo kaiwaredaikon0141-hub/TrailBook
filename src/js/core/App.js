@@ -4,6 +4,8 @@ import FolderScanner from "../services/FolderScanner.js";
 import GPXLoader from "../services/GPXLoader.js";
 import GPXParser from "../services/GPXParser.js";
 import GPXDisplayQueue from "../services/GPXDisplayQueue.js";
+import GeometryCacheRepository from "../services/GeometryCacheRepository.js";
+import GPXGeometryLoader from "../services/GPXGeometryLoader.js";
 import SearchService from "../services/SearchService.js";
 import TrackStyleService from "../services/TrackStyleService.js";
 import DisplaySettingsStore from "../services/DisplaySettingsStore.js";
@@ -55,8 +57,13 @@ export default class App {
         this.folderColorControl = null;
         this.folderColorDialog = null;
         this.folderScanner = new FolderScanner();
-        this.gpxLoader = new GPXLoader();
-        this.gpxParser = new GPXParser();
+        this.gpxGeometryLoader = new GPXGeometryLoader({
+            parser: new GPXParser(),
+            fileLoader: new GPXLoader(),
+            repository: new GeometryCacheRepository(
+                this.config.geometryCache
+            )
+        });
         this.searchService = new SearchService();
         this.trackStyleService = new TrackStyleService(
             this.config.map.trackStyle
@@ -272,7 +279,7 @@ export default class App {
 
     async handleLibraryLoaded(
         library,
-        { generation, isCurrent }
+        { generation, isCurrent, cacheNamespace = null }
     ) {
 
         if (!isCurrent()) {
@@ -294,6 +301,7 @@ export default class App {
         this.searchView.setAvailable(false);
         this.mapView.clear();
         this.mapView.resetView({ silent: true });
+        this.gpxGeometryLoader.setLibraryNamespace(cacheNamespace);
         this.displayState.setLibrary(library.rootFolder.handle);
 
         await this.treeView.render(library);
@@ -543,13 +551,7 @@ export default class App {
             fileHandle,
             generation,
             requestId,
-            run: async () => {
-                const loaded = await this.gpxLoader.load(fileHandle);
-                return this.gpxParser.parse(
-                    loaded.text,
-                    loaded.sourceFileName
-                );
-            },
+            run: () => this.gpxGeometryLoader.load(path, fileHandle),
             onSuccess: result => this.handleDisplayParsed(
                 path,
                 result,

@@ -92,6 +92,11 @@ body{
     margin:0;
 }
 
+.previous-library-open{
+
+    margin-top:8px;
+}
+
 .library-settings-actions{
 
     display:flex;

@@ -1770,7 +1770,7 @@ Current runtime contract: `DisplayState.checked`が表示意図、loading / load
 | 2 | ViewStateStore / schema、Map state、desktop sidebar、Reset基盤 | Completed |
 | 3 | visible Track restore、existing Queue、bulk coalescing、stale guard | Completed |
 | 4 | Previous Library Handle Store / Coordinator、permission UX、自動 / 手動open | Completed |
-| 5 | 806 GPX warm restore performance gate、条件付きgeometry cache | Not started |
+| 5 | 806 GPX warm restore performance gate、geometry cache | Completed |
 | 6 | selected Track restore、Reset UI、error / lifecycle integration | Not started |
 | 7 | Chrome / Edge、806 GPX、documentation、Release finalization | Not started |
 
@@ -1783,9 +1783,9 @@ Production Implementation Status: Unit 4 Completed
 - [ ] visibleかつloadedなselected TrackだけをSelectionStateへ復元する
 - [ ] desktop sidebar open / closedを保存・復元する。widthは保存しない
 - [ ] current Libraryの保存済みprevious view stateだけを消すconfirmation付きResetを提供する
-- [x] 最後に正常に開いたDirectoryHandleだけをIndexedDBへ保存し、localStorage / shared JSONへHandleを書かない
+- [x] 最後に正常に開いたDirectoryHandleとcache専用opaque namespaceをIndexedDBへ保存し、localStorage / shared JSONへHandleを書かない
 - [x] permission `granted`時の自動openと、`prompt` / `denied`時の`前回のLibraryを開く` / manual pickerを提供する
-- [ ] `trailbook.json`、GPX、Folder、Leaflet Layer、Queueへview stateを書かない。geometry cacheは5秒gate不達時だけ再生成可能な補助として検討する
+- [x] `trailbook.json`、GPX、Folder、Leaflet Layer、Queueへview stateを書かない。geometry cacheは5秒gate不達により再生成可能な補助として実装する
 - [ ] existing Queue concurrency 2、cache上限100、Waypoint初期OFF、Search / Folder bulk契約を維持する
 
 Future: sidebar width、Search query、Tree expanded paths / scroll / focus、stable Library alias。Mobile sidebar、shared view state、browser間同期はRelease 1.3対象外とする。
@@ -1907,10 +1907,10 @@ Mobile Viewer UXは既存の非対応 / 未確認結果を維持し、Release 1.
 - [ ] restore後pan / zoom、Track click / highlight、Map mode、Folder restyleを定性的評価
 - [ ] cache上限100のため806件すべてをwarmと記載しない
 - [ ] Waypoint ONの大量Marker既知制限をprevious view restore回帰と混同しない
-- [ ] 数値benchmark未実施時は定性的結果と明記し、20%比較を推測しない
-- [ ] 806前後のwarm restoreはLibrary scan / permission時間を分離し、Waypoint OFF、最低3回の中央値約5秒以内を目標とする
-- [ ] cold初回parseは従来速度を許容し、warmと混同しない
-- [ ] 既存再parse方式を先に測定し、不達の場合だけIndexedDB geometry cacheを実装して同じ条件で再測定する
+- [x] baselineとgeometry cache導入後を数値で測定し、推測値を使用しない
+- [x] 806前後のwarm restoreはLibrary scan / permission時間を分離し、Waypoint OFF、最低3回の中央値約5秒以内を確認する
+- [x] cold初回parseは従来速度を許容し、warmと混同しない
+- [x] 既存再parse中央値25秒の不達によりIndexedDB geometry cacheを実装し、導入後中央値3秒を確認する
 
 Initial policyは既存root bulk相当の一括enqueueである。806件で再現可能なUI blockまたは重大回帰がある場合だけ、既存Queueへのchunked enqueueとprogressを検討する。hard limit、200件confirmation、別RestoreQueueは採用しない。約5秒gate不達時のgeometry cacheは既存Queueの正本性を維持し、cache failureを通常parseへfallbackさせる。
 
@@ -1974,7 +1974,6 @@ Browser用`sample/release/view-state-store-test.html`と`view-state-store-test.j
 
 ### Open Validation After Unit 4 Browser Acceptance
 
-- 806前後のwarm restore約5秒目標と条件付きgeometry cache（Unit 5）
 - selected Track restore（Unit 6）
 
 ### Unit 3 Visible Track Restoration
@@ -1989,7 +1988,7 @@ Unit 3 Status: Completed
 
 Unit 4 Previous Library Restore Status: Completed
 
-Unit 5 Fast Restore Performance Gate Status: Not started
+Unit 5 Fast Restore Performance Gate Status: Completed — Cache median 3 seconds
 
 Implementation result:
 
@@ -2033,13 +2032,13 @@ Browser Acceptance result:
 | progress UI | Not added as planned | 現時点では不要。Unit 5 Performance Gateと分離 |
 | Data protection | Pass | `trailbook.json` / GPXへの書き込みなし |
 
-Unit 3はCompletedである。806前後のwarm restore約5秒目標はUnit 5で同一条件により判定する。既存再parse方式が不達の場合だけ、Decision 0040のIndexedDB geometry cacheを実装候補とする。数値や約5秒達成を推測しない。
+Unit 3はCompletedである。Unit 5では既存再parse中央値25秒の不達を確認してDecision 0040のIndexedDB geometry cacheを実装し、導入後中央値3秒で約5秒目標をPassした。
 
 ### Additional Planning — Previous Library and Fast Restore
 
 Planning Addendum Status: Completed
 
-Production Implementation Status: Previous Library Restore Completed。geometry cacheはNot started
+Production Implementation Status: Previous Library Restore / geometry cache Completed
 
 - [x] previous DirectoryHandleはIndexedDBだけへ保存し、HandleをlocalStorage / shared JSONへ保存しない設計とした
 - [x] startupはread permission `granted`時だけ自動openし、`prompt` / `denied`は利用者gestureの`前回のLibraryを開く`へ分離した
@@ -2048,7 +2047,7 @@ Production Implementation Status: Previous Library Restore Completed。geometry 
 - [x] 806前後のwarm restore中央値約5秒をperformance gateとし、cold loadと分離した
 - [x] geometry cacheはgate不達時だけ採用し、Library namespace + relative path、parser / cache schema、size、lastModifiedでvalidationする
 - [x] cache miss / invalid / failureはexisting Queueへfallbackし、duplicate parse / renderを禁止する
-- [x] Unit 3 / 4はBrowser AcceptanceまでCompleted。Performance GateはNot started
+- [x] Unit 3 / 4はBrowser AcceptanceまでCompleted。Unit 5 Performance GateもCompleted
 
 ### Unit 4 Previous Library Restore
 
@@ -2060,11 +2059,11 @@ Unit 4 Browser Acceptance Status: Completed
 
 Unit 4 Status: Completed
 
-Unit 5 Fast Restore Performance Gate Status: Not started
+Unit 5 Fast Restore Performance Gate Status: Completed — Cache median 3 seconds
 
 Implementation result:
 
-- origin-local IndexedDB `trailbook.runtime` version 1、object store `previousLibrary`、key `last`へ最後に正常に開いたDirectoryHandleだけを保存する
+- origin-local IndexedDB `trailbook.runtime` version 1、object store `previousLibrary`、key `last`へ最後に正常に開いたDirectoryHandleとcache専用opaque namespaceを保存する
 - startupはread permissionをqueryし、`granted`だけを既存Library load lifecycleへ自動接続する
 - `prompt` / `denied`ではstartup permission requestを行わず、native `前回のLibraryを開く` buttonの明示操作時だけread permissionをrequestする
 - manual picker成功時はcurrent generationでLibrary apply完了後だけlast Handleを更新する
@@ -2103,4 +2102,31 @@ Static result:
 | Console | Pass | アプリ由来errorなし |
 | Data protection | Pass | localStorage、`trailbook.json`、GPXへの追加書き込みなし |
 
-Unit 4のChrome / Edge Browser AcceptanceはCompletedである。Unit 5 Fast Restore Performance GateはNot startedのまま維持する。
+Unit 4のChrome / Edge Browser AcceptanceはCompletedである。
+
+### Unit 5 Fast Restore Performance Gate
+
+Unit 5 Status: Completed
+
+Unit 5 Baseline Measurement Status: Completed
+
+Unit 5 Geometry Cache Implementation Status: Completed
+
+Unit 5 Geometry Cache Static Test Status: Completed
+
+Unit 5 Geometry Cache Browser Remeasurement Status: Completed
+
+Decision 0040に従い、既存GPX再parse方式を先に実Browserで測定する。測定条件はWaypoint OFF、806前後のprevious visible Tracks、同一PC / browser / origin、最低3回とし、Library scanとpermission時間を除外する。開始境界はLibrary scan完了後、終了境界は全restore対象がloaded / error / cancelledのterminal状態となりLayerが確定した時点である。
+
+| Measurement | Run 1 | Run 2 | Run 3 | Median | Result |
+|---|---:|---:|---:|---:|---|
+| Previous visible Track warm restore | 24 sec | 25 sec | 25 sec | 25 sec | Fail — 約5秒gate不達 |
+| Geometry Cache warm restore | 3 sec | 3 sec | 3 sec | 3 sec | Pass — 約5秒gate達成 |
+
+測定と同時に、UI responsiveness、806 Track表示後のpan / zoom、duplicate parse / render、`trailbook.viewState`へのlocalStorage write回数、Queue concurrency 2、session cache上限100の利用状況を確認する。static testはduplicate path除去、restore対象の一回通知、bulk saveの一回coalescing、Queue concurrency 2とidle判定を保証するが、実GPX read / parse / render時間、UI responsiveness、pan / zoom、memory cache hit数はBrowser測定なしに判定しない。
+
+中央値25秒で不達が再現したため、Library opaque namespace + relative pathをkeyとし、`File.size`、`File.lastModified`、parser / cache schemaで検証する再生成可能cacheを実装した。cacheにはTrack / Waypoint描画用latitude / longitudeだけを保存し、hit時はXML text read / parseを省略する。miss / stale / corrupt / quota / schema mismatchは既存Queue内の通常parseへfallbackする。
+
+Static testではcache hit、namespace分離、source変更、schema mismatch、corrupt geometry、read / quota failure fallback、inflight deduplication、Queue concurrency 2、localStorage bulk write coalescingを確認した。Browser再測定では中央値3秒、UI停止なし、pan / zoom正常、duplicate表示なし、Console errorなしを確認した。baseline中央値25秒から約8倍高速化した。
+
+cache miss / invalid時は既存parseへfallbackし、GPX / `trailbook.json`へ書き込まない。IndexedDB geometry cacheは正本ではなく、削除・再生成可能な派生データとして正式採用する。Unit 5をCompletedとし、Unit 6はNot startedのまま維持する。

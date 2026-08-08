@@ -812,7 +812,7 @@ File System Access APIのpermissionとwrite lifecycleは[Chrome File System Acce
 
 ## Release 1.3 Architecture — Previous View Restoration
 
-Status: In Progress。Current Releaseは1.2.0のままである。Unit 1〜4はCompleted、Unit 5 Fast Restore Performance GateはNot startedである。
+Status: In Progress。Current Releaseは1.2.0のままである。Unit 1〜5はCompleted、Unit 6はNot startedである。
 
 ### Data Boundary
 
@@ -826,9 +826,9 @@ previous view stateはLibrary内容ではなく、同じbrowser origin上の端�
 | visible / selected Track | 保存しない | 保存しない | Library単位、relative path |
 | sidebar open / closed | 保存しない | 保存しない | Library単位 |
 | sidebar width、Search / Tree navigation | 保存しない | 保存しない | Release 1.3では保存しない |
-| last DirectoryHandle | 保存しない | 保存しない | IndexedDBへ前回Library再開用として保存予定 |
+| last DirectoryHandle | 保存しない | 保存しない | IndexedDBへ前回Library再開用として保存 |
 | GPX XML、Leaflet Layer、Queue | 保存しない | 保存しない | 保存しない |
-| parsed geometry | 保存しない | 保存しない | 5秒性能gate不達時だけ再生成可能なIndexedDB cache候補 |
+| parsed geometry | 保存しない | 保存しない | 5秒性能gate不達により再生成可能なIndexedDB cacheを採用 |
 
 既存`DisplaySettingsStore` schema version 1をversion 2へ上げる案は採用しない。Map mode / legacy Folder colorとLibrary view lifecycleを同じdocumentへ結合し、既存schema migration、unknown-version failure範囲、test matrixを不要に広げるためである。専用Storeはschema version 1から開始するので、Release 1.3にschema 1からのdata migrationはない。既存key、schema、保存値をそのまま維持する。
 
@@ -880,7 +880,7 @@ Release 1.3は`ViewStateStore`用に既存`createLibraryId(rootFolderName)`の`r
 | C. root構造fingerprint | 不採用 | rename / move / file増減で変わり、全内容hashは特に高コスト。GPX内容hashは行わない |
 | D. user alias | Future | 衝突回避には有効だが、UI、rename、shared metadataとの意味付けがRelease 1.3を越える |
 
-同名root FolderはView State上で衝突し、root名変更時は別Libraryになる。この制限をUI / test / known limitationへ明記し、current Libraryのview stateだけを消すResetを回復経路とする。HandleをlocalStorageまたは`trailbook.json`へ保存しない。最後に正常に開いたDirectoryHandleだけはprevious Library用IndexedDBへ保存し、`isSameEntry()`で手動選択handleとの同一性を確認できる。[File System Access specification](https://wicg.github.io/file-system-access/)が定義するhandle serializationと`isSameEntry()`は、sharedまたはlocalStorage用の安定文字列identifierとは別の契約である。
+同名root FolderはView State上で衝突し、root名変更時は別Libraryになる。この制限をUI / test / known limitationへ明記し、current Libraryのview stateだけを消すResetを回復経路とする。HandleをlocalStorageまたは`trailbook.json`へ保存しない。最後に正常に開いたDirectoryHandleとcache専用opaque namespaceはprevious Library用IndexedDBへ保存し、`isSameEntry()`で手動選択handleとの同一性を確認できる。[File System Access specification](https://wicg.github.io/file-system-access/)が定義するhandle serializationと`isSameEntry()`は、sharedまたはlocalStorage用の安定文字列identifierとは別の契約である。
 
 ### Responsibilities and Dependencies
 
@@ -903,14 +903,14 @@ Release 1.3は`ViewStateStore`用に既存`createLibraryId(rootFolderName)`の`r
 
 `PreviousLibraryStore` / `PreviousLibraryCoordinator`:
 
-- IndexedDBのversioned object storeへ最後に正常に開いた`FileSystemDirectoryHandle`だけを保存し、localStorageとshared settingsを参照しない。opaque cache namespaceはUnit 5でgeometry cacheを実際に採用する場合だけ追加検討する
+- IndexedDBのversioned object storeへ最後に正常に開いた`FileSystemDirectoryHandle`とgeometry cache専用のopaque namespaceを保存し、localStorageとshared settingsを参照しない。namespaceはshared identityやlocalStorage keyへ流用しない
 - 起動時は`queryPermission({ mode: "read" })`だけを行い、`granted`なら既存Library load callbackへ接続する。`prompt` / `denied`では自動promptを出さず、利用者gestureによる`requestPermission({ mode: "read" })`と手動pickerを維持する
 - IndexedDB unavailable / corrupt、stale / missing handle、permission failureをnon-fatalにし、AppへIndexedDB transaction、permission分岐、cache policyを直接追加しない
 - originのscheme / host / port変更、site data削除、private browsing終了ではrecordを共有または保証しない
 
-Conditional `GeometryCacheRepository`:
+`GeometryCacheRepository` / `GPXGeometryLoader`:
 
-- Unit 5の性能gateが不達の場合だけ実装し、Library cache namespace + relative pathをentry keyとする
+- 約807 Trackの既存再parse中央値25秒によりUnit 5の約5秒gateが不達となったため実装し、Library cache namespace + relative pathをentry keyとする
 - parser / cache schema version、`File.size`、`File.lastModified`が一致するplain parsed DTOだけを返す。Leaflet Layer、GPX XML、FileHandle、Queue状態をentryへ含めない
 - miss / stale / invalid / quota / transaction failureは既存`GPXDisplayQueue`のload / parseへfallbackする。cache hitとfallbackを同じpathへ二重enqueueまたは二重renderしない
 - cacheは削除可能・再生成可能であり、Folder構造、GPX、`trailbook.json`の正本性を変更しない
@@ -955,12 +955,19 @@ HandleのIndexedDB保存とpermission lifecycleは[Chrome File System Access doc
 
 - Unit 3は少数Trackと807 visible TrackのBrowser Acceptanceを完了した。stale path、Map center / zoom、Sidebar、duplicate表示、UI応答性、data protectionに問題はなく、復元速度は通常のcold表示とほぼ同等だった。約5秒warm restoreはUnit 5の別Performance Gateとし、Unit 3へprogress UIを追加しない。
 - Unit 4は`PreviousLibraryStore` / Coordinator、permission UX、自動 / 手動open、stale handle recoveryのImplementation / Static TestとChrome / Edge Browser Acceptanceを完了した。
-- Unit 5で806前後のvisible Trackを同一条件で最低3回測定し、Library scan後からterminalまでのwarm中央値約5秒をgateとする。既存再parse方式が達成すればgeometry cacheを実装しない。不達の場合だけ上記cacheを実装して再測定する。
+- Unit 5の既存再parse方式は24秒、25秒、25秒、中央値25秒で約5秒gateに不達だった。geometry cache導入後は3秒、3秒、3秒、中央値3秒となり、約8倍高速化してgateをPassした。UI停止、pan / zoom、duplicate表示、Console errorはない。
 - Unit 6でselected Track restoreと残るlifecycle / Reset統合、Unit 7でChrome / Edge、cold / warm、origin制限、data protection、finalizationを確認する。
 
 ### Unit 4 Previous Library Restore Implementation
 
-- `PreviousLibraryStore`はversioned IndexedDB `trailbook.runtime`の`previousLibrary` object storeへ、固定key `last`で最後に正常に開いたDirectoryHandleだけをstructured cloneする。storage unavailable / blocked / corrupt / clone failureはnon-fatalである。
+- `PreviousLibraryStore`はversioned IndexedDB `trailbook.runtime`の`previousLibrary` object storeへ、固定key `last`で最後に正常に開いたDirectoryHandleとopaque cache namespaceをstructured cloneする。既存Handle-only recordはnamespaceをbest effortで補い、storage unavailable / blocked / corrupt / clone failureはnon-fatalである。
+
+### Unit 5 Geometry Cache Implementation
+
+- `GeometryCacheRepository`は別DB `trailbook.geometryCache` version 1の`entries` object storeを使用する。keyはprevious Libraryのopaque namespaceとrelative GPX pathの組である。
+- recordはcache schema 1、parser schema 1、`File.size`、`File.lastModified`、Track segmentのlatitude / longitude、Waypointのlatitude / longitudeだけを保持する。metadata、name、time、elevation、warning、GPX XML、FileHandle、Leaflet Layer、Queue状態を保持しない。
+- `GPXGeometryLoader`は`getFile()`でsource identityを取得し、valid cache hitなら`File.text()`と`GPXParser.parse()`を省略する。miss / stale / corrupt / schema mismatch / IndexedDB / quota failureは同じ既存Queue request内で通常parseし、成功geometryをbest effortでcacheへ書く。
+- 同一namespace / pathの同時loadは一つのinflight Promiseへ統合する。AppはRepository詳細を扱わず、Library namespaceの設定と既存Queue `run`のLoader呼び出しだけを配線する。
 - `PreviousLibraryCoordinator`はsupport判定、manual picker、Folder scan、Library generation、read permission、last Handle更新を担当する。Appから既存picker / scan lifecycleを抽出し、AppはCoordinator生成と既存`handleLibraryLoaded()` callbackだけを提供する。
 - startupは保存Handleへ`queryPermission({ mode: "read" })`だけを行う。`granted`なら既存Library lifecycleへ自動接続し、`prompt` / `denied`では`前回のLibraryを開く`を表示する。`requestPermission({ mode: "read" })`はそのnative buttonの明示操作時だけ行う。
 - manual picker成功後、scan、shared settings、Tree / Search、DisplayState登録までcurrent generationで正常完了した場合だけlast Handleを更新する。Map / Sidebar / visible Trackは同じ`ViewStateCoordinator.restoreLibrary()`を通る。

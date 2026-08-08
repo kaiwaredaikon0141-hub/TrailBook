@@ -59,7 +59,7 @@ GPXを独自形式へ取り込むのではなく、ユーザーのGPX資産を�
 - `LibrarySettingsCoordinator`がload、explicit save、migration、manual Reload、Conflict recoveryを調停する。
 - `LibrarySettingsPanel`と`SettingsConflictDialog`がstatusとReload / Overwrite / Cancel操作を担当する。
 
-Release 1.3 Unit 1〜4はCompletedで、Unit 5の806前後のwarm restore約5秒Performance GateはNot startedである。Unit 4はDirectoryHandleをorigin-local IndexedDBへ保存し、granted時の自動openとprompt / denied時の明示操作を既存Library lifecycleへ接続する。既存DisplaySettingsStore / shared settings schema、DisplayState、SelectionState、GPXDisplayQueueを正本として維持する。
+Release 1.3 Unit 1〜5はCompletedである。Unit 5は約807 visible Trackの既存再parse中央値25秒によりIndexedDB geometry cacheを採用し、導入後中央値3秒で約5秒Performance GateをPassした。Unit 6はNot startedである。Unit 4はDirectoryHandleとopaque cache namespaceをorigin-local IndexedDBへ保存し、granted時の自動openとprompt / denied時の明示操作を既存Library lifecycleへ接続する。既存DisplaySettingsStore / shared settings schema、DisplayState、SelectionState、GPXDisplayQueueを正本として維持する。
 
 ## Implemented Through Release 1.2
 

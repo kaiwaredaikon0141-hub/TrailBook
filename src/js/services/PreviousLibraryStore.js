@@ -103,15 +103,31 @@ function isDirectoryHandle(handle) {
     );
 }
 
+function createCacheNamespace() {
+
+    if (typeof globalThis.crypto?.randomUUID === "function") {
+        return globalThis.crypto.randomUUID();
+    }
+
+    return `library-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function isCacheNamespace(value) {
+
+    return typeof value === "string" && value.length > 0 && value.length <= 200;
+}
+
 /**
- * Stores only the last successfully opened DirectoryHandle in origin-local
- * IndexedDB. It never uses localStorage or Library files.
+ * Stores the last successfully opened DirectoryHandle and an opaque cache
+ * namespace in origin-local IndexedDB. It never uses localStorage or Library
+ * files.
  */
 export default class PreviousLibraryStore {
 
     constructor(config, {
         indexedDBFactory = globalThis.indexedDB,
-        adapter = null
+        adapter = null,
+        namespaceFactory = createCacheNamespace
     } = {}) {
 
         this.config = config;
@@ -119,7 +135,9 @@ export default class PreviousLibraryStore {
             config,
             indexedDBFactory
         );
+        this.namespaceFactory = namespaceFactory;
         this.status = "available";
+        this.currentRecord = null;
     }
 
     async load() {
@@ -129,6 +147,7 @@ export default class PreviousLibraryStore {
 
             if (!record) {
                 this.status = "available";
+                this.currentRecord = null;
                 return null;
             }
 
@@ -138,7 +157,13 @@ export default class PreviousLibraryStore {
                 return null;
             }
 
+            if (!isCacheNamespace(record.cacheNamespace)) {
+                record.cacheNamespace = this.namespaceFactory();
+                await this.#writeMigratedRecord(record);
+            }
+
             this.status = "available";
+            this.currentRecord = record;
             return record.handle;
         } catch {
             this.status = "unavailable";
@@ -146,14 +171,36 @@ export default class PreviousLibraryStore {
         }
     }
 
-    async save(handle) {
+    async resolveCacheNamespace(handle) {
+
+        if (!isDirectoryHandle(handle)) {
+            return null;
+        }
+
+        if (
+            this.currentRecord &&
+            await this.#isSameEntry(this.currentRecord.handle, handle)
+        ) {
+            return this.currentRecord.cacheNamespace;
+        }
+
+        return this.namespaceFactory();
+    }
+
+    async save(handle, { cacheNamespace = null } = {}) {
 
         if (!isDirectoryHandle(handle)) {
             return false;
         }
 
         try {
-            await this.adapter.set(this.config.recordKey, { handle });
+            const namespace = isCacheNamespace(cacheNamespace)
+                ? cacheNamespace
+                : await this.resolveCacheNamespace(handle);
+            const record = { handle, cacheNamespace: namespace };
+
+            await this.adapter.set(this.config.recordKey, record);
+            this.currentRecord = record;
             this.status = "available";
             return true;
         } catch {
@@ -166,6 +213,7 @@ export default class PreviousLibraryStore {
 
         try {
             await this.adapter.delete(this.config.recordKey);
+            this.currentRecord = null;
             this.status = "available";
             return true;
         } catch {
@@ -181,10 +229,38 @@ export default class PreviousLibraryStore {
 
     async #discardInvalidRecord() {
 
+        this.currentRecord = null;
+
         try {
             await this.adapter.delete(this.config.recordKey);
         } catch {
             this.status = "unavailable";
+        }
+    }
+
+    async #writeMigratedRecord(record) {
+
+        try {
+            await this.adapter.set(this.config.recordKey, record);
+        } catch {
+            // The Handle remains usable; cache persistence is optional.
+        }
+    }
+
+    async #isSameEntry(first, second) {
+
+        if (first === second) {
+            return true;
+        }
+
+        if (typeof first?.isSameEntry !== "function") {
+            return false;
+        }
+
+        try {
+            return await first.isSameEntry(second);
+        } catch {
+            return false;
         }
     }
 }

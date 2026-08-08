@@ -550,6 +550,34 @@ Reason: Release 1.2までに806 GPXのroot一括表示、requestId、Library gen
 
 Consequences: initial designでは件数hard limitとconfirmationを固定せず、0 / 1 / 50 / 200 / 806 GPXで測定する。UI blockまたは再現可能な重大回帰がある場合だけ既存Queueへのchunked enqueue / progressを追加する。restore中の利用者操作とLibrary generationをsaved stateより優先し、missing / error Trackをselectionへ復元しない。Waypoint初期OFFと大量Markerの既知制限を維持する。
 
+## Decision 0039 — Previous Directory Handle Uses Origin-local IndexedDB
+
+Date: 2026-08
+Status: Proposed
+Scope: Release 1.3 Additional Planning
+
+Decision Proposal: 最後に正常に開いた`FileSystemDirectoryHandle`をorigin-local IndexedDBへstructured cloneで保存する。次回起動時は`queryPermission({ mode: "read" })`が`granted`の場合だけ、現在のLibrary load pipelineで自動openする。`prompt` / `denied`では自動permission requestを行わず、keyboard操作可能な`前回のLibraryを開く`と既存の手動pickerを提示する。HandleをlocalStorage、`trailbook.json`、Consoleへ保存または出力しない。
+
+Reason: localStorageはFileSystemHandleを保存できず、起動直後のpermission requestは利用者gestureを必要とし得る。File System Access仕様が定義するserializable handleとIndexedDBのstructured cloneを使えば、GPXやLibrary設定を変更せずに前回Libraryへの再開入口を保持できる。これはFolder / GPXを正本とするLibrary databaseではなく、削除可能な端末・origin限定のcapability recordである。
+
+Consequences: Decision 0036 / 0037の「HandleとIndexedDBをRelease 1.3で使わない」という提案境界を、この用途に限って変更する。IndexedDB failure、record破損、permission拒否、stale / missing handleでもViewerと手動pickerを継続する。恒久的に無効なrecordは安全に破棄できるが、一時的なprovider offlineは自動破棄しない。IndexedDBはscheme / host / portごとに分離され、site data削除やprivate browsing終了で失われ得る。readwrite permissionを保存または自動要求しない。
+
+Extended by Decision 0040: 同じprevious Library recordは、geometry cache key専用のopaque namespaceをHandleとともに保持する。namespaceはshared identity、localStorage key、Library内容として使用しない。
+
+## Decision 0040 — Parsed Geometry Cache Is a Conditional and Regenerable Accelerator
+
+Date: 2026-08
+Status: Accepted
+Scope: Release 1.3 Additional Planning
+
+Decision Proposal: 806前後のprevious visible Trackについて、Library scan後から全対象Layerがterminalになるまでのwarm restore中央値を約5秒以内とする。既存GPX再parse pipelineを先に測定し、目標を再現可能に満たせない場合だけIndexedDB parsed geometry cacheを導入する。cache keyはLibrary handle recordのopaque namespaceとGPX relative path、validation情報はparser / cache schema version、`File.size`、`File.lastModified`とする。
+
+Reason: 現行session cache上限100では806 GPXを次回起動へ持ち越せず、全件XML read / parseがwarm再開の支配要因になり得る。一方、計測前の永続cache実装はstorage、quota、invalid data、schema、evictionのfailure範囲を不必要に増やすため、performance gateを先に置く。
+
+Consequences: cacheはGPXから再生成可能で正本ではない。source情報不一致、schema不一致、missing / corrupt entry、IndexedDB read / write / quota failureでは該当GPXを既存`GPXDisplayQueue`へfallbackし、GPX変更時だけ再parseする。GPX XML、FileHandle、Leaflet Layer、Queue状態をgeometry entryへ保存しない。cold loadは従来速度を許容し、専用RestoreQueue、duplicate parse / render、GPX書き込みを追加しない。`size + lastModified`の衝突可能性、cache上限 / eviction、bulk read方式は実装Unitでtestと計測により確定する。
+
+Implementation Note: 約807 visible Tracks、Waypoint OFF、scan / permission除外の既存再parse warm restoreは24秒、25秒、25秒、中央値25秒であり、約5秒gateに不達だった。Release 1.3 Unit 5はorigin-local IndexedDB geometry cacheを採用し、cache / parser schema、`File.size`、`File.lastModified`が一致するTrack / Waypoint座標だけを復元する。cache導入後は3秒、3秒、3秒、中央値3秒となり、約8倍高速化してgateをPassした。cache miss / invalid時は既存parseへfallbackし、cacheは削除・再生成可能な派生データとして正式採用する。
+
 ## Decision Status
 
 - Accepted: 正式採用

@@ -21,6 +21,21 @@ const Config = {
         maxZoom: 19
     },
 
+    previousLibrary: {
+        databaseName: "trailbook.runtime",
+        databaseVersion: 1,
+        objectStoreName: "previousLibrary",
+        recordKey: "last"
+    },
+
+    geometryCache: {
+        databaseName: "trailbook.geometryCache",
+        databaseVersion: 1,
+        objectStoreName: "entries",
+        cacheSchemaVersion: 1,
+        parserSchemaVersion: 1
+    },
+
     sharedLibrarySettings: {
         fileName: "trailbook.json",
         schemaVersion: 1,

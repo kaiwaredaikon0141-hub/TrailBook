@@ -833,7 +833,7 @@ Folder color dialogのApplyは画面とsession / local fallbackへ反映して`U
 
 # 22. Release 1.3 UI — Previous View Restoration
 
-Status: In Progress。Release 1.2の確定UIを維持する。Unit 1〜4はCompleted、Unit 5 Fast Restore Performance GateはNot startedである。
+Status: In Progress。Release 1.2の確定UIを維持する。Unit 1〜5はCompleted、Unit 6はNot startedである。
 
 ## Restored State
 
@@ -889,7 +889,7 @@ Unit 2ではこのReset基盤とdevice-local状態表示を実装した。Reset�
 ## Fast Visible Track Restore — Planned Performance Gate
 
 - 806前後のprevious visible Trackは、Library scan後から全target terminalまでのwarm中央値約5秒以内を目標とする。permission / picker時間とcold初回parseは別に記録する。
-- 既存再parse方式を先に測定し、目標不達の場合だけIndexedDB geometry cacheを検討する。cache failure時は既存Queueへfallbackし、checkbox、loading / loaded / error、StatusBarの既存表示を維持する。
+- 既存再parse方式の中央値25秒で目標不達となったためIndexedDB geometry cacheを採用する。cache failure時は既存Queueへfallbackし、checkbox、loading / loaded / error、StatusBarの既存表示を維持する。新しいprogressやcache UIは追加しない。
 - cache使用時も同じGPXを二重parse / renderせず、GPX変更時だけ該当entryを無効化する。復元中の操作をmodalでblockしない。
 
 ## Release 1.3 Scope Boundary
@@ -903,4 +903,4 @@ Unit 2ではこのReset基盤とdevice-local状態表示を実装した。Reset�
 - Chrome / Edge Browser Acceptance: Completed
 - Unit 3: Completed
 - Unit 4: Previous Library RestoreはCompleted
-- Unit 5: Fast Restore performance gate / conditional cacheはNot started
+- Unit 5: Fast Restore performance gateとgeometry cacheはCompleted。warm restore中央値3秒で約5秒目標をPass
