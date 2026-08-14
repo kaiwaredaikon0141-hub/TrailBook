@@ -126,6 +126,60 @@ export default class TrackDiscoveryCoordinator {
         this.#applyMode();
     }
 
+    async addFileEntry({ path, fileHandle } = {}) {
+
+        if (
+            !this.available || !path || !fileHandle ||
+            this.fileHandles.has(path) ||
+            !this.index.addFileEntry({ relativePath: path, fileHandle })
+        ) {
+            return false;
+        }
+
+        this.fileHandles.set(path, fileHandle);
+
+        if (this.index.getStatus() === "ready") {
+            await this.index.loadEntry(path, {
+                isCurrent: generation =>
+                    generation === this.generation && this.isCurrent()
+            });
+
+            if (!this.isCurrent()) return false;
+            this.#applyFilter();
+        }
+
+        return true;
+    }
+
+    async refreshFileEntry({ path, fileHandle } = {}) {
+
+        const hadLoadedEntry = Boolean(this.index.getEntry(path));
+
+        if (
+            !this.available || !path || !fileHandle ||
+            !this.fileHandles.has(path) ||
+            !this.index.replaceFileEntry({ relativePath: path, fileHandle })
+        ) {
+            return false;
+        }
+
+        this.fileHandles.set(path, fileHandle);
+        const status = this.index.getStatus();
+
+        if (hadLoadedEntry || status === "ready" || status === "building") {
+            const entry = await this.index.loadEntry(path, {
+                isCurrent: generation =>
+                    generation === this.generation && this.isCurrent()
+            });
+
+            if (!entry || !this.isCurrent()) return false;
+            if (this.index.getStatus() === "ready") this.#applyFilter();
+            await this.trackInfo.setSelectedPath(this.trackInfo.selectedPath);
+        }
+
+        return true;
+    }
+
     getMode() {
 
         return this.mode;

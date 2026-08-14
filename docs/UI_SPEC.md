@@ -996,3 +996,100 @@ Status: Implementation / Static Test / Browser Acceptance Completed。
 - Folder Tree file labelの日付置換
 - Timeline、chart、statistics dashboard、elevation gain / loss
 - Track / TrackPoint編集、GPX保存、Folder移動 / rename
+
+# 24. Release 1.5 UI — Safe GPX Editing / Track Simplification
+
+Status: Completed。Editor UI、line / point preview、editing lifecycle、Original Backup + In-place SaveのBrowser AcceptanceとfinalizationはCompleted。
+
+## Entry and Single-session Rule
+
+- selected GPXのTrack Infoまたは明示Editor actionから`Trackを軽量化`を開始する
+- active Edit sessionは1 GPXだけとし、別GPXを編集する場合はcurrent sessionのCancelまたは完了を必要とする
+- Viewer selectionが変わってもactive editor targetを暗黙に切り替えない
+- source load中、lossy decode、parse / DOM mapping failureはblocking save errorとしてEditor内に表示するが、Viewer操作は継続する
+
+## Editor Panel
+
+Editor panelは少なくとも次を表示する。
+
+- source display nameとrelative path
+- toleranceのmeter numeric input
+- 5 / 10 / 25 / 50 m preset候補
+- original point count、simplified point count、reduction count / percentage
+- original distance、simplified distance、absolute / percentage difference
+- actual maximum shape deviation
+- Before / After / Both preview mode
+- Apply、Undo、Redo、Done、Cancel、保存
+
+Unit 4では保存をまだ表示せず、selected GPX、tolerance、preview mode、metrics、Apply、Undo、Redo、CancelまでをMap上の非modal panelとして実装する。保存はUnit 5でBackup / permission / verification契約と同時に追加する。
+
+Unit 4 Browser Acceptance前の修正で`Done / 編集終了`を追加する。Applyはworking copy確定だけでEditorを閉じない。Doneはnormal Viewerへ戻り、現在のworking mask / historyを1件のsession-memory draftとして保持する。同じLibrary / Trackの`編集を再開`で復元できるが、GPX、`trailbook.json`、cache、Index、localStorageへ保存せず、page reload、Library変更、別TrackのEdit開始では失われる。`Cancel / 破棄`はworking state / historyを保持しない。
+
+tolerance入力とpreview計算だけではworking copyを変更しない。Applyで初めてcandidateをworking copyへ確定し、Undo historyへ追加する。invalid tolerance、計算中、source conflict、saving中は理由を文字で示して該当buttonをdisableする。
+
+## Map Preview
+
+- Beforeはsource geometryをneutral / dashed style、Afterは明瞭なpreview styleで表示する候補とし、色だけで識別せずlegend / labelを付ける
+- Bothでは同じTrackを比較でき、selected Track highlight、Folder color、Track alpha blendingとpreview styleを混同しない
+- preview Layerはnormal visibility、DisplayState、SelectionState、Map center / zoom、saved view stateを変更しない
+- preview開始やtolerance変更で自動fitしない。明示`Previewへ移動`を追加する場合だけMap移動を許可する
+- Waypointはpreview対象外で、source Waypoint表示を変更しない
+
+line preview modeの表示契約:
+
+- Before: source lineだけ
+- After: simplified lineだけ
+- Both: source lineとsimplified line
+
+対象GPXが通常Viewerでvisibleな場合も、編集中はそのnormal Track / selection outline presentationだけを一時的に隠し、上記専用lineだけを表示する。checked / loaded state、Layer entry、Waypointは変更せず、Done / Cancelで同じnormal Layerを復帰させる。
+
+point previewはline modeと独立したOff / Before / After / Bothを提供し、初期値はOffとする。Before pointは固定半径4 px、retained After pointは固定半径5.5 pxとし、size、fill、outline、labelで区別してcolorだけに依存しない。Canvas rendererへmode選択時だけ遅延生成し、zoomに応じてmarkerを拡大せず、point click / selection / editはRelease 1.5 Unit 4へ含めない。
+
+## Undo, Redo, and Cancel
+
+- Undo / RedoはApply済みsimplification commandだけを対象とし、button stateとkeyboard shortcutを提供する
+- `Ctrl+Z` / `Ctrl+Y`またはplatform相当はinput native undoと競合しない範囲でEditor focus内だけに限定する
+- dirty sessionのCancel、Library switch、別Edit開始、page離脱は破棄確認を必要とする
+- Cancel default actionは破棄しない側とし、Escapeはdialog Cancelとして扱う
+- Done完了後はworking draftをsession memoryへ保持してpreviewを消し、通常Viewerと起点controlへ戻す
+- Cancel完了後はworking draft / historyとpreviewを破棄し、通常Viewerと起点controlへ戻す
+
+## Original Backup and Save
+
+- `保存`は明示button操作だけで開始し、その時点でreadwrite permissionを要求する。filename入力と`*-simplified.gpx` sibling作成は行わない
+- 初回保存時は「原本をTrailBook_Backupへ保存してから編集結果を保存します」と文字で明示する。Backup済みの場合はoriginal Backupを維持してsourceだけを更新することを表示する
+- confirmationには更新対象のoriginal relative path、Backup状態、point reduction、distance difference、formatting policyを示す。default focusはCancelとする
+- `TrailBook_Backup`にはsourceと同名で編集前のoriginal bytesを保存する。Backup成功・read-back verification前はsourceへ書かず、既存Backupを上書き・削除しない
+- permission deny、Backup create / write / verification failureではsourceを変更せず、Editor内statusと`aria-live`へ表示してretry / Cancelを可能にする
+- source write failureまたは編集後verification failureではBackupが復旧用に残ることと`TrailBook_Backup/<source-name>`を表示し、Viewerを停止しない
+- save成功後だけ同じsource pathのcache / Index / Track Infoを更新する。visibility、selection、Map center / zoomを維持し、new Tree entry、自動表示、自動選択、Map fitを作らない
+- Apply済みworking maskがcurrent source baselineと異なり、sourceが安全にserialize可能な場合だけbuttonを有効にする。saving / verifying中はEditor lifecycle操作と重複Saveをdisabledにする
+- 保存成功後はverified edited sourceをSessionのimmutable baselineへrebaseし、同じpathで後続編集を継続できる。Done / session-memory draft / Cancel semanticsは維持する
+
+## Attribute Notice
+
+preview / confirmationへ次を明記する。
+
+- retained pointのtime、elevation、extensionsは保持する
+- removed pointのtime、elevation、extensionsは出力から除かれ、補間しない
+- TrackSegment境界、Waypoint、route、metadata、Track / Segment extensionsは変更しない
+- outputはUTF-8 BOMなし、LFとなり、元fileのindentやquote等のbyte formattingは保持しない場合がある
+- 初回はoriginal bytesをreserved Backupへ検証付きで保存し、利用者の明示操作後だけ元GPX pathへ編集結果を保存する
+
+## Accessibility
+
+- tolerance、metrics、preview mode、dirty / calculating / saving / error / savedを文字で識別する
+- metrics更新を過剰にannounceせず、計算完了とsave結果をpolite live regionへ通知する
+- preview mode、Apply、Undo / Redo、Done、Cancel、保存をkeyboardだけで操作可能にする
+- confirmation dialogはinitial focus、focus trap、Escape、close後focus returnを既存dialog contractへ合わせる
+- Before / Afterは色だけで区別しない
+
+Unit 4実装ではBeforeをneutral dashed、Afterをsolid orangeとし、文字legendを併記する。編集中はsidebar selection controlsを`inert`とし、Map Track / background clickによるselection変更だけを抑止する。Editor controlsとMap pan / zoomはkeyboard / pointerで引き続き利用できる。
+
+## Release 1.5 UI Out of Scope
+
+- Backup verificationなしのsource更新、Backupのoverwrite / delete
+- point選択 / 移動 / 追加 / 手動削除、区間削除、split / join
+- Waypoint / route / metadata / extension編集
+- multi-GPX / batch UI、Mobile editor
+- autosave、background save、editing session recovery

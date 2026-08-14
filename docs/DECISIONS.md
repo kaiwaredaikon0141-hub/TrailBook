@@ -642,6 +642,62 @@ Reason: selected Track情報の必要高は画面と利用者によって異な�
 
 Consequences: Track Info内部scrollを維持し、Sidebar横resize / open / closeと同じschema version 1、750ms save queueを使用する。drag中の誤selectionを抑止するが、Map center / zoom、selection、visibilityは変更しない。Mobile / coarse pointerへseparatorを表示せず、GPXと`trailbook.json`を書き換えない。
 
+## Decision 0045 — Release 1.5 Uses an Immutable GPX Source and Explicit Save As
+
+Date: 2026-08
+Status: Accepted
+Scope: Release 1.5 Unit 2
+
+Decision Proposal: Release 1.5の編集対象は同時に1 GPXだけとし、Edit開始時のGPX XMLをimmutable source snapshot、Segmentごとのretained TrackPoint indexをmemory working copyとして分離する。Track軽量化はRamer–Douglas–PeuckerをSegment単位へ適用し、Apply済みworking-copy commandだけをUndo / Redo対象とする。保存はsourceと異なる新規filenameへの明示Save Asだけを許可し、sourceまたはexisting fileのOverwrite、自動保存、background保存を行わない。
+
+Reason: Viewerのparsed ModelまたはGeometry Cacheを直接編集すると、表示・cache・正本の境界が崩れ、Cancelや未知extensionsの保持が不確実になる。immutable source XMLとcompact working maskなら、previewとUndoをmemory内に限定し、retained pointのtime、elevation、extensionsとTrack / Segment / Waypoint構造をsemanticに保持できる。Save As限定なら最初のEditor Releaseで元GPX消失のriskを最小化できる。
+
+Consequences:
+
+- source XML Documentをcloneし、除外point elementだけをremoveするserializerを使用する。Parser ModelからGPX全体を再構築しない。
+- outputはUTF-8 BOMなし、LF、XML declaration、final newlineとする。元のindent、quote、attribute順等のbyte formattingは保証しない。
+- retained pointの属性 / children / extensionsは保持し、removed pointのtime / elevation / extensionsを補間または近傍へ移さない。
+- TrackSegment境界、Waypoint、route、metadata、unknown root / Track / Segment extensionsを変更しない。
+- permissionはSave Asの明示操作時だけ要求する。source同名とexisting targetは拒否し、v1.5ではOverwriteを提供しない。
+- source fingerprint変更、permission deny、collision、write / close / verification failureでは元GPX、Library state、normal Layer、cache / Indexを変更せず、working copyを再試行可能なdirty状態に保つ。
+- verification成功後だけnew pathをLibraryへrefreshし、Geometry Cache / Discovery Indexは新規pathの通常derived-data lifecycleから生成する。editing draftをcache正本にしない。
+- manual point / range edit、Track split / joinは同じSession / Command / Serializer boundaryへ追加できる将来候補だが、Release 1.5 scopeへ含めない。
+
+Alternatives: ViewerのTrack Modelを直接mutateする、full XML snapshotをUndoごとに保持する、Geometry Cacheをworking copyにする、source GPXをOverwriteする、uniform point samplingまたはVisvalingam–Whyattを最初のalgorithmにする。
+
+Related: Decision 0025のViewer / Editor責務分離と暗黙上書き禁止、Decision 0032の明示書き込み原則を具体化する。Release 1.5 Unit 2の実装開始承認によりAcceptedとする。
+
+Implementation Note: Unit 2はsource XML string / fingerprintとprivate source DOM clone factory、document-order Track / Segment / TrackPoint mappingを持つ`GPXEditingSourceLoader`、retained-point boolean maskを持つ`GPXEditingSession`、上限20の`EditingCommandHistory`、source DOM cloneから除外`trkpt`だけをremoveする`GPXEditingSerializer`を追加した。lossy decode、XML / GPX parse failure、Parser ModelとDOMのcount / coordinate不一致はsave不可とし、GPX、Geometry Cache、Discovery Index、Tree、Appへ接続していない。Unit 3はSegment-localなiterative Ramer–Douglas–Peuckerとmeter-based metricsをpure serviceへ追加した。previewはhistoryを変更せず、Apply時だけretained maskを既存historyへ確定し、同一結果を重複記録しない。invalid coordinateは保持してrunを分断し、retained point属性を変更せず、cooperative yield可能なasync APIを維持する。Unit 4はApp / TreeView外の`TrackEditingCoordinator`、非modal `TrackEditingPanel`、normal LayerManager外の`EditingPreviewLayerManager`を接続した。lineとpointのBefore / After Layerはnon-interactiveで、normal Track presentationは編集中だけ一時抑止し、selection / visibility / Map view / cache / Indexを変更しない。Doneはworking mask / historyを1件のsession-memory draftとして保持して通常Viewerへ戻り、CancelはSessionとともに破棄する。Unit 4時点ではSave AsとGPX writeを実装していない。
+
+Unit 5 Implementation Note: 明示Save As時だけreadwrite permissionを要求し、source / existing fileを拒否して新規GPXへserializer outputを書き、close後のread-back verification成功後だけnew pathをFolder Tree / DisplayState / Discoveryへ追加する。失敗時はsource、working Session、Library stateを維持し、targetが残る可能性を通知する。
+
+Unit 6 Historical Note: Unit 1〜5のBrowser Acceptanceと統合確認により、immutable source、memory working copy、RDP preview、Undo / Redo、Done / Cancel、明示Save As、verification、targeted Library refreshのDecision境界を維持したままRelease 1.5をCompletedとした。元GPXと`trailbook.json`は意図せず変更せず、point / range editing、Track split / join、Overwrite、Mobile editorは将来候補として残す。
+
+Historical Note: Unit 5のSave As境界と、それに基づくUnit 6 finalization記録はDecision 0046によりsupersededされた。immutable source、working mask、serializer、preview、Undo / Redo、Done / CancelのDecisionは引き続き有効である。
+
+## Decision 0046 — First Save Preserves Original Bytes Before In-place GPX Update
+
+Date: 2026-08-09
+Status: Accepted
+Scope: Release 1.5 Unit 5 revised save boundary
+Supersedes in part: Decision 0045のSave As / new-path policy
+
+Decision Proposal: TrailBookの編集保存は`<source>-simplified.gpx` siblingを作らず、original filename / relative pathを維持する。初回の明示`保存`ではsource Folder直下のreserved `TrailBook_Backup`へ現在sourceと同名で編集前のoriginal bytesを保存し、bytes / fingerprint / GPX mappingのread-back verification成功後だけsource pathへserializer outputを書き込む。既存Backupは上書き・削除せず、2回目以降は最初の原本を永久保持してsourceだけを更新する。
+
+Reason: 通常Libraryへ編集後GPXとsimplified siblingを並存させると、利用者から見たidentity、Tree / Date / Search、visibility、cacheが分岐する。original bytesをreserved Folderへ1回だけ退避して同じpathを更新すれば、通常Libraryのidentityを維持しつつ、serializerや編集後verificationが失敗した場合にも明確な原本を残せる。
+
+Consequences:
+
+- permissionは明示`保存`操作時だけ要求する。permission deny、Backup create / write / verification failureではsourceを変更しない。
+- Backupにはserializer outputでなく`GPXEditingSourceLoader`が保持するoriginal bytesを保存する。既存Backupは再利用前に検証し、invalid / partial Backupを暗黙修復しない。
+- source write failureまたは編集後verification failureではBackupを保持し、UIへ復旧場所を明示する。automatic restore、Backup overwrite / deleteは行わない。
+- `TrailBook_Backup`はcase-insensitiveなreserved Folder名とし、任意階層のLibrary scanから除外する。Folder Tree、Date Tree、Search、Discovery Index、Geometry Cache、GPX / Folder件数へ含めない。
+- verification成功後は同じpathのsession cacheとDiscovery summaryだけをinvalidate / refreshする。Geometry CacheはFile.size / lastModifiedでinvalid化し、visible Trackは既存Queueから1回だけ再parse / renderする。
+- visibility、selection、Map center / zoomを可能な限り維持し、new pathやduplicate entryを作らない。旧方式で既に作成されたsimplified GPXは通常GPXとして扱う。
+- Release 1.5 Unit 5は新仕様のImplementation / Static Test / Browser Acceptance Completed。Unit 6 finalizationもCompletedである。
+
+Alternatives: Save As siblingを継続する、毎回timestamp付きBackupを作る、Backupなしでsourceを上書きする、Backupをserializer outputから再構築する、Library全体をrescanする。
+
 ## Decision Status
 
 - Accepted: 正式採用

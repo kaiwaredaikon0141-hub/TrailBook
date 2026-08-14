@@ -1,8 +1,8 @@
 # TrailBook Release Checklist
 
-Version: 1.0.0 / 1.1.0 / 1.2.0 release records / 1.3.0 ready for final commit and tag
-Status: Release 1.0 / 1.1 / 1.2 / 1.3 Completed
-Baseline: v1.2.0 for Release 1.3
+Version: 1.0.0〜1.5.0 release records
+Status: Release 1.0〜1.5 Completed
+Baseline: v1.4.0 for Release 1.5
 
 ## Purpose
 
@@ -1743,7 +1743,7 @@ Release 1.2はfinal commitとtagを作成できる状態である。commit、tag
 
 ## Release 1.3 Previous View Restoration — Completed
 
-Release Status: Ready for final commit and tag
+Release Status: Completed
 
 Current Release: `1.3.0`。Release 1.2 Unit 1〜5のCompleted記録、v1.2.0 baseline、shared settings schema version 1を変更しない。
 
@@ -2634,3 +2634,394 @@ Static finalization:
 | `git diff --check` | Pass | whitespace errorなし |
 
 Release blockerはない。Mobile UI、大量LibraryでのWaypoint ON、local timezoneによるDate group差、origin-local state / cache、同名root Library identity衝突は既知制限として維持する。v1.4.0はfinal commit / tag可能である。
+
+## Release 1.5 Safe GPX Editing / Track Simplification — Completed
+
+Release Status: Ready for final commit and tag
+
+Current Release: `1.5.0`
+
+Production Implementation Status: Completed
+
+### Unit Status
+
+| Unit | Scope | Status |
+|---|---|---|
+| 1 | Planning、Architecture、Decision、data protection、algorithm / serializer / test contract | Completed |
+| 2 | Immutable editing source、working copy、session、command history、serializer round-trip | Completed |
+| 3 | Ramer–Douglas–Peucker、metrics、large Track performance、Undo / Redo core | Completed |
+| 4 | Editor panel、Before / After preview、point preview、Done / Cancel、keyboard / ARIA | Completed |
+| 5 | Original Backup + In-place Save、permission、Backup / source verification、reserved Folder、targeted refresh | Completed |
+| 6 | Chrome / Edge integration、large GPX performance、data protection、documentation、finalization | Completed |
+
+### Unit 1 Design Checklist
+
+- [x] 単一GPX、immutable source XML、memory working copy、1 active sessionを定義した
+- [x] Viewer Model、DisplayState、SelectionState、LayerManager、Geometry Cacheを編集正本にしない
+- [x] Segment単位Ramer–Douglas–Peuckerを第一候補とし、Visvalingam–Whyatt / radial / uniformを比較した
+- [x] meter tolerance、sourceからのpreview、point count、reduction、distance delta、max deviationを定義した
+- [x] retained point属性、time、elevation、extensionsとTrack / Segment / Waypoint構造の保持方針を定義した
+- [x] source DOM cloneから除外`trkpt`だけをremoveするserializer境界を定義した
+- [x] UTF-8 BOMなし、LF、XML declaration、final newlineとsemantic verificationを定義した
+- [x] initial original-byte Backup、検証後のsame-path save、Backup overwrite / delete禁止をDecision 0046で定義した
+- [x] explicit action時だけのreadwrite permission、source fingerprint、write / close / verification failureを定義した
+- [x] command history、Undo / Redo、Cancel、save済みstateとの分離を定義した
+- [x] Save成功前はLibrary / cache / Index不変、成功後だけsame pathをtargeted refreshする
+- [x] App.js / TreeView.js 1,000行未満とCoordinator / Service / Repository / View分離をgateとした
+- [x] Mobile、point / range edit、split / join、Waypoint edit、Backup overwrite / delete、autosaveをOut of Scopeとした
+
+### Planned Static Tests
+
+- source XML / parsed Track / DOM TrackPoint mapping、namespace、GPX 1.0 / 1.1
+- empty / 1 / 2 / multiple / large point Segment、multiple Track / Segment
+- tolerance invalid / boundary / repeated preview、first / last point retention
+- high latitude、antimeridian、duplicate coordinate、iterative stack
+- point count、reduction ratio、Segment内distance、distance delta、max deviation
+- retained `ele` / `time` / extensions、Waypoint / route / metadata / unknown extensions preservation
+- UTF-8 / UTF-16 / Windows-31J sourceからUTF-8 no-BOM / LF output、lossy decode save rejection
+- Apply、Undo、Redo、history limit、Cancel、source immutability
+- existing / invalid Backup、reserved Folder、permission deny、source fingerprint conflict
+- Backup / source write、close、verification failure、retry
+- Save前のTree / cache / Index不変、Save成功後のsame path 1回置換、source cache invalidation
+- Library switch / page leave dirty confirmation、saving中guard
+- production module graph、missing import、cycle、App / TreeView 1,000行未満、`git diff --check`
+
+### Browser Acceptance Plan
+
+- Chrome / Edge、readwrite permission granted / prompt / denied
+- Before / After / Both、Map pan / zoom、normal Track / selection / Waypoint / Monochrome回帰
+- point count、reduction、distance / shape差を既知fixtureと比較
+- Apply、Undo / Redo、Cancelで元表示へ完全復帰
+- 初回Backup作成、2回目以降のBackup維持、permission / failure表示、keyboard / ARIA / focus return
+- Save成功後だけ同じGPX pathのFolder / Date / Search / Track Infoが更新される
+- Backup成功前のsource GPX内容 / timestampと、`trailbook.json`、Folder色、view stateが不変
+- large point GPXでpreview UIが応答し、必要ならWorker gateを判断する
+
+### Open Risks and Human Decisions
+
+- meter distance実装をlatitude-aware local projectionとgeodesic計算のどちらで確定するか
+- tolerance range / default / presetsを実GPXで調整する必要がある
+- XMLSerializerによるformatting差を受け入れ、semantic preservationをDone Definitionとするか
+- Original Backup + In-place SaveをDecision 0046で確定した
+- source更新後のverification failureでは検証済みBackupの復旧場所を案内する
+- full Library rescanを避け、same-path targeted refreshを採用した
+- large Trackでmain-thread 200 ms超が再現した場合のWeb Worker導入判断
+
+### Definition of Done Draft
+
+- 保存前は元GPXを変更せず、単一GPXをmemory working copyで軽量化・previewできる
+- Segment境界、retained attributes、Waypoint / extensionsをsemanticに保持する
+- point / distance / shape metricsを確認してApply、Undo / Redo、Cancelできる
+- explicit Saveだけが、検証済みoriginal Backupを確保した後に同じsource pathへ編集結果を書く
+- Backup failure時はsource不変とし、source更新後のfailureではBackupを保持し、success verification後だけLibraryへ反映する
+- Chrome / Edge、data protection、large GPX performance、static / integration testsをPassする
+- App.js / TreeView.jsは1,000行未満、docs / implementation / Decisionが一致する
+
+### Unit 2 Editing Core
+
+Unit 1 Status: Completed
+
+Unit 2 Implementation Status: Completed
+
+Unit 2 Static Test Definition Status: Completed
+
+Unit 2 Static Test Execution Status: Completed
+
+Unit 2 Browser Acceptance Status: Completed through Unit 4 / 6 integration
+
+Unit 2 Status: Completed
+
+Unit 3 Status: Completed
+
+Implementation result:
+
+- source FileHandleを1回readし、元XML、relative path、filename、size / lastModified fingerprintをimmutable sourceへ保持する
+- private source DOMは外部へ公開せず、`cloneDocument()`が毎回独立cloneを返す
+- DOM / Parser mappingはTrack / Segment / TrackPointのdocument order、count、latitude / longitude完全一致を要求する
+- working stateはsource shapeと同じretained-point boolean maskで、source XML / DOM / Parser Modelをmutateしない
+- Applyでchanged maskだけをhistoryへ追加し、Undo / Redo、branch truncate、上限20、Cancel clearを実装する
+- serializerはsource DOM cloneから除外`trkpt`だけをremoveし、retained pointのattributes、time、elevation、extensionsを保持する
+- Track / Segment境界、Waypoint、route、metadata、root / Track / Segment unknown extensionsをclone上で維持する
+- U+FFFDを含むlossy decode、XML / GPX parse failure、DOM mapping mismatchをsave不可reasonとして返す
+- UTF-8 BOMなし、LF、XML declaration、final newlineへ正規化し、構造 / retained countを再検証する
+- `createWritable`、readwrite permission、GPX write、Geometry Cache / Discovery Index / Tree / App接続を追加しない
+
+Static test definition:
+
+| Check | Status | Notes |
+|---|---|---|
+| Source mapping / fingerprint / immutability | Defined | Track / Segment / points、clone isolation、single read |
+| Session / history | Defined | changed Apply、Undo / Redo、branch、limit、Cancel、inactive guard |
+| Serializer preservation | Defined | Segment、Waypoint、route、metadata / unknown extensions、retained attributes / children |
+| Output policy | Defined | UTF-8 declaration、no BOM、LF、single final newline |
+| Blocked sources | Defined | U+FFFD lossy decode、invalid pointによるDOM mapping mismatch |
+| Data protection | Pass by inspection | write API、cache / Index / Tree integrationなし |
+
+Static test page: `sample/release/editing-core-test.html`。66 assertionsをPassした。immutable source、Session、history、serializerのBrowser integrationはUnit 4〜6でCompletedである。
+
+### Unit 3 Track Simplification
+
+Unit 3 Implementation Status: Completed
+
+Unit 3 Static Test Definition Status: Completed
+
+Unit 3 Static Test Execution Status: Completed
+
+Unit 3 Browser Acceptance Status: Completed through Unit 4 / 6 integration
+
+Unit 3 Status: Completed
+
+Implementation result:
+
+- Segment-local iterative Ramer–Douglas–Peuckerを実装し、先頭 / 末尾、0〜2 point、Track / Segment境界、元point順を維持する
+- invalid coordinateは保持してvalid runを分断し、その前後をshortcutまたはdistanceで接続しない
+- latitude-aware local projectionによるpoint-to-segment距離とHaversine path distanceをmeter単位で使用し、antimeridian longitude deltaを正規化する
+- source / retained / removed point count、reduction ratio、source / simplified distance、signed / absolute distance difference、actual max deviation、invalid countをSegment / Track / 全体で集計する
+- tolerance変更はpreviewを置換するだけでhistoryへ入れず、Apply時だけ既存retained mask commandへ確定する。同一結果Applyはhistoryを増やさず、Undo / Redo / Cancelはpreviewを破棄する
+- 既定4,096 point-distance評価ごとのcooperative yield、AbortSignal、Segment progress callbackを持つ。pointごとの不要なPromise生成は行わない
+- point objectとtime / elevation / extensionsを変更せず、GPX write、preview UI、Geometry Cache、Discovery Index、Tree、Appへの接続を追加しない
+
+Static test definition:
+
+| Check | Status | Notes |
+|---|---|---|
+| 0 / 1 / 2 point、first / last、order | Defined | Segment shapeとendpoint retention |
+| Segment / Track independence | Defined | multiple Track / Segmentと全体集計 |
+| tolerance / iterative RDP | Defined | strict / relaxed corner fixture |
+| meter geometry | Defined | latitude-aware、high latitude、antimeridian |
+| metrics | Defined | point、reduction、distance、delta、max deviation |
+| invalid coordinate | Defined | retained boundary、finite metrics、Viewer非停止 |
+| preview / Apply / Undo / Redo / Cancel | Defined | preview historyなし、same Apply dedupe |
+| async work | Defined | cooperative yield、AbortSignal、progress |
+| source attributes / data protection | Pass by inspection | maskだけを生成しsource / GPX / cache / Indexを変更しない |
+
+Static test page: `sample/release/track-simplification-test.html`。58 assertionsをPassした。Unit 4 / 6のBrowser Acceptanceでpreview、Apply、Undo / Redo、Cancel、Map応答性を確認した。専用の数値long-task benchmarkは実施していない。
+
+### Unit 4 Editor UI and Preview
+
+Unit 4 Implementation Status: Completed
+
+Unit 4 Static Test Definition Status: Completed
+
+Unit 4 Static Test Execution Status: Completed
+
+Unit 4 Browser Acceptance Status: Completed
+
+Unit 4 Status: Completed
+
+Implementation result:
+
+- selected GPX 1件だけを明示`編集`操作からsource load / Sessionへ接続し、別selectionを暗黙にEditor targetへ採用しない
+- tolerance入力は150 ms debounceし、新preview開始前に前requestをAbortする。stale requestId / Sessionの結果は採用しない
+- native progressとpolite live statusでsource load、Segment progress、preview完了、invalid tolerance / failureを文字表示する
+- Beforeはneutral dashed、Afterはsolid orangeの別pane / LayerGroupで、Bothを含め文字legendから識別する。preview Polylineはnon-interactiveでnormal LayerManagerへ登録しない
+- preview modeとcandidate更新はMap fit、center / zoom、DisplayState、SelectionState、Waypoint、normal Layerを変更しない
+- tolerance変更はhistoryへ入れず、Applyだけがworking maskを確定する。Undo / Redoはworking maskをAfter Layerとmetricsへ再投影する
+- Cancelはpending timer / AbortController、preview Layer、Session preview / working mask / historyを破棄し、sidebar / Map selection interactionと通常Viewer表示を復元する
+- 編集中はsidebarを`inert`、Map Track / background selectionをdisabledとし、Map pan / zoomは維持する
+- Save As、readwrite permission、GPX / `trailbook.json` write、draft Geometry Cache / Discovery Index更新を追加しない
+
+Browser Acceptance pre-fix:
+
+- After modeで専用Before Layerはremoveされていたが、背後のnormal Viewer Trackが残るためsourceも見える不具合を確認した
+- 対象normal Track / outline presentationをediting中だけ一時removeし、Before / After / Bothを専用Layerだけで構成する。DisplayState / Layer entry / Waypointは変更せずDone / Cancelで復帰する
+- point preview Off / Before / After / Bothをline modeと独立して追加した。既定Off、Before固定半径4 px、After固定半径5.5 px、共有Canvas renderer、mode要求時だけのCircleMarker遅延生成とする
+- Applyはworking mask確定のみ、Doneは1件のsession-memory draftを保持して通常Viewerへ戻る、Cancelはdraft / historyを破棄する意味へ分離した
+- Done draftは同じLibrary / relative pathでresumeできるが、永続化せず、page reload、Library変更、別GPX Edit開始で破棄する。Unit 5 Save As前はnormal Viewer / cache / Indexへ投影しない
+- Browser AcceptanceでDone後にselection rootの`inert`とPanelのEdit対象が確実に復帰せず、Map / Sidebar Track clickとEdit操作が不能になり得る問題を確認した。unlock時に`inert` / `aria-disabled`属性を明示除去し、Map selection interaction、対象Track / outline、既存Polyline click handlerを復帰させ、draft pathをPanelへ明示して`編集を再開`を有効化する
+- 再試験でDone後もMap Track clickが不能になる問題を確認した。guard stateやPolyline listenerではなく、高z-indexの編集専用Canvas paneがLayer remove後も通常Track Canvasのpointer targetを遮ることが原因だった。全編集paneを`pointer-events: none`とし、preview描画は維持しながらMap / normal Trackへpointer eventを透過する。guard active / inactive、通常Track interactive / click listener、lock class / inert / aria / cursor / pointer style解除をstatic testで固定する
+
+Final Browser Acceptance:
+
+| Check | Result | Notes |
+|---|---|---|
+| Done後Track hover / click | Pass | normal Track interactionへ復帰 |
+| Map background click | Pass | selection clear経路正常 |
+| Map pan / zoom | Pass | editing終了後も正常 |
+| Sidebar Track selection | Pass | interaction guard解除を確認 |
+| Edit resume | Pass | session-memory draftを同一Trackで復元 |
+| Point preview size | Pass | Before 4 px、After 5.5 pxを採用 |
+| Console | Pass | アプリ由来errorなし |
+| Data protection | Pass | GPX / `trailbook.json`への書き込みなし |
+
+Static test definition:
+
+| Check | Status | Notes |
+|---|---|---|
+| explicit single-GPX start | Defined | selected path / FileHandle、single active Session |
+| async preview / progress | Defined | initial preview、Segment progress、metrics projection |
+| Abort / stale result | Defined | new tolerance abort、Cancel後result rejection |
+| Apply / Undo / Redo / Cancel | Defined | existing Session history、full cleanup / unlock |
+| Preview Layer ownership | Defined | separate panes / groups、non-interactive、clear |
+| Before / After distinction | Defined | dashed neutral / solid orange / text legend |
+| After source suppression | Defined | normal Trackを一時remove、state維持、終了時復帰 |
+| Point preview | Defined | Off / Before / After / Both、Before 4 px / After 5.5 px、lazy Canvas markers |
+| Done / Cancel semantics | Defined | memory draft / resumeとfull discardを分離 |
+| invalid coordinate | Defined | Leafletへnon-finite coordinateを渡さない |
+| selection guard | Defined | sidebar inert、Map selection event suppression |
+| accessibility | Defined | native controls、status / live、progress name、disabled state |
+| data protection | Pass by inspection | write API、cache / Index / normal Layer mutationなし |
+
+Static test page: `sample/release/editing-preview-test.html`。117 assertionsをPassした。上記の人間による最終Browser AcceptanceもCompletedである。
+
+### Unit 5 Save As — Historical Acceptance Superseded by Decision 0046
+
+Unit 5 Save As Implementation Status: Completed
+
+Unit 5 Save As Static Test Status: Completed
+
+Unit 5 Save As Browser Acceptance Status: Historical only — not acceptance for the revised save policy
+
+Unit 5 Save As Status: Superseded
+
+Unit 6 Integration / Finalization Status: Superseded; rerun after revised Unit 5 Browser Acceptance
+
+Implementation result:
+
+- 明示Save As clickだけからreadwrite permissionをquery / requestし、source Folderへ新規`.gpx`を作成する
+- default filenameは`<source-stem>-simplified.gpx`。invalid / reserved name、source自身、case-insensitive existing targetを拒否し、Overwriteと自動suffixを提供しない
+- immutable source DOM cloneへworking maskを適用する既存Serializerを使用し、UTF-8 BOMなし、LF、XML declaration、single final newlineでbyte writeする
+- close後にtargetを再読込し、encoding / XML parse、version / namespace、Waypoint / route、Track / Segment、retained point countを検証する。成功前はLibraryへ投影しない
+- verification成功後だけnew FileHandleをsource parent Folder modelへ追加し、Tree / DisplayState / Discovery Indexへnew pathを1回反映する。source cache、selection、visibility、Map center / zoomを維持する
+- permission deny / Cancel、collision、source変更、write / close / verification failureではworking Sessionとcurrent Libraryを維持する。write開始後の失敗ではtarget fileが残る可能性をstatusへ明示する
+- save成功後もactive Sessionを維持し、Doneで保存済みまたは以後変更済みのsession-memory draftとして通常Viewerへ戻れる。Cancel semanticsは変更しない
+
+Static validation:
+
+| Check | Result | Notes |
+|---|---|---|
+| Editing Core | Pass | 66 assertions |
+| Track Simplification | Pass | 58 assertions |
+| Editor Preview / lifecycle | Pass | 117 assertions |
+| Save As / verification / refresh | Pass | 53 assertions |
+| Browser Acceptance | Completed | 人間による実ブラウザ確認で全項目Pass |
+
+Browser Acceptance result:
+
+| Check | Result | Notes |
+|---|---|---|
+| Simplify / Apply / Save As | Pass | working resultを明示操作で保存 |
+| Default filename | Pass | `<source-name>-simplified.gpx` |
+| Source protection | Pass | 元GPX不変、source自身への上書きを拒否 |
+| New simplified GPX | Pass | 新規fileを作成しTrailBookで正常読込 |
+| Saved structure | Pass | retained point数が一致し、Track / Segment構造は正常 |
+| Track Info | Pass | 保存後の新規GPX情報を正常表示 |
+| Collision | Pass | 既存filenameとの衝突を拒否 |
+| Permission denial | Pass | fileを作成せずViewerとdraftを維持 |
+| Library refresh | Pass | 保存成功後だけ新規pathを追加し、Treeへ反映 |
+| Discovery integration | Pass | Date Tree / Search / Discovery Indexと整合 |
+| Existing viewer state | Pass | source cache / selection / visibility / Map viewを維持 |
+| Automatic projection | Pass | 新規GPXを自動表示・自動選択しない |
+| Save failure | Pass | draftを維持 |
+| Console | Pass | アプリ由来errorなし |
+| Data protection | Pass | `trailbook.json`へ書き込まず、元GPXも変更しない |
+
+このBrowser Acceptanceは旧Save As実装の履歴として保持する。Decision 0046のOriginal Backup + In-place Saveの受け入れには流用せず、現行Statusは後述のRevised Unit 5記録を正本とする。
+
+### Unit 6 Integration Acceptance and Release Finalization — Historical Finalization Superseded by Decision 0046
+
+Unit 6 Integration Acceptance Status: Superseded historical record
+
+Unit 6 Documentation Status: Superseded
+
+Unit 6 Static Validation Status: Superseded
+
+Unit 6 Status: Superseded historical record
+
+Release 1.5 Status: Superseded historical finalization record
+
+既存Unit 4 / 5の人間によるBrowser Acceptanceを統合し、次をRelease 1.5の受け入れ結果とする。
+
+| Integration check | Result | Evidence |
+|---|---|---|
+| Editing Core / source protection | Pass | immutable source、retained mask、Cancel、元GPX不変 |
+| RDP / metrics / history | Pass | Segment-local RDP、Apply、Undo / Redo、同一Apply dedupe |
+| Line / point preview | Pass | Before / After / Both、point Off / Before / After / Both、normal Layer分離 |
+| Done / draft / resume | Pass | Viewer interaction完全復帰、同一Trackのsession-memory draft復元 |
+| Cancel | Pass | Session、preview、history、draftを完全破棄 |
+| Save As / verification | Pass | 明示操作、新規file、collision / source拒否、close後read-back validation |
+| Targeted Library refresh | Pass | 成功後だけTree / Date / Search / Discovery / Track Infoへ1回追加 |
+| Existing Viewer state | Pass | source cache、selection、visibility、Map center / zoomを維持 |
+| Failure recovery | Pass | permission deny、collision、save failureでViewer継続とdraft維持 |
+| Duplicate protection | Pass | duplicate entry / renderなし。source cacheを維持し新規pathだけ通常pipelineへ接続 |
+| Data protection | Pass | 元GPX不変、`trailbook.json`への意図しない書き込みなし |
+| Console | Pass | Browser Acceptanceでアプリ由来errorなし |
+
+Performance acceptance:
+
+- async previewはAbortSignal、cooperative yield、progressを維持する。
+- Unit 4 Browser Acceptanceでpreview中とDone後のMap pan / zoom、Cancel応答性、Viewer interactionをPassした。
+- Unit 5のtargeted refreshでfull Library rescanを行わず、既存cache / visibility / Map viewを維持した。
+- 明確な性能回帰はBrowser Acceptanceで確認されていない。専用の数値benchmarkは実施していない。
+
+Final static validation:
+
+| Check | Result | Notes |
+|---|---|---|
+| Editing Core | Pass | 66 assertions |
+| Track Simplification | Pass | 58 assertions |
+| Editor Preview / lifecycle | Pass | 117 assertions |
+| Save As / verification / refresh | Pass | 53 assertions |
+| Production module graph | Pass | 全production module reachable、missing import / cycleなし |
+| App / TreeView size gate | Pass | 各1,000行未満 |
+| Config version | Historical | 旧finalization時点の`1.5.0`。Decision 0046採用後は`1.4.0`へ戻した |
+| Decision 0045 | Historical | save boundaryはDecision 0046によりsuperseded |
+| `git diff --check` | Pass | whitespace errorなし |
+
+Known limitations / future candidates:
+
+- point移動、point追加、point削除、区間削除
+- Track / Segment分割・結合
+- sourceまたはexisting GPXへのOverwrite
+- session-memory draftの永続化
+- Mobile editor / Mobile Viewer UX
+- 大量LibraryでWaypoint ON時の既存性能制限
+
+この旧finalization記録はDecision 0046によりsupersededされた。現行の受け入れとfinalizationは後述のRevised Unit 5記録を正本とする。
+
+### Revised Unit 5 Original Backup + In-place Save
+
+Unit 5 Revised Implementation Status: Completed
+
+Unit 5 Revised Static Test Status: Completed
+
+Unit 5 Revised Browser Acceptance Status: Completed
+
+Unit 5 Revised Status: Completed
+
+Unit 6 Status: Completed
+
+- 初回の明示`保存`は`TrailBook_Backup/<source filename>`へimmutable original bytesを書き、read-back bytes / fingerprint / GPX mappingの確認後だけsource pathを更新する
+- 既存Backupは上書き・削除せず、2回目以降はsourceだけを更新する。invalid / partial Backupはfail closedとする
+- `TrailBook_Backup`はcase-insensitive reserved Folderで、任意階層のscanから除外する。Tree / Date / Search / Discovery / Geometry Cache / GPX件数へ含めない
+- permission deny、Backup create / write / verification failureではsource不変。source write / edited verification failureではBackupを保持して復旧場所を通知する
+- 成功後はsame pathのDisplayState cacheとDiscovery summaryだけをinvalid化し、visible Trackだけ既存Queueでreloadする。visibility / selection / Map viewを維持し、duplicate entryを作らない
+- Config versionは`1.5.0`。Release 1.5 Unit 1〜6はCompletedで、final commit / tag対象である
+
+| Revised static check | Result | Notes |
+|---|---|---|
+| Editing Core | Pass | 68 assertions。immutable source bytesのcopy isolationを含む |
+| Track Simplification | Pass | 58 assertions |
+| Editor Preview / lifecycle | Pass | 117 assertions。保存成功後のsame-path rebaseを含む |
+| Original Backup / in-place save / reserved scan / refresh | Pass | 46 assertions |
+| Discovery same-path replacement | Pass | 85 assertions |
+| Production module graph | Pass | 81 / 81 reachable、missing import 0、cycle 0 |
+| App / TreeView size gate | Pass | `App.js` 954行、`TreeView.js` 997行 |
+| Browser Acceptance | Completed | Original Backup、in-place source更新、reserved scan除外、same-path refreshを人間が確認 |
+
+### Unit 6 Integration Acceptance and Release Finalization
+
+Unit 6 Integration Acceptance Status: Completed
+
+Unit 6 Documentation Status: Completed
+
+Unit 6 Static Validation Status: Completed
+
+Unit 6 Status: Completed
+
+Release 1.5 Status: Ready for final commit and tag
+
+- Unit 1〜5のBrowser Acceptanceを統合し、Editing Core、RDP preview、Apply / Undo / Redo、Done / draft resume、Cancel、Original Backup + In-place Save、verification、same-path refreshをAcceptedとする
+- permission deny、Backup failure、source write / verification failureでViewerを継続し、Backup成功前にsourceを変更しない境界を維持する
+- `TrailBook_Backup`を通常Libraryから除外し、GPX、`trailbook.json`、Library stateへ意図しない書き込みを行わない
+- point move / add / delete、interval delete、split / merge、autosave、Mobile editing、batch simplification、whole-Track movement、date correction、filename date organizationはRelease 1.5対象外である

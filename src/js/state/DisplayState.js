@@ -168,6 +168,11 @@ export default class DisplayState {
         this.evictCache();
     }
 
+    invalidateCachedResult(path) {
+
+        return this.cache.delete(path);
+    }
+
     touchCache(path) {
 
         const entry = this.cache.get(path);

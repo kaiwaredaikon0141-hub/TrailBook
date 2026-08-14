@@ -1,5 +1,6 @@
 import Folder from "../models/Folder.js";
 import Library from "../models/Library.js";
+import { isReservedLibraryFolderName } from "./LibraryReservedFolderPolicy.js";
 
 const GPX_EXTENSION = ".gpx";
 
@@ -110,6 +111,10 @@ export default class FolderScanner {
         for await (const entry of handle.values()) {
 
             if (entry.kind === "directory") {
+
+                if (isReservedLibraryFolderName(entry.name)) {
+                    continue;
+                }
 
                 folder.folders.push(
                     await this.#scanFolder(entry.name, entry)

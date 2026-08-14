@@ -1,5 +1,35 @@
 # Changelog
 
+## v1.5.0
+
+Date: 2026-08-14
+Status: Ready for final commit and tag
+
+### Added
+
+- Immutable single-GPX editing source, retained-point working mask, and command history with Undo / Redo
+- Segment-local iterative Ramer–Douglas–Peucker simplification with point, distance, reduction, and deviation metrics
+- Before / After / Both line and point previews with Apply, Done, Cancel, and session-memory draft resume
+- Explicit `保存` flow that preserves original bytes in `TrailBook_Backup/<source filename>` before updating the original GPX path
+- Read-back verification for both the original Backup and edited GPX
+
+### Changed
+
+- Successful editing keeps the original filename and relative path and refreshes only the same-path cache, Discovery entry, and visible Layer
+- `TrailBook_Backup` is a reserved Folder excluded from Library scan, Tree, Date Tree, Search, Discovery Index, Geometry Cache, and GPX counts
+
+### Data Protection
+
+- GPX writes occur only after an explicit user save action and successful original-byte Backup verification
+- Existing Backups are never automatically overwritten or deleted, and no automatic restore is performed
+- Permission denial or Backup failure leaves the source GPX unchanged; source-write or edited-verification failure preserves the Backup for recovery
+- `trailbook.json` is not modified by GPX editing
+
+### Known Limitations
+
+- Point move / add / delete, interval deletion, Track split / merge, batch simplification, whole-Track movement, date correction, and filename date organization are not implemented
+- Autosave, Mobile editing, automatic Backup restore, and automatic recovery are not implemented
+
 ## v1.4.0
 
 Date: 2026-08-08

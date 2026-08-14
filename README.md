@@ -4,10 +4,11 @@ TrailBookは、GPXを含むFolderをLibraryとして閲覧する、個人利用�
 
 ## Current Status
 
-- Current Release: `1.4.0` Library Browsing / Track Discovery
-- Release 1.4 Library Browsing / Track Discovery: Completed
+- Current Release: `1.5.0` Safe GPX Editing / Track Simplification
+- Release 1.5 Safe GPX Editing / Track Simplification: Completed
+- Next Release: Not defined
 
-Release 1.4は個人利用向けStable Viewerを維持しながら、Date Tree、Track Info、Track名 / Folder / date range Search・Filterを1つのDiscovery Indexで提供する完成Releaseです。Release 1.3のprevious view restorationとIndexedDB geometry cacheを維持し、一般公開版や配布artifactにはしていません。
+Release 1.5は個人利用向けStable Viewerへ、安全な単一GPX Track軽量化、preview、Undo / Redoを追加したCompleted Releaseです。初回保存では原本を`TrailBook_Backup`へ検証付きで保存し、その成功後だけ同じGPX pathを更新します。
 
 ## Implemented Features
 
@@ -38,14 +39,17 @@ Release 1.4は個人利用向けStable Viewerを維持しながら、Date Tree�
 - 通常Track opacity 0.55のalpha blending
 - desktop Sidebar幅とTrack list / Track Info高のresize・復元
 - GPX encoding decodeと壊れた内部Track名のfilename fallback
+- 単一GPXのRamer–Douglas–Peucker Track軽量化とBefore / After / Both preview
+- Point preview、Apply、Undo / Redo、Done、Cancelとsession-memory draft再開
+- original Backup後の明示保存、read-back verification、同一pathのtargeted refresh
 - ローカル同梱したLeaflet 1.9.4による地図表示
 
 従来のFolder名、GPXファイル名、relative path Searchはmetadataだけで動作します。Track名またはdate filterを明示した場合だけDiscovery Indexを遅延構築し、filter入力だけではGPX表示、SelectionState、DisplayState、Map center / zoomを変更しません。
 
 ## Data Principles
 
-- Release 1.4でもGPXは読み取り専用で扱います。
-- GPXを変更、移動、削除、保存しません。
+- Current Release 1.5は、利用者の明示`保存`時にoriginal bytesのBackupを検証した後だけ同じGPX pathを更新します。
+- Backup成功前、自動、backgroundではGPXを変更せず、GPXの移動・削除も行いません。
 - `trailbook.json`への書き込みはSave、Migration、明示Overwriteの利用者操作時だけ行います。
 - SQLiteやIndexedDBをFolder / GPXに代わるLibrary正本として使用しません。
 - `localStorage`はdevice-local Map mode、legacy Folder色fallback、Library別のprevious view stateに使用し、GPX XMLやgeometryを保存しません。
@@ -75,7 +79,7 @@ File System Access API、secure context、対応originが必要です。対応or
 
 ### Mobile
 
-iPhone Chromeでは、HTTPSでの起動、Google Drive上のFolder選択、Folder走査、Tree表示までは成功しました。一方、GPX checkbox、Track表示、touch UIは動作しなかったため、Release 1.4では非対応です。原因分類はAPI不足ではなくMobile UI / touch操作未対応です。
+iPhone Chromeでは、HTTPSでの起動、Google Drive上のFolder選択、Folder走査、Tree表示までは成功しました。一方、GPX checkbox、Track表示、touch UIは動作しなかったため、Release 1.5では非対応です。原因分類はAPI不足ではなくMobile UI / touch操作未対応です。
 
 Android ChromeとiPad Chromeは未確認です。将来候補`Mobile Viewer UX`でresponsive layout、touch操作、gesture分離などを検討します。
 
@@ -143,8 +147,8 @@ TrailBookはGPXファイルやGPX内容を外部serverへアップロードし�
 ## Data Protection
 
 - File System AccessはユーザーがFolder pickerを操作したときだけ開始します。
-- pickerはread-only modeを指定します。`createWritable`は明示保存時の`trailbook.json`だけに使用します。
-- GPXを変更、移動、削除、保存しません。
+- 通常のLibrary pickerはread-only modeを指定します。`createWritable`を使用するのは、明示操作による`trailbook.json`保存と、Editorの初回原本Backupおよび同一path保存だけです。
+- Editorは明示`保存`時だけreadwrite permissionを要求し、Backup成功前、自動、backgroundではGPXを書き換えません。
 - session cacheはLibrary切り替え時に破棄します。前回Library Handleと再生成可能geometry cacheだけはorigin-local IndexedDBへ保存します。
 - SQLiteやIndexedDBをLibraryの正本として使用しません。
 - `localStorage`にはdevice-local UI設定とLibrary別previous view stateを保存します。
@@ -159,7 +163,8 @@ TrailBookはGPXファイルやGPX内容を外部serverへアップロードし�
 - 大量GPX表示中にWaypointをONにすると、多数のMarker描画により操作が重くなります。大量LibraryではWaypoint OFFを推奨します。
 - Waypointは初期OFFです。
 - OpenStreetMap背景tileはオンライン依存で、offline地図保存はありません。
-- GPX編集、GPX書き込み、Undo / Redo、保存、別名保存は未実装です。
+- point移動・追加・削除、区間削除、Track分割・結合、BackupのOverwrite / deleteは未実装です。
+- 編集draftはsession memory限定で、page reload、Library変更、別GPXの編集開始では破棄されます。
 - Folder rename / moveとImport / Exportは未実装です。
 - automatic merge、polling、background sync、cloud APIはありません。
 - Google Driveの同期statusは取得しません。Drive側の更新後はmanual ReloadまたはLibrary再選択が必要な場合があります。

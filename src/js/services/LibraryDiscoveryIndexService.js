@@ -24,6 +24,7 @@ export default class LibraryDiscoveryIndexService {
         this.buildPromise = null;
         this.buildToken = 0;
         this.entryPromises = new Map();
+        this.entryVersions = new Map();
     }
 
     setLibrary({ namespace = null, fileEntries = [], generation = 0 } = {}) {
@@ -34,6 +35,9 @@ export default class LibraryDiscoveryIndexService {
         this.entries.clear();
         this.failures.clear();
         this.entryPromises.clear();
+        this.entryVersions = new Map(
+            this.fileEntries.map(entry => [entry.relativePath, 0])
+        );
         this.status = "idle";
         this.buildPromise = null;
         this.loader.setLibraryNamespace?.(namespace);
@@ -118,7 +122,8 @@ export default class LibraryDiscoveryIndexService {
         }
 
         const generation = this.generation;
-        const promise = this.#loadEntry(source, generation, isCurrent)
+        const version = this.entryVersions.get(relativePath) || 0;
+        const promise = this.#loadEntry(source, generation, isCurrent, version)
             .finally(() => {
                 if (this.entryPromises.get(relativePath) === promise) {
                     this.entryPromises.delete(relativePath);
@@ -133,6 +138,43 @@ export default class LibraryDiscoveryIndexService {
     getFailures() {
 
         return new Map(this.failures);
+    }
+
+    addFileEntry({ relativePath, path, fileHandle } = {}) {
+
+        const candidatePath = relativePath ?? path;
+
+        if (
+            typeof candidatePath !== "string" || candidatePath.length === 0 ||
+            !fileHandle ||
+            this.fileEntries.some(entry => entry.relativePath === candidatePath)
+        ) {
+            return false;
+        }
+
+        this.fileEntries.push({ relativePath: candidatePath, fileHandle });
+        this.entryVersions.set(candidatePath, 0);
+        return true;
+    }
+
+    replaceFileEntry({ relativePath, path, fileHandle } = {}) {
+
+        const candidatePath = relativePath ?? path;
+        const index = this.fileEntries.findIndex(
+            entry => entry.relativePath === candidatePath
+        );
+
+        if (index < 0 || !fileHandle) return false;
+
+        this.fileEntries[index] = { relativePath: candidatePath, fileHandle };
+        this.entryVersions.set(
+            candidatePath,
+            (this.entryVersions.get(candidatePath) || 0) + 1
+        );
+        this.entries.delete(candidatePath);
+        this.failures.delete(candidatePath);
+        this.entryPromises.delete(candidatePath);
+        return true;
     }
 
     async #build({ token, generation, onProgress, isCurrent }) {
@@ -198,7 +240,7 @@ export default class LibraryDiscoveryIndexService {
         );
     }
 
-    async #loadEntry(source, generation, isCurrent) {
+    async #loadEntry(source, generation, isCurrent, version) {
 
         let summary;
 
@@ -210,12 +252,22 @@ export default class LibraryDiscoveryIndexService {
         } catch (error) {
             summary = await this.#createFailureSummary(source);
 
-            if (this.#isLibraryCurrent(generation, isCurrent)) {
+            if (this.#isEntryCurrent(
+                source.relativePath,
+                generation,
+                version,
+                isCurrent
+            )) {
                 this.failures.set(source.relativePath, error);
             }
         }
 
-        if (!this.#isLibraryCurrent(generation, isCurrent)) {
+        if (!this.#isEntryCurrent(
+            source.relativePath,
+            generation,
+            version,
+            isCurrent
+        )) {
             return null;
         }
 
@@ -228,6 +280,12 @@ export default class LibraryDiscoveryIndexService {
 
         return generation === this.generation &&
             (typeof isCurrent !== "function" || isCurrent(generation));
+    }
+
+    #isEntryCurrent(relativePath, generation, version, isCurrent) {
+
+        return this.#isLibraryCurrent(generation, isCurrent) &&
+            this.entryVersions.get(relativePath) === version;
     }
 
     #isCurrent(token, generation, isCurrent) {

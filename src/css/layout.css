@@ -113,3 +113,20 @@ body{
 
     z-index:1000;
 }
+
+.track-editor{
+
+    position:absolute;
+
+    top:10px;
+
+    left:10px;
+
+    z-index:1001;
+
+    width:min(340px, calc(100% - 20px));
+
+    max-height:calc(100% - 20px);
+
+    overflow:auto;
+}

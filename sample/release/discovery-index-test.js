@@ -415,8 +415,45 @@ async function testLargeWarmIndexContract() {
         "806 entry index contains duplicate paths");
 }
 
+async function testTargetedEntryReplacement() {
+    const releases = [];
+    const loader = {
+        setLibraryNamespace() {},
+        loadSummary(path, fileHandle) {
+            return new Promise(resolve => releases.push(() => resolve({
+                relativePath: path,
+                displayName: fileHandle.marker,
+                resolvedDate: null
+            })));
+        }
+    };
+    const index = new LibraryDiscoveryIndexService({ loader });
+    const oldHandle = { marker: "old" };
+    const newHandle = { marker: "edited" };
+
+    index.setLibrary({
+        namespace: "replace",
+        generation: 1,
+        fileEntries: [{ path: "same.gpx", fileHandle: oldHandle }]
+    });
+    const stale = index.loadEntry("same.gpx");
+    assert(index.replaceFileEntry({
+        relativePath: "same.gpx",
+        fileHandle: newHandle
+    }), "same-path Discovery source was not replaceable");
+    const current = index.loadEntry("same.gpx");
+
+    releases.shift()();
+    assert(await stale === null, "stale pre-save summary was applied");
+    releases.shift()();
+    assert((await current).displayName === "edited",
+        "edited same-path summary was not applied");
+    assert(index.getEntries().length === 1,
+        "same-path refresh created a duplicate Discovery entry");
+}
+
 try {
-    assert(Config.version === "1.3.0", "Config version changed");
+    assert(Config.version === "1.5.0", "Config version is 1.5.0");
     assert(Config.geometryCache.cacheSchemaVersion === 3,
         "Geometry/discovery cache schema not updated");
     assert(Config.geometryCache.textDecoderSchemaVersion === 1,
@@ -425,6 +462,7 @@ try {
     await testSharedLoaderAndCache();
     await testLazyIndex();
     await testGenerationGuard();
+    await testTargetedEntryReplacement();
     await testLargeWarmIndexContract();
     output.textContent = `PASS: ${assertions} assertions`;
 } catch (error) {

@@ -30,6 +30,12 @@ export default class GPXLoader {
     async decode(file) {
 
         const bytes = new Uint8Array(await file.arrayBuffer());
+
+        return this.decodeBytes(bytes);
+    }
+
+    decodeBytes(bytes) {
+
         const detected = this.#detectEncoding(bytes);
 
         if (detected !== undefined) {

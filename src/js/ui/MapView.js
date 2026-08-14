@@ -40,6 +40,8 @@ export default class MapView {
 
         this.programmaticViewChangeDepth = 0;
 
+        this.selectionInteractionEnabled = true;
+
         this.handleZoomEnd = () => {
             this.eventBus.emit("map:zoom-ended", {
                 zoom: this.getZoom()
@@ -47,7 +49,9 @@ export default class MapView {
         };
 
         this.handleMapClick = () => {
-            this.eventBus.emit("map:background-clicked");
+            if (this.selectionInteractionEnabled) {
+                this.eventBus.emit("map:background-clicked");
+            }
         };
 
         this.handleMoveEnd = () => {
@@ -100,7 +104,9 @@ export default class MapView {
                 {
                     trackRenderer: this.trackRenderer,
                     onTrackClick: (path, event) => {
-                        this.eventBus.emit("map:track-clicked", { path });
+                        if (this.selectionInteractionEnabled) {
+                            this.eventBus.emit("map:track-clicked", { path });
+                        }
 
                         if (event?.originalEvent) {
                             L.DomEvent.stopPropagation(event.originalEvent);
@@ -315,6 +321,20 @@ export default class MapView {
     hasDisplay(path) {
 
         return this.layerManager?.hasDisplay(path) ?? false;
+    }
+
+    setSelectionInteractionEnabled(enabled) {
+
+        this.selectionInteractionEnabled = Boolean(enabled);
+        return this.selectionInteractionEnabled;
+    }
+
+    setEditingTargetSuppressed(path, suppressed) {
+
+        return this.layerManager?.setTrackPresentationVisible(
+            path,
+            !suppressed
+        ) ?? false;
     }
 
     setSelectedPath(path, selectedMainStyle, selectedOutlineStyle) {

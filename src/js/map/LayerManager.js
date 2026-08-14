@@ -12,6 +12,7 @@ export default class LayerManager {
         this.trackRenderer = options.trackRenderer || null;
         this.onTrackClick = options.onTrackClick || null;
         this.layers = new Map();
+        this.suppressedTrackPaths = new Set();
         this.selectedPath = null;
     }
 
@@ -19,7 +20,10 @@ export default class LayerManager {
 
         this.removeGPX(path);
 
-        const trackLayerGroup = L.layerGroup().addTo(this.map);
+        const trackPresentationVisible = !this.suppressedTrackPaths.has(path);
+        const trackLayerGroup = L.layerGroup();
+
+        if (trackPresentationVisible) trackLayerGroup.addTo(this.map);
         const trackBounds = [];
         const trackStyle = style || this.mapConfig.trackStyle;
         const segments = [];
@@ -68,6 +72,7 @@ export default class LayerManager {
             normalStyle: { ...trackStyle },
             selectedMainStyle: null,
             selectedOutlineStyle: null,
+            trackPresentationVisible,
             color: trackStyle.color || trackStyle.lineColor || null,
             waypointCount: result.waypoints.length
         });
@@ -166,6 +171,39 @@ export default class LayerManager {
     getDisplayedPaths() {
 
         return [...this.layers.keys()];
+    }
+
+    setTrackPresentationVisible(path, visible) {
+
+        const entry = this.layers.get(path);
+        const nextVisible = Boolean(visible);
+
+        if (nextVisible) {
+            this.suppressedTrackPaths.delete(path);
+        } else {
+            this.suppressedTrackPaths.add(path);
+        }
+
+        if (!entry || entry.trackPresentationVisible === nextVisible) {
+            return false;
+        }
+
+        entry.trackPresentationVisible = nextVisible;
+
+        if (nextVisible) {
+            entry.trackLayerGroup.addTo(this.map);
+            entry.outlineLayerGroup?.addTo(this.map);
+            if (path === this.selectedPath) {
+                entry.segments.forEach(({ mainLayer }) => {
+                    mainLayer.bringToFront();
+                });
+            }
+        } else {
+            entry.trackLayerGroup.remove();
+            entry.outlineLayerGroup?.remove();
+        }
+
+        return true;
     }
 
     updateTrackWeights(weight) {
@@ -295,7 +333,11 @@ export default class LayerManager {
             ...selectedOutlineStyle,
             interactive: false
         };
-        entry.outlineLayerGroup = L.layerGroup().addTo(this.map);
+        entry.outlineLayerGroup = L.layerGroup();
+
+        if (entry.trackPresentationVisible) {
+            entry.outlineLayerGroup.addTo(this.map);
+        }
 
         entry.segments.forEach(({ latLngs, mainLayer }) => {
             L.polyline(latLngs, {
@@ -305,7 +347,9 @@ export default class LayerManager {
                 bubblingMouseEvents: false
             }).addTo(entry.outlineLayerGroup);
             mainLayer.setStyle(entry.selectedMainStyle);
-            mainLayer.bringToFront();
+            if (entry.trackPresentationVisible) {
+                mainLayer.bringToFront();
+            }
         });
 
         this.selectedPath = path;

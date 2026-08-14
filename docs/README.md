@@ -4,13 +4,15 @@
 
 ## Current Status
 
-- Current Release: `1.4.0` Library Browsing / Track Discovery
-- Completed: Release 0.1からRelease 1.4
+- Current Release: `1.5.0` Safe GPX Editing / Track Simplification
+- Completed: Release 0.1からRelease 1.5
 - Next Release: Not defined
 
 Release 1.4 Library Browsing / Track DiscoveryはCompletedです。Release 1.3の前回Library / view restorationとgeometry cacheを維持し、1つのDiscovery IndexからDate Tree、Track Info、Track名 / Folder / date range Search・Filterを提供します。
 
 Release 1.4 Unit 1〜6の設計、実装、Browser Acceptance、performance、data protection、finalization記録はCompletedです。warm Discovery Indexは約806 GPXで中央値3秒、warm Track restoreは既存中央値3秒を維持する定性的受け入れを完了しています。
+
+Release 1.5 Safe GPX Editing / Track SimplificationはCompletedです。Unit 1〜6の設計、実装、Browser Acceptance、data protection、finalizationを完了し、初回原本Backupの検証後だけ同じGPX pathへ編集結果を保存します。
 
 ## Read Order
 
@@ -26,7 +28,7 @@ Release 1.4 Unit 1〜6の設計、実装、Browser Acceptance、performance、da
 10. [CONTRIBUTING.md](CONTRIBUTING.md) — Gitと変更手順
 11. [GLOSSARY.md](GLOSSARY.md) — 用語
 
-Release 1.0のUnit 1〜8、Release 1.1のUnit 1〜7、Release 1.2のUnit 1〜5、Release 1.3のUnit 1〜7、Release 1.4のUnit 1〜6は[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)に記録しています。
+Release 1.0のUnit 1〜8、Release 1.1のUnit 1〜7、Release 1.2のUnit 1〜5、Release 1.3のUnit 1〜7、Release 1.4のUnit 1〜6、Release 1.5のUnit 1〜6は[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)に記録しています。
 
 Release 1.1 Unit roles:
 
@@ -65,7 +67,16 @@ Release 1.4 Unit roles:
 5. Track名 / Folder / date range Search・Filter
 6. Chrome / Edge統合、performance、data protection、documentation、finalization
 
-## Implemented Through Release 1.4
+Release 1.5 Unit roles:
+
+1. Planning、Architecture、Decision、data protection、algorithm / serializer / test contract
+2. Immutable editing source、working copy、session、command history、serializer
+3. Segment-local Ramer–Douglas–Peucker、metrics、Undo / Redo core
+4. Editor UI、line / point preview、Apply、Done / draft、Cancel
+5. Original Backup + In-place Save、verification、reserved Folder、targeted refresh
+6. Integration acceptance、documentation、Release finalization
+
+## Implemented Through Release 1.5
 
 - Folder Libraryと再帰走査
 - GPX Parser
@@ -96,14 +107,18 @@ Release 1.4 Unit roles:
 - Track名 / Folder path / inclusive date range Search・Filter
 - Track Alpha Blendingとdesktop Sidebar / Track Info resize
 - GPX encoding decodeとbroken Track nameのfilename fallback
+- immutable sourceとmemory working copyによる単一GPX editing session
+- Segment単位Ramer–Douglas–Peucker、metrics、line / point preview
+- Apply、Undo / Redo、Done / draft再開、Cancel
+- 作業中のOriginal Backup + In-place Save、source protection、read-back verification、targeted Library refresh
 
 実装済み範囲の詳細は[CHANGELOG.md](../CHANGELOG.md)、Release順序は[ROADMAP.md](ROADMAP.md)を正本とします。
 
 ## Current Release and Future Features
 
-Release 1.4 Library Browsing / Track DiscoveryはCompletedです。Discovery IndexとGeometry Cacheは削除・再生成可能なderived dataであり、Folder構造、GPX、`trailbook.json`の正本性を変更しません。
+Release 1.5 Safe GPX Editing / Track SimplificationはCompletedです。初回保存前のoriginal bytesをreserved `TrailBook_Backup`へ保存・検証し、その後だけoriginal filename / relative pathへ編集結果を保存します。Backupの自動上書き・削除・automatic restoreは行いません。
 
-Search / Tree navigation復元、Stable Library Identity / Aliasに加え、Statistics、Replay、HeatMap、vehicle metadata、GPX編集、GPX size reduction、Cloud Sync、Mobile Viewer UX、Waypoint性能最適化、数値性能再測定、Plugin、AI Searchなどは未実装の将来候補です。
+Search / Tree navigation復元、Stable Library Identity / Alias、point移動・追加・削除、区間削除、Track分割・結合、Backup overwrite / deleteに加え、Statistics、Replay、HeatMap、vehicle metadata、Cloud Sync、Mobile Viewer UX、Waypoint性能最適化、数値性能再測定、Plugin、AI Searchなどは未実装の将来候補です。
 
 ## Source of Truth
 

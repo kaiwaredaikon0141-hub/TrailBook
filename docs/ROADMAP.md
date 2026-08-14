@@ -1,8 +1,8 @@
 # ROADMAP.md
 
-Version: 1.3 Completed
+Version: 1.5 Completed
 Status: Official
-Current Release: 1.4.0 Library Browsing / Track Discovery
+Current Release: 1.5.0 Safe GPX Editing / Track Simplification
 Next Release: Not defined
 
 ## Version Policy
@@ -542,6 +542,117 @@ Unit 5は既存Search欄へTrack / Folder path textとFrom / Toを追加し、�
 - vehicle metadata、tag / bookmark、Import / Export、cloud API、automatic sync
 - Mobile layout / touch対応
 
+## Current Release — Release 1.5 Safe GPX Editing / Track Simplification
+
+Status: Completed
+
+Goal: 単一GPXのTrackPoint集合をmemory上のworking copyで安全に軽量化し、元GPXとbefore / afterを比較してから、利用者の明示操作でoriginal backupを確保して同じGPX pathへ保存できる最小Editor基盤を作る。通常Viewer、Folder / Date / Search、shared settings、previous view restorationを維持し、Backup成功前または利用者操作なしに元GPXを変更しない。
+
+### Scope
+
+- selected GPX 1件だけを対象とする明示的なEdit session
+- immutable source snapshotとmemory working copy
+- TrackSegmentごとに独立して適用するRamer–Douglas–Peucker Track simplification
+- meter単位tolerance、元 / 軽量化後point数、削減率、距離差、最大形状差のpreview
+- Map上のBefore / After / Both表示切替。通常Layerと編集preview Layerを分離する
+- working copyへ適用したsimplification commandのUndo / Redoと、session全体を破棄するCancel
+- 初回保存前のoriginal bytesをreserved `TrailBook_Backup`へ検証付きで保存した後、元のrelative pathへ編集結果を明示保存
+- UTF-8、BOMなし、LF、XML declaration、final newlineのdeterministic output
+- 保存成功・verification完了後だけのLibrary refresh、Discovery Index generation更新、derived cache連携
+
+### Editing and Data Protection Boundary
+
+- EditorはViewerのparsed Model、DisplayState、SelectionState、Geometry Cacheを直接変更しない。
+- Edit開始時にsource GPX bytesを読み、decoded XML DocumentとTrackPoint element対応をimmutable sourceとしてsession memoryだけへ保持する。
+- working copyはSegmentごとのretained point index / maskとmetricsを保持し、元XML DOMを直接変更しない。
+- retained TrackPointは緯度・経度だけでなくtime、elevation、extensions、unknown child elementを元elementのまま保持する。除外pointに属する属性は補間・移送しない。
+- Track、TrackSegmentの個数・順序と境界、Waypoint、route、metadata、namespaces、root / Track / Segment extensionsを維持する。
+- lossy decode、well-formedでないXML、source TrackPointとDOM elementの対応不一致では編集保存を禁止し、Viewerは継続する。
+- working copy、preview、historyはlocalStorage、IndexedDB、`trailbook.json`へ保存しない。Geometry Cacheは編集正本にしない。
+- Cancelはpreview、working copy、history、dirty stateを破棄し、元Layer、selection、visibility、Map stateへ戻す。
+
+### Simplification Algorithm
+
+第一候補はRamer–Douglas–Peuckerとする。各TrackSegmentへ独立適用し、先頭 / 末尾pointを必ず保持し、0〜2 point Segmentは変更しない。latitudeを考慮したmeter単位のpoint-to-segment距離を使い、再帰ではなくiterative stackで大規模Segmentのstack overflowを避ける。
+
+- Douglas–Peucker: toleranceを最大横方向偏差として説明しやすく、元pointを選択保持できるため採用候補
+- Visvalingam–Whyatt: 視覚的な面積基準には強いが、meter toleranceと最大形状差の説明が難しいためv1.5では不採用候補
+- radial distance / uniform sampling: 高速だがcorner、停止点、細部を予測しにくく、品質確認なしの主algorithmにはしない
+
+toleranceは正の有限meter値とし、UIはnumeric inputと5 / 10 / 25 / 50 mのpresetを候補とする。preview計算はimmutable sourceから毎回行い、input変更だけではworking copyやhistoryを変更しない。Apply時だけcommandとしてworking copyへ確定する。
+
+### Attribute and Serialization Policy
+
+serializerは元XML Documentをcloneし、working copyで除外された`trkpt` elementだけをremoveする。GPX 1.0 / 1.1 version、namespace prefix、metadata、Track / Segment構造、Waypoint、route、未知extensionsを再構築せずsemanticに保持する。retained pointの`ele`、`time`、extensionsを補間・変更しないため、軽量化後のtime / elevation samplingは保持pointだけになる。
+
+outputはXML declarationをUTF-8へ統一し、UTF-8 BOMなし、LF、末尾newlineとする。sourceのindent、quote、attribute順、改行をbyte単位では保持しないことをpreview / confirmationへ明記する。保存前にserializer出力を再parseし、Segment数、retained point数、Waypoint数、namespace / versionを検証する。
+
+### Original Backup and In-place Save Policy
+
+- `保存` buttonのpointer / keyboardによる明示操作時だけ、source parent DirectoryHandleへ`requestPermission({ mode: "readwrite" })`を要求する。
+- 初回保存はsource Folder直下のreserved `TrailBook_Backup` Folderへ現在のsource GPX bytesを同名で保存し、read-back bytesとsource fingerprintが一致した後だけ元source pathへ編集結果を保存する。
+- Backupにはserializer outputではなく編集開始時のoriginal bytesを保存する。既存Backupを上書き・削除せず、2回目以降は検証済みBackupを維持してsourceだけを更新する。
+- original filename / relative pathを維持し、`*-simplified.gpx` sibling、自動suffix、別名保存を作成しない。旧方式で利用者が既に作成したfileは通常GPXとして扱う。
+- source fingerprint（size / lastModified）がEdit開始後に変わっていればSaveを停止し、ReloadまたはCancelを求める。
+- Backup verification後にsourceへserializer outputを書き、`close()`後に再読込・parse・point count / fingerprint verificationを行う。
+- permission deny、picker / write / close / verification failureではViewer、元GPX、source cache、Library metadataを変更せず、working copyをdirtyのまま再試行可能にする。
+- verification成功後だけ同じsource pathのsession cache / Discovery summaryをinvalidateしてtargeted refreshする。visibility / selection / Map viewを可能な限り維持し、duplicate entryを作らない。
+
+### Undo / Cancel Policy
+
+snapshot全XMLを積む方式はmemory負荷が大きく、parameterだけの再計算方式は将来のpoint editへ拡張しにくい。v1.5はcommand historyを採用候補とし、各commandがbefore / afterのcompact retained-point maskとmetricsを持つ。historyはsession memory限定、上限20 commandを初期候補とする。
+
+- Undo / Redo対象はworking copyへApplyしたsimplificationだけとする。
+- tolerance入力中の未Apply preview、Map表示切替、保存先名はhistoryへ入れない。
+- Backup作成とsource保存はUndo対象外とし、Backupを自動削除・上書きしない。
+- Cancelは未保存commandを全破棄する。dirty時のCancel、Library switch、別TrackのEdit開始、page離脱には明示確認を出す。
+- 保存済み状態とworking copy / history cursorを分離し、保存後の追加編集は新しいdirty revisionとして扱う。
+
+### Cache and Index Integration
+
+Edit previewは専用memory Layerを使い、通常LayerManager entryとGeometry Cache recordを変更しない。保存成功前はDiscovery Index、Folder / Date Tree、Searchへworking copyを投影しない。成功後は同じsource pathのsession cacheをinvalidateし、File.size / lastModifiedによりGeometry Cacheを再生成し、同じpathのDiscovery summary、Date Tree、Search、Track Infoをtargeted refreshする。
+
+### Units
+
+1. Planning、Architecture、Decision、data protection、algorithm / serializer / test contract（Completed）
+2. Immutable editing source、working-copy model、session、command history、serializer round-trip foundation（Completed）
+3. Ramer–Douglas–Peucker service、metrics、large Track performance、Undo / Redo core（Completed）
+4. Editor panel、Before / After preview、point preview、Done / Cancel、keyboard / ARIA（Completed）
+5. Original Backup + In-place Save、permission、backup / source verification、reserved Folder除外、targeted refresh（Completed）
+6. Chrome / Edge integration、large GPX performance、data protection、documentation、Release finalization（Completed）
+
+Unit 2は`GPXEditingSourceLoader`、`GPXEditingSession`、`EditingCommandHistory`、`GPXEditingSerializer`を追加した。source XML / fingerprintとprivate DOM clone factoryをimmutable sourceへ保持し、Track / Segment / TrackPointをdocument order、count、coordinateでParser Modelと照合する。working stateはSegmentごとのboolean retained-point mask、historyはApply済みbefore / after maskだけを上限20件で保持する。serializerはsource DOM cloneから除外pointだけをremoveし、version、namespace、Segment、Waypoint、route、retained attributes / childrenを検証する。GPX write、Geometry Cache / Discovery Index / Tree / App接続、RDP、preview、Save Asはまだ行わない。
+
+Unit 3は`TrackSimplificationService`と`TrackSimplificationMetrics`を追加し、Segmentごとのiterative Ramer–Douglas–Peucker、latitude-awareなmeter距離、point / distance / 最大形状差metricsをpure serviceへ分離した。invalid coordinateは削除せずvalid runの境界として保持し、Segmentを跨ぐshortcutを作らない。previewはimmutable sourceから生成し、tolerance変更ではSession / historyを変更しない。Apply時だけretained maskを既存上限20のhistoryへ記録し、同一結果のApplyはcommandを追加しない。計算はpoint評価数ごとにcooperative yieldできるasync APIとし、Unit 4のUIへ接続した。Browser AcceptanceではUI応答性、Map pan / zoom、Cancelを確認し、専用の数値long-task benchmarkは実施していない。
+
+Unit 4は`TrackEditingCoordinator`、`TrackEditingPanel`、`EditingPreviewLayerManager`を追加し、selected GPX 1件を明示Edit操作からimmutable source / Sessionへ接続する。tolerance入力は150 ms debounceでasync previewを開始し、新requestは前requestをAbortする。編集中は対象のnormal Track presentationだけを一時抑止し、Beforeはneutral dashed、Afterはsolid orangeの専用non-interactive LayerGroupとして表示するため、Before / After / Bothの意味を混在させない。Point previewはOff / Before / After / Bothをline modeから独立させ、既定Off、共有Canvas renderer、要求時だけの遅延生成とする。Applyだけがworking mask / historyを更新し、Undo / Redoを維持する。Doneはpreviewを終了して通常Viewerを復元し、working mask / historyを1件のsession-memory draftとして保持する。同じLibrary / pathの再編集ではresumeできるが、page reload、Library変更、別GPXのEdit開始で破棄され、GPX、cache、Indexへ保存しない。Cancelはdraftを保持せずSessionを完全破棄する。編集中はFolder / Date / SearchとMap Track selectionだけを抑止し、Map pan / zoomは維持する。Save As、GPX write、draftのcache / Index更新はUnit 4へ含めずUnit 5へ引き継いだ。Implementation、Static Test、Browser AcceptanceはCompletedである。
+
+Unit 5の保存境界はOriginal Backup + In-place Edited GPXへ変更した。明示`保存`時だけpermissionを要求し、初回はoriginal bytesをreserved `TrailBook_Backup`へ同名保存・read-back verificationした後だけsource pathを更新する。Backup済みの2回目以降はBackupを変更せずsourceだけを更新する。scannerはreserved Folderを任意階層で除外するためTree、Date、Search、Discovery、Geometry Cache、GPX件数へ混入しない。同一pathのsession cacheとDiscovery entryだけをinvalidate / refreshし、visibility、selection、Map viewを維持する。Implementation、Static Test、Browser AcceptanceはCompletedである。
+
+Unit 6は既存Browser Acceptanceの統合、data protection、documentation、static validation、version 1.5.0のrelease finalizationを完了した。
+
+### Out of Scope
+
+- Backup verificationなしの元GPX更新、BackupのOverwrite / delete
+- automatic save、background save、autosave recovery、editing session persistence
+- manual TrackPoint移動 / 追加 / 削除、区間削除、Track / Segment分割・結合
+- Waypoint / route / metadata / extensions編集
+- 複数GPX同時編集、batch simplification
+- Mobile editor、cloud API、automatic sync / merge
+- `trailbook.json` schema変更または編集metadata保存
+
+### Performance and Acceptance Gates
+
+- 1 / 複数Track、0 / 1 / 2 / large point Segment、複数Segment、Waypoint / extensions fixture
+- tolerance 0 / invalid / small / large、high latitude、antimeridian近傍、duplicate coordinate
+- original / simplified count、reduction ratio、distance delta、actual max deviationの一致
+- repeated preview、Apply、Undo / Redo、Cancelでsource DOM / normal Layer不変
+- unknown extensions、time、elevation、namespace、GPX versionのround-trip semantic維持
+- permission deny、collision、source external change、write / close / verification failure
+- Save成功前はTree / Index / cache不変、成功後だけ新規pathを1回追加しduplicate parse / renderなし
+- representative largest GPXでpreview中のUI応答性を測定する。200 ms超のmain-thread long taskが再現する場合はasync APIを維持したままWeb Workerを検討する
+- App.js / TreeView.js 1,000行未満、production module graph、cycle、`git diff --check`
+
 ## Future Design Boundaries
 
 以下は過去Releaseから保全している将来設計境界である。Release 1.4で実装済みとなった項目は、上記Release 1.4節を優先する。
@@ -603,20 +714,20 @@ Release 0.9では、車両情報の読み込み、保存、編集、色変更を
 
 ## Future Candidates
 
-Release 1.2 Shared Library SettingsとRelease 1.3 Previous View RestorationはCompletedである。以下はRelease 1.3より後の候補であり、設計承認時にRelease番号を決定する。
+Release 1.2 Shared Library Settings、Release 1.3 Previous View Restoration、Release 1.4 Library Browsing / Track Discovery、Release 1.5 Safe GPX Editing / Track SimplificationはCompletedである。以下はRelease 1.5のOut of Scopeまたは後続候補である。
 
 - GPX Metadata Index
 - Date-based Display（Release 1.4でCompleted）
 - Vehicle Metadata / Track Style
-- GPX Editing Foundation
+- GPX Editing Foundation（Release 1.5でCompleted）
 - TrackPoint Editing
 - Mobile Viewer UX
 - Waypoint Performance Optimization
 - Unit 2-equivalent Performance Remeasurement
 - Stable Library Identity / Alias
-- Sidebar Width Restoration
+- Sidebar Width Restoration（Release 1.4でCompleted）
 - Search / Tree Navigation Restoration
-- GPX Size Reduction
+- GPX Size Reduction（Release 1.5でCompleted）
 - Replay
 - HeatMap
 - Bookmark
