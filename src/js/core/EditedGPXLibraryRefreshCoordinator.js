@@ -1,5 +1,5 @@
 /**
- * Invalidates and refreshes one verified in-place GPX without rescanning.
+ * Invalidates and refreshes one verified edited GPX without rescanning.
  */
 export default class EditedGPXLibraryRefreshCoordinator {
 
@@ -8,8 +8,10 @@ export default class EditedGPXLibraryRefreshCoordinator {
         displayState,
         selectionState,
         discoveryCoordinator,
+        eventBus = null,
         getLibrary,
         getColor,
+        invalidateGeometry = async () => false,
         reloadVisiblePath = async () => true,
         onLibraryUpdated = () => {}
     }) {
@@ -18,13 +20,15 @@ export default class EditedGPXLibraryRefreshCoordinator {
         this.displayState = displayState;
         this.selectionState = selectionState;
         this.discoveryCoordinator = discoveryCoordinator;
+        this.eventBus = eventBus;
         this.getLibrary = getLibrary;
         this.getColor = getColor;
+        this.invalidateGeometry = invalidateGeometry;
         this.reloadVisiblePath = reloadVisiblePath;
         this.onLibraryUpdated = onLibraryUpdated;
     }
 
-    async refreshVerifiedFile({ sourcePath, fileHandle }) {
+    async refreshVerifiedFile({ sourcePath, targetPath = sourcePath, fileHandle }) {
 
         const library = this.getLibrary();
         const metadata = this.treeView.nodeMetadata.get(sourcePath);
@@ -33,33 +37,71 @@ export default class EditedGPXLibraryRefreshCoordinator {
         if (
             !library || !fileHandle || metadata?.kind !== "file" ||
             !this.treeView.hasFile(sourcePath)
-        ) {
-            return false;
-        }
+        ) return false;
 
         const wasChecked = Boolean(display?.checked);
         const wasSelected = this.selectionState.isSelected(sourcePath);
+        const previousRequestId = display?.requestId || 0;
+        const renamed = targetPath !== sourcePath;
 
-        this.displayState.invalidateCachedResult(sourcePath);
-        this.displayState.registerFile(
-            sourcePath,
-            fileHandle,
-            this.getColor(sourcePath)
-        );
-        this.displayState.setIdle(sourcePath);
+        await this.invalidateGeometry(sourcePath);
 
-        const discoveryRefreshed = await this.discoveryCoordinator
-            .refreshFileEntry({ path: sourcePath, fileHandle });
+        if (renamed) {
+            if (!this.#replaceLibraryFile(metadata, fileHandle)) return false;
+            if (!this.displayState.replaceFilePath(
+                sourcePath,
+                targetPath,
+                fileHandle,
+                this.getColor(targetPath)
+            )) return false;
 
-        if (!discoveryRefreshed) {
-            throw new Error("The edited GPX could not refresh Discovery data");
+            const discoveryRefreshed = await this.discoveryCoordinator
+                .renameFileEntry({ sourcePath, targetPath, fileHandle });
+
+            if (!discoveryRefreshed) {
+                throw new Error("The renamed GPX could not refresh Discovery data");
+            }
+
+            await this.treeView.render(library);
+        } else {
+            this.displayState.invalidateCachedResult(sourcePath);
+            this.displayState.registerFile(
+                sourcePath,
+                fileHandle,
+                this.getColor(sourcePath)
+            );
+            this.displayState.setIdle(sourcePath);
+
+            const discoveryRefreshed = await this.discoveryCoordinator
+                .refreshFileEntry({ path: sourcePath, fileHandle });
+
+            if (!discoveryRefreshed) {
+                throw new Error("The edited GPX could not refresh Discovery data");
+            }
+        }
+
+        if (wasSelected && renamed) {
+            const change = this.selectionState.select(targetPath, "system");
+
+            if (change) {
+                this.eventBus?.emit("selection:changed", {
+                    path: targetPath,
+                    previousPath: sourcePath,
+                    source: "system",
+                    reason: "edited-file-renamed",
+                    refocus: false
+                });
+            }
         }
 
         const displayRefreshed = await this.reloadVisiblePath({
-            path: sourcePath,
+            sourcePath,
+            path: targetPath,
             fileHandle,
             wasChecked,
-            wasSelected
+            wasSelected,
+            previousRequestId,
+            renamed
         });
 
         if (!displayRefreshed) {
@@ -70,11 +112,26 @@ export default class EditedGPXLibraryRefreshCoordinator {
         this.onLibraryUpdated(library);
 
         return Object.freeze({
-            path: sourcePath,
+            path: targetPath,
+            previousPath: sourcePath,
             fileHandle,
             checked: wasChecked,
-            selected: wasSelected
+            selected: wasSelected,
+            renamed
         });
+    }
+
+    #replaceLibraryFile(metadata, fileHandle) {
+
+        const folder = this.treeView.nodeMetadata.get(metadata.parentPath)?.model;
+        const index = folder?.gpxFiles?.findIndex(
+            candidate => candidate === metadata.model || candidate.name === metadata.name
+        );
+
+        if (index < 0) return false;
+
+        folder.gpxFiles[index] = fileHandle;
+        return true;
     }
 
     #restoreTreePresentation() {

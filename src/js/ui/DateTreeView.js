@@ -14,6 +14,7 @@ export default class DateTreeView {
         this.fileHandles = new Map();
         this.getDisplay = () => null;
         this.selectedPath = null;
+        this.revealSelected = false;
         this.expandedIds = new Set();
         this.renderedTrackRows = new Map();
         this.renderedGroupRows = new Map();
@@ -78,6 +79,7 @@ export default class DateTreeView {
         this.cancelButton.hidden = true;
         this.root.replaceChildren(...groups.map(group => this.#createGroup(group)));
         this.root.hidden = groups.length === 0;
+        if (this.revealSelected) this.#revealSelectedPath();
         this.#setInitialTabStop();
     }
 
@@ -89,17 +91,33 @@ export default class DateTreeView {
         this.renderedGroupRows.clear();
         this.visibilityIndex.clear();
         this.expandedIds.clear();
+        this.revealSelected = false;
         this.status.textContent = "";
         this.cancelButton.hidden = true;
         this.root.replaceChildren();
         this.root.hidden = true;
     }
 
-    setSelectedPath(path) {
+    setSelectedPath(path, { reveal = false } = {}) {
 
         this.selectedPath = path;
+        this.revealSelected = Boolean(path) && Boolean(reveal);
+        if (this.revealSelected) this.#revealSelectedPath();
+        this.#applySelection();
+    }
+
+    revealSelectedPath() {
+
+        if (!this.selectedPath) return false;
+
+        this.revealSelected = true;
+        return this.#revealSelectedPath();
+    }
+
+    #applySelection() {
+
         this.renderedTrackRows.forEach((row, candidate) => {
-            const selected = candidate === path;
+            const selected = candidate === this.selectedPath;
             row.classList.toggle("is-selected", selected);
 
             if (selected) {
@@ -469,6 +487,41 @@ export default class DateTreeView {
                 group.children.filter(candidate => !candidate.relativePath)
             );
             if (child) return child;
+        }
+
+        return null;
+    }
+
+    #revealSelectedPath() {
+
+        const chain = this.#findGroupChain(this.selectedPath);
+
+        if (!chain) return false;
+
+        chain.forEach(group => {
+            const row = this.renderedGroupRows.get(group.id);
+
+            if (row?.getAttribute("aria-expanded") !== "true") {
+                this.#expandGroup(row, group);
+            }
+        });
+        this.#applySelection();
+        return this.renderedTrackRows.has(this.selectedPath);
+    }
+
+    #findGroupChain(path, groups = this.groups) {
+
+        for (const group of groups) {
+            if (group.children.some(child => child.relativePath === path)) {
+                return [group];
+            }
+
+            const nested = this.#findGroupChain(
+                path,
+                group.children.filter(child => !child.relativePath)
+            );
+
+            if (nested) return [group, ...nested];
         }
 
         return null;

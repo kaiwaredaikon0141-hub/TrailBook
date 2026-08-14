@@ -1,5 +1,36 @@
 # Changelog
 
+## v1.6.0
+
+Date: 2026-08-15
+Status: Ready for final commit and tag
+
+### Added
+
+- Track Point date correction with one UTC offset, Undo / Redo, and draft support
+- Date-based filename rename with collision suffixes, Backup association index, and single-Track name synchronization
+- Whole-Track translation that changes only Track Point latitude / longitude
+- OpenStreetMap / GSI standard base-map selection stored as a device-local preference
+- Analyzed, explicit batch simplification for a selected Folder subtree or the whole Library
+
+### Changed
+
+- Date Tree now uses year / month / Track without day nodes while preserving resolved-date ordering and Unknown Date behavior
+- Map Track selection expands the required Date Tree year / month and synchronizes the Track node
+- Batch simplification skips zero-reduction GPX files without writing, Backup creation, timestamp changes, or refresh
+
+### Data Protection
+
+- Release 1.5 Original Backup + In-place Edited GPX remains the save boundary
+- Date, filename, Track-name, and translation changes are written only by an explicit save action
+- Original Backup files are never renamed, overwritten, or deleted
+- Batch writes are sequential, continue after file-level failures, and cancel only at a safe file boundary
+
+### Known Limitations
+
+- Point move / add / delete, interval deletion, Track split / merge, autosave, and Mobile editing are not implemented
+- GPS current-position tracking, wake lock, Google Maps, white-map scanning, and historical trace are not implemented
+
 ## v1.5.0
 
 Date: 2026-08-14

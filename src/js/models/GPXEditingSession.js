@@ -1,4 +1,7 @@
 import EditingCommandHistory from "../state/EditingCommandHistory.js";
+import TrackTranslationService, {
+    ZERO_TRACK_TRANSLATION
+} from "../services/TrackTranslationService.js";
 
 /**
  * Owns one GPX editing working copy without mutating its source.
@@ -9,8 +12,18 @@ export default class GPXEditingSession {
     #history;
     #preview = null;
     #isActive = true;
+    #timeOffsetMs = 0;
+    #desiredFileName;
+    #sourceFileName;
+    #translation = ZERO_TRACK_TRANSLATION;
+    #translationPreview = null;
+    #translationService;
 
-    constructor(source, { history = new EditingCommandHistory() } = {}) {
+    constructor(source, {
+        history = new EditingCommandHistory(),
+        desiredFileName = source?.sourceFileName,
+        translationService = new TrackTranslationService()
+    } = {}) {
 
         if (!source?.tracks) {
             throw new TypeError("A mapped GPX editing source is required");
@@ -18,7 +31,15 @@ export default class GPXEditingSession {
 
         this.source = source;
         this.#history = history;
+        this.#translationService = translationService;
         this.#retainedPointMasks = this.#createSourceMasks();
+        this.#sourceFileName = typeof source.sourceFileName === "string"
+            ? source.sourceFileName
+            : "source.gpx";
+        const initialFileName = desiredFileName || this.#sourceFileName;
+
+        this.#validateFileName(initialFileName);
+        this.#desiredFileName = initialFileName;
     }
 
     get isActive() {
@@ -28,7 +49,10 @@ export default class GPXEditingSession {
 
     get isDirty() {
 
-        return !this.#masksEqual(
+        return this.#timeOffsetMs !== 0 ||
+            this.#desiredFileName !== this.#sourceFileName ||
+            !this.#translationService.isZero(this.#translation) ||
+            !this.#masksEqual(
             this.#retainedPointMasks,
             this.#createSourceMasks()
         );
@@ -51,12 +75,35 @@ export default class GPXEditingSession {
 
     get hasPreview() {
 
-        return this.#isActive && this.#preview !== null;
+        return this.#isActive &&
+            (this.#preview !== null || this.#translationPreview !== null);
     }
 
     getRetainedPointMasks() {
 
         return this.#cloneMasks(this.#retainedPointMasks);
+    }
+
+    getTimeOffsetMs() {
+
+        return this.#timeOffsetMs;
+    }
+
+    getDesiredFileName() {
+
+        return this.#desiredFileName;
+    }
+
+    getTranslation() {
+
+        return this.#translationService.normalize(this.#translation);
+    }
+
+    getTranslationPreview() {
+
+        return this.#translationPreview
+            ? this.#translationService.normalize(this.#translationPreview)
+            : null;
     }
 
     getPreview() {
@@ -84,21 +131,68 @@ export default class GPXEditingSession {
     clearPreview() {
 
         this.#preview = null;
+        this.#translationPreview = null;
+    }
+
+    clearSimplificationPreview() {
+
+        this.#preview = null;
+    }
+
+    setTranslationPreview(value) {
+
+        this.#assertActive();
+        const translation = this.#translationService.normalize(value);
+
+        this.#translationPreview = this.#translationService.isZero({
+            latitudeDelta: translation.latitudeDelta - this.#translation.latitudeDelta,
+            longitudeDelta: translation.longitudeDelta - this.#translation.longitudeDelta
+        }) ? null : translation;
+
+        return this.#translationPreview !== null;
     }
 
     applyPreview() {
 
         this.#assertActive();
 
-        if (!this.#preview) return false;
+        if (!this.#preview && !this.#translationPreview) return false;
 
-        const changed = this.applyRetainedPointMasks(
-            this.#preview.retainedPointMasks,
-            "simplify"
+        const nextMasks = this.#preview?.retainedPointMasks ||
+            this.#retainedPointMasks;
+        const nextTranslation = this.#translationPreview || this.#translation;
+        const masksChanged = !this.#masksEqual(
+            this.#retainedPointMasks,
+            nextMasks
         );
-        this.#preview = null;
+        const translationChanged = !this.#translationEqual(
+            this.#translation,
+            nextTranslation
+        );
 
-        return changed;
+        if (!masksChanged && !translationChanged) {
+            this.clearPreview();
+            return false;
+        }
+
+        this.#history.record({
+            type: masksChanged && translationChanged
+                ? "simplify-translate"
+                : masksChanged ? "simplify" : "translate",
+            before: this.#snapshot(),
+            after: this.#snapshot(
+                nextMasks,
+                this.#timeOffsetMs,
+                this.#desiredFileName,
+                nextTranslation
+            )
+        });
+        this.#retainedPointMasks = this.#cloneMasks(nextMasks);
+        this.#translation = this.#translationService.normalize(nextTranslation);
+        this.#preview = null;
+        this.#translationPreview = null;
+
+        return true;
     }
 
     applyRetainedPointMasks(masks, type = "edit") {
@@ -114,11 +208,62 @@ export default class GPXEditingSession {
 
         this.#history.record({
             type,
-            before: this.#retainedPointMasks,
-            after: next
+            before: this.#snapshot(),
+            after: this.#snapshot(next, this.#timeOffsetMs)
         });
         this.#retainedPointMasks = next;
 
+        return true;
+    }
+
+    applyDateOffset(offsetMs, desiredFileName = this.#desiredFileName) {
+
+        this.#assertActive();
+
+        if (!Number.isFinite(offsetMs)) {
+            throw new TypeError("Track time offset must be finite");
+        }
+
+        this.#validateFileName(desiredFileName);
+
+        if (
+            offsetMs === this.#timeOffsetMs &&
+            desiredFileName === this.#desiredFileName
+        ) return false;
+
+        this.#history.record({
+            type: "date-correction",
+            before: this.#snapshot(),
+            after: this.#snapshot(
+                this.#retainedPointMasks,
+                offsetMs,
+                desiredFileName
+            )
+        });
+        this.#timeOffsetMs = offsetMs;
+        this.#desiredFileName = desiredFileName;
+        this.#preview = null;
+        return true;
+    }
+
+    applyDesiredFileName(fileName) {
+
+        this.#assertActive();
+        this.#validateFileName(fileName);
+
+        if (fileName === this.#desiredFileName) return false;
+
+        this.#history.record({
+            type: "filename",
+            before: this.#snapshot(),
+            after: this.#snapshot(
+                this.#retainedPointMasks,
+                this.#timeOffsetMs,
+                fileName
+            )
+        });
+        this.#desiredFileName = fileName;
+        this.#preview = null;
         return true;
     }
 
@@ -130,7 +275,7 @@ export default class GPXEditingSession {
         if (!previous) return false;
 
         this.#preview = null;
-        this.#retainedPointMasks = previous;
+        this.#restore(previous);
         return true;
     }
 
@@ -142,7 +287,7 @@ export default class GPXEditingSession {
         if (!next) return false;
 
         this.#preview = null;
-        this.#retainedPointMasks = next;
+        this.#restore(next);
         return true;
     }
 
@@ -150,6 +295,10 @@ export default class GPXEditingSession {
 
         this.#preview = null;
         this.#retainedPointMasks = this.#createSourceMasks();
+        this.#timeOffsetMs = 0;
+        this.#desiredFileName = this.#sourceFileName;
+        this.#translation = ZERO_TRACK_TRANSLATION;
+        this.#translationPreview = null;
         this.#history.clear();
         this.#isActive = false;
     }
@@ -159,6 +308,49 @@ export default class GPXEditingSession {
         return this.source.tracks.map(track => track.segments.map(
             segment => segment.points.map(() => true)
         ));
+    }
+
+    #snapshot(
+        retainedPointMasks = this.#retainedPointMasks,
+        timeOffsetMs = this.#timeOffsetMs,
+        desiredFileName = this.#desiredFileName,
+        translation = this.#translation
+    ) {
+
+        return {
+            retainedPointMasks: this.#cloneMasks(retainedPointMasks),
+            timeOffsetMs,
+            desiredFileName,
+            translation: this.#translationService.normalize(translation)
+        };
+    }
+
+    #restore(state) {
+
+        this.#retainedPointMasks = this.#cloneMasks(state.retainedPointMasks);
+        this.#timeOffsetMs = state.timeOffsetMs;
+        this.#desiredFileName = state.desiredFileName;
+        this.#translation = this.#translationService.normalize(state.translation);
+        this.#translationPreview = null;
+    }
+
+    #translationEqual(left, right) {
+
+        const first = this.#translationService.normalize(left);
+        const second = this.#translationService.normalize(right);
+
+        return Math.abs(first.latitudeDelta - second.latitudeDelta) < 1e-12 &&
+            Math.abs(first.longitudeDelta - second.longitudeDelta) < 1e-12;
+    }
+
+    #validateFileName(fileName) {
+
+        if (
+            typeof fileName !== "string" || !fileName.toLowerCase().endsWith(".gpx") ||
+            fileName.includes("/") || fileName.includes("\\")
+        ) {
+            throw new TypeError("Desired GPX filename is invalid");
+        }
     }
 
     #validateMasks(masks) {

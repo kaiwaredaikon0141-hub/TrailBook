@@ -25,7 +25,7 @@ function groupNode(kind, key, label, children) {
 }
 
 /**
- * Creates a virtual year / month / day projection without copying entries.
+ * Creates a virtual year / month projection without copying entries.
  */
 export default class DateTreeBuilder {
 
@@ -44,8 +44,6 @@ export default class DateTreeBuilder {
 
             const year = date.getFullYear();
             const month = date.getMonth() + 1;
-            const day = date.getDate();
-
             if (!years.has(year)) {
                 years.set(year, new Map());
             }
@@ -53,16 +51,10 @@ export default class DateTreeBuilder {
             const months = years.get(year);
 
             if (!months.has(month)) {
-                months.set(month, new Map());
+                months.set(month, []);
             }
 
-            const days = months.get(month);
-
-            if (!days.has(day)) {
-                days.set(day, []);
-            }
-
-            days.get(day).push(entry);
+            months.get(month).push(entry);
         });
 
         const nodes = [...years.entries()]
@@ -73,20 +65,11 @@ export default class DateTreeBuilder {
                 `${year}年`,
                 [...months.entries()]
                     .sort(([first], [second]) => second - first)
-                    .map(([month, days]) => groupNode(
+                    .map(([month, tracks]) => groupNode(
                         "month",
                         `${year}-${String(month).padStart(2, "0")}`,
                         `${month}月`,
-                        [...days.entries()]
-                            .sort(([first], [second]) => second - first)
-                            .map(([day, tracks]) => groupNode(
-                                "day",
-                                [year, month, day].map(value =>
-                                    String(value).padStart(2, "0")
-                                ).join("-"),
-                                `${day}日`,
-                                [...tracks].sort(compareTracks)
-                            ))
+                        [...tracks].sort(compareTracks)
                     ))
             ));
 

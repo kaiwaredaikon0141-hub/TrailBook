@@ -150,6 +150,7 @@ export default class GPXEditingSourceLoader {
 
             tracks.push(Object.freeze({
                 trackIndex,
+                name: parsedTrack?.name || null,
                 segments: Object.freeze(segments)
             }));
         });

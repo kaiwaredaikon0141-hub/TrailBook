@@ -1,4 +1,7 @@
 import App from "./core/App.js";
+import BatchSimplificationCoordinator, {
+    collectBatchEntries
+} from "./core/BatchSimplificationCoordinator.js";
 import EditedGPXLibraryRefreshCoordinator from "./core/EditedGPXLibraryRefreshCoordinator.js";
 import TrackEditingCoordinator from "./core/TrackEditingCoordinator.js";
 import { folderPathFromFilePath } from "./utils/PathUtils.js";
@@ -14,18 +17,37 @@ window.addEventListener("DOMContentLoaded", () => {
         displayState: app.displayState,
         selectionState: app.selectionState,
         discoveryCoordinator: app.trackDiscoveryCoordinator,
+        eventBus: app.eventBus,
         getLibrary: () => app.currentLibrary,
         getColor: path => app.getColor(path),
-        reloadVisiblePath: async ({ path, fileHandle, wasChecked }) => {
+        invalidateGeometry: path => app.gpxGeometryLoader.repository.invalidate(
+            app.gpxGeometryLoader.namespace,
+            path
+        ),
+        reloadVisiblePath: async ({
+            sourcePath,
+            path,
+            fileHandle,
+            wasChecked,
+            previousRequestId,
+            renamed
+        }) => {
+            if (renamed) {
+                app.displayQueue.invalidate(sourcePath, previousRequestId);
+                app.mapView.removeGPX(sourcePath);
+            }
+
             if (!wasChecked) {
                 app.treeView.setDisplayIdle(path);
                 return true;
             }
 
-            app.stopDisplay(path, {
-                refocus: false,
-                preserveSelection: true
-            });
+            if (!renamed) {
+                app.stopDisplay(path, {
+                    refocus: false,
+                    preserveSelection: true
+                });
+            }
             app.displayState.invalidateCachedResult(path);
             app.displayState.setIdle(path);
             app.handleDisplayToggled({
@@ -43,6 +65,7 @@ window.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+    let batchSimplification = null;
     const editor = new TrackEditingCoordinator({
         eventBus: app.eventBus,
         selectionState: app.selectionState,
@@ -50,6 +73,7 @@ window.addEventListener("DOMContentLoaded", () => {
         getLibraryToken: () => app.currentLibrary,
         refreshEditedFile: saved => editedFileRefresh.refreshVerifiedFile(saved),
         setSaveBusy: busy => app.toolbar.setFolderPickerBusy(busy),
+        isExternalBusy: () => Boolean(batchSimplification?.isBusy()),
         interactionRoot: app.workspace.querySelector(".sidebar-shell"),
         getFileEntry: path => {
             const entry = app.treeView.getFileEntries()
@@ -66,5 +90,20 @@ window.addEventListener("DOMContentLoaded", () => {
     });
 
     editor.attach(app.mapView.element);
+
+    batchSimplification = new BatchSimplificationCoordinator({
+        getEntries: scope => collectBatchEntries(app.treeView, scope),
+        getRootDirectoryHandle: () => app.currentLibrary?.rootFolder?.handle,
+        getLibraryToken: () => app.currentLibrary,
+        isLibraryAvailable: () => Boolean(app.currentLibrary),
+        isEditorBusy: () => editor.isBusy(),
+        refreshSavedFile: saved => editedFileRefresh.refreshVerifiedFile(saved),
+        setBusy: busy => app.toolbar.setFolderPickerBusy(busy)
+    });
+    batchSimplification.attach(
+        app.trackDiscoveryCoordinator.sidebarShell
+            ?.querySelector(".sidebar-fixed-controls") ||
+        app.trackDiscoveryCoordinator.sidebarShell
+    );
 
 });

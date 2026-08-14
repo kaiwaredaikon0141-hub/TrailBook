@@ -1,7 +1,7 @@
 export const EDITING_HISTORY_LIMIT = 20;
 
 /**
- * Session-only command history for immutable retained-point snapshots.
+ * Session-only command history for compact editing-state snapshots.
  */
 export default class EditingCommandHistory {
 
@@ -37,8 +37,8 @@ export default class EditingCommandHistory {
         this.#commands.splice(this.#cursor);
         this.#commands.push(Object.freeze({
             type,
-            before: this.#freezeMasks(before),
-            after: this.#freezeMasks(after)
+            before: this.#freezeState(before),
+            after: this.#freezeState(after)
         }));
 
         if (this.#commands.length > this.limit) {
@@ -53,7 +53,7 @@ export default class EditingCommandHistory {
         if (!this.canUndo) return null;
 
         this.#cursor -= 1;
-        return this.#cloneMasks(this.#commands[this.#cursor].before);
+        return this.#cloneState(this.#commands[this.#cursor].before);
     }
 
     redo() {
@@ -62,13 +62,23 @@ export default class EditingCommandHistory {
 
         const command = this.#commands[this.#cursor];
         this.#cursor += 1;
-        return this.#cloneMasks(command.after);
+        return this.#cloneState(command.after);
     }
 
     clear() {
 
         this.#commands = [];
         this.#cursor = 0;
+    }
+
+    #freezeState(state) {
+
+        return Object.freeze({
+            retainedPointMasks: this.#freezeMasks(state.retainedPointMasks),
+            timeOffsetMs: state.timeOffsetMs,
+            desiredFileName: state.desiredFileName,
+            translation: Object.freeze({ ...state.translation })
+        });
     }
 
     #freezeMasks(masks) {
@@ -78,6 +88,16 @@ export default class EditingCommandHistory {
                 segment => Object.freeze([...segment])
             ))
         ));
+    }
+
+    #cloneState(state) {
+
+        return {
+            retainedPointMasks: this.#cloneMasks(state.retainedPointMasks),
+            timeOffsetMs: state.timeOffsetMs,
+            desiredFileName: state.desiredFileName,
+            translation: { ...state.translation }
+        };
     }
 
     #cloneMasks(masks) {

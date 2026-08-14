@@ -1328,3 +1328,16 @@ working copy、history、serialized draft、preview geometryをGeometry Cache / 
 - GPXを暗黙に変更しない。
 - 将来機能のために現在のRelease範囲を広げない。
 - 一つのReleaseで責務が大きくなる場合は、小さいReleaseへ分割する。
+
+## Release 1.6 Architecture
+
+Status: Completed
+
+- `DateTreeBuilder`はDiscovery entryを年 / 月 / Trackへgroup化し、日nodeを生成しない。resolvedDate、Unknown Date、stable sortの正本は既存Discovery Indexに置く
+- `TrackDateCorrectionService`は最初の有効`trkpt/time`を基準にUTC offsetを計算し、Session commandとSerializer DOM cloneへ適用する。既存`metadata/time`だけを同offsetで更新する
+- filename rename draftと`GPXBackupIndexService`はcurrent source filenameから最初のoriginal Backup filenameへのassociationを保持する。Backup GPX本体をrename / overwrite / deleteしない
+- `TrackTranslationService`はproject / unprojectに基づく地理offsetをSessionへ保持し、Serializerが`trkpt`のlat / lonだけへ適用する。Waypoint / routeは対象外とする
+- Date modeはSelectionStateのrelative pathを正本として、対象年 / 月を展開し同じTrack nodeを選択表示する
+- `MapView`はOSMまたは国土地理院標準地図のbase layerを1枚だけ保持する。選択値はdevice-local view stateへ保存し、unknown値と旧`gsi-pale`はOSMへfallbackする
+- `BatchSimplificationCoordinator` / `BatchSimplificationService` / `BatchSimplificationPanel`は既存RDP、Serializer、Backup + in-place save、targeted refreshを再利用する。解析はread-only、実行はsequentialで、0削減fileを変更せず、file単位failure後も継続し、安全なfile境界でCancelする
+- Release 1.5のOriginal Backup + In-place Edited GPX、explicit save、verification、reserved `TrailBook_Backup`境界を変更しない

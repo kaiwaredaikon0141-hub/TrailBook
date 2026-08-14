@@ -2,7 +2,7 @@
 
 Version: 1.5 Completed
 Status: Official
-Current Release: 1.5.0 Safe GPX Editing / Track Simplification
+Current Release: 1.6.0
 Next Release: Not defined
 
 ## Version Policy
@@ -653,6 +653,39 @@ Unit 6は既存Browser Acceptanceの統合、data protection、documentation、s
 - representative largest GPXでpreview中のUI応答性を測定する。200 ms超のmain-thread long taskが再現する場合はasync APIを維持したままWeb Workerを検討する
 - App.js / TreeView.js 1,000行未満、production module graph、cycle、`git diff --check`
 
+## Current Release — Release 1.6
+
+Status: Completed
+
+Goal: Release 1.5のOriginal Backup + In-place Edited GPXを維持し、日付中心のLibrary操作、Track全体編集、背景地図切替、一括軽量化を既存Viewer / Editor lifecycleへ追加する。
+
+### Completed Scope
+
+- Date Treeを`年 → 月 → Track`へ簡略化し、日nodeを生成しない。既存resolvedDate、降順、Unknown Dateを維持する
+- 全有効`trkpt/time`を同一offsetでshiftし、point間時間差と日またぎを維持する。既存`metadata/time`だけを同offsetでshiftし、Undo / Redo / draftへ統合する
+- Track開始 / 終了日からfilenameを生成し、collisionへ`-02`、`-03`を付ける。Backup association indexで最初のoriginal Backupを維持し、単一Track GPXでは保存filename basenameへTrack nameを同期する
+- GPX内の全Track Pointを同一地理offsetで平行移動し、`trkpt`のlat / lonだけを変更する。Waypoint / routeを変更せず、Undo / Redo / draftへ統合する
+- Map選択時にDate Treeの対象年 / 月を必要に応じて展開し、同じSelectionStateからTrack nodeを同期する
+- OpenStreetMapと国土地理院標準地図を切り替え、device-local view stateへ保存する。国土地理院淡色地図は提供しない
+- 選択Folder配下またはLibrary全体を解析後の明示操作で一括簡略化する。0削減GPXはwrite / Backup / refreshせず、sequentialに処理し、file単位failure後も継続し、安全なfile境界でCancelする
+
+### Units
+
+1. Date Tree year / month / Track simplification（Completed）
+2. Track Date Correction（Completed）
+3. Date-based Filename Rename、Backup association、single Track name sync（Completed）
+4. Whole-Track TranslationとDate mode Selection Sync（Completed）
+5. OSM / GSI standard Base Map（Completed）
+6. Batch Simplification（Completed）
+7. Integration Acceptance、documentation、Release finalization（Completed）
+
+### Out of Scope
+
+- point個別move / add / delete、interval delete、Track / Segment split / merge
+- autosave、Mobile Viewer / Mobile editing
+- GPS current-position tracking、wake lock
+- Google Maps、白地図scan、historical trace
+
 ## Future Design Boundaries
 
 以下は過去Releaseから保全している将来設計境界である。Release 1.4で実装済みとなった項目は、上記Release 1.4節を優先する。
@@ -714,7 +747,7 @@ Release 0.9では、車両情報の読み込み、保存、編集、色変更を
 
 ## Future Candidates
 
-Release 1.2 Shared Library Settings、Release 1.3 Previous View Restoration、Release 1.4 Library Browsing / Track Discovery、Release 1.5 Safe GPX Editing / Track SimplificationはCompletedである。以下はRelease 1.5のOut of Scopeまたは後続候補である。
+Release 1.2 Shared Library Settings、Release 1.3 Previous View Restoration、Release 1.4 Library Browsing / Track Discovery、Release 1.5 Safe GPX Editing / Track Simplification、Release 1.6はCompletedである。以下は完了ReleaseのOut of Scopeまたは後続候補である。
 
 - GPX Metadata Index
 - Date-based Display（Release 1.4でCompleted）

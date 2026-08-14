@@ -1,3 +1,6 @@
+import TrackDateCorrectionService from "./TrackDateCorrectionService.js";
+import TrackTranslationService from "./TrackTranslationService.js";
+
 /**
  * Serializes a GPX working mask by cloning the immutable source XML.
  */
@@ -5,14 +8,22 @@ export default class GPXEditingSerializer {
 
     constructor({
         DOMParserClass = globalThis.DOMParser,
-        XMLSerializerClass = globalThis.XMLSerializer
+        XMLSerializerClass = globalThis.XMLSerializer,
+        dateCorrection = new TrackDateCorrectionService(),
+        translation = new TrackTranslationService()
     } = {}) {
 
         this.DOMParserClass = DOMParserClass;
         this.XMLSerializerClass = XMLSerializerClass;
+        this.dateCorrection = dateCorrection;
+        this.translation = translation;
     }
 
-    serialize(source, retainedPointMasks) {
+    serialize(source, retainedPointMasks, {
+        timeOffsetMs = 0,
+        trackNameFileName = null,
+        translation = null
+    } = {}) {
 
         if (!source?.canSerialize) {
             throw this.#error(
@@ -32,6 +43,14 @@ export default class GPXEditingSerializer {
             );
         }
         const trackElements = this.#children(document.documentElement, "trk");
+
+        this.dateCorrection.apply(document, timeOffsetMs);
+        this.#synchronizeSingleTrackName(
+            document,
+            trackElements,
+            trackNameFileName
+        );
+        this.translation.apply(document, translation);
 
         trackElements.forEach((trackElement, trackIndex) => {
             const segmentElements = this.#children(trackElement, "trkseg");
@@ -154,6 +173,28 @@ export default class GPXEditingSerializer {
                 }
             });
         });
+    }
+
+    #synchronizeSingleTrackName(document, trackElements, fileName) {
+
+        if (
+            trackElements.length !== 1 ||
+            typeof fileName !== "string" ||
+            !fileName.toLowerCase().endsWith(".gpx")
+        ) return;
+
+        const track = trackElements[0];
+        let name = this.#children(track, "name")[0];
+
+        if (!name) {
+            name = document.createElementNS(
+                track.namespaceURI || document.documentElement.namespaceURI,
+                "name"
+            );
+            track.insertBefore(name, track.firstElementChild);
+        }
+
+        name.textContent = fileName.slice(0, -4);
     }
 
     #children(element, localName) {

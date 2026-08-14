@@ -18,6 +18,22 @@ export default class TrackEditingPanel {
         this.body = this.element.querySelector(".track-editor-body");
         this.editButton = this.element.querySelector("[data-editor-action='edit']");
         this.toleranceInput = this.element.querySelector(".editor-tolerance");
+        this.dateInput = this.element.querySelector(".editor-start-date");
+        this.currentStartTime = this.element.querySelector(".editor-current-start");
+        this.dateStatus = this.element.querySelector(".editor-date-status");
+        this.currentFileName = this.element.querySelector(".editor-current-filename");
+        this.candidateFileName = this.element.querySelector(".editor-candidate-filename");
+        this.renameCheckbox = this.element.querySelector(".editor-rename-by-date");
+        this.renameStatus = this.element.querySelector(".editor-rename-status");
+        this.translationMode = this.element.querySelector(
+            ".editor-translation-mode"
+        );
+        this.translationNorth = this.element.querySelector(
+            ".editor-translation-north"
+        );
+        this.translationEast = this.element.querySelector(
+            ".editor-translation-east"
+        );
         this.backupStatus = this.element.querySelector(".editor-backup-status");
         this.progress = this.element.querySelector(".editor-progress");
         this.status = this.element.querySelector(".editor-status");
@@ -27,6 +43,7 @@ export default class TrackEditingPanel {
         this.draftPath = null;
         this.canSerialize = false;
         this.saveEnabled = false;
+        this.dateCorrectionEnabled = false;
         this.historyState = { canUndo: false, canRedo: false };
         this.metrics = new Map(
             [...this.element.querySelectorAll("[data-editor-metric]")]
@@ -80,9 +97,101 @@ export default class TrackEditingPanel {
             ?.value || "off";
     }
 
+    getTranslationMode() {
+
+        return Boolean(this.translationMode.checked);
+    }
+
+    configureTranslation({
+        northMeters = 0,
+        eastMeters = 0,
+        pending = false,
+        canApply = pending
+    } = {}) {
+
+        this.translationNorth.textContent = this.#formatDirection(
+            northMeters,
+            "北",
+            "南"
+        );
+        this.translationEast.textContent = this.#formatDirection(
+            eastMeters,
+            "東",
+            "西"
+        );
+        this.actionButtons.get("apply").disabled = !canApply;
+    }
+
     getSaveButton() {
 
         return this.actionButtons.get("save");
+    }
+
+    isDateRenameEnabled() {
+
+        return this.renameCheckbox.checked && !this.renameCheckbox.disabled;
+    }
+
+    configureFileName({
+        currentFileName,
+        candidateFileName = null,
+        renameEnabled = false,
+        defaultRename = false
+    } = {}) {
+
+        this.currentFileName.textContent = currentFileName || "—";
+        this.candidateFileName.textContent = candidateFileName || "—";
+        this.renameCheckbox.disabled = !renameEnabled;
+        this.renameCheckbox.checked = renameEnabled && Boolean(defaultRename);
+        this.renameStatus.textContent = renameEnabled
+            ? ""
+            : "有効なTrack Point timeがないためfilenameを変更できません。";
+    }
+
+    updateFileNameCandidate(candidateFileName, checked) {
+
+        this.candidateFileName.textContent = candidateFileName || "—";
+        this.renameCheckbox.disabled = !candidateFileName;
+        this.renameCheckbox.checked = Boolean(candidateFileName && checked);
+        this.renameStatus.textContent = candidateFileName
+            ? ""
+            : "有効なTrack Point timeがないためfilenameを変更できません。";
+    }
+
+    configureDateCorrection({ sourceStartTime = null, timeOffsetMs = 0 } = {}) {
+
+        const available = sourceStartTime instanceof Date &&
+            Number.isFinite(sourceStartTime.getTime());
+
+        this.dateCorrectionEnabled = available;
+
+        if (!available) {
+            this.currentStartTime.textContent = "—";
+            this.dateInput.value = "";
+            this.dateInput.disabled = true;
+            this.actionButtons.get("date-apply").disabled = true;
+            this.dateStatus.textContent =
+                "有効なTrack Point timeがないため日付を修正できません。";
+            return;
+        }
+
+        const current = new Date(sourceStartTime.getTime() + timeOffsetMs);
+
+        this.currentStartTime.textContent = current.toLocaleString();
+        this.dateInput.value = this.#formatLocalDate(current);
+        this.dateInput.disabled = false;
+        this.actionButtons.get("date-apply").disabled = false;
+        this.dateStatus.textContent = "";
+    }
+
+    showDateError(message) {
+
+        this.dateStatus.textContent = message;
+    }
+
+    showDateMessage(message) {
+
+        this.dateStatus.textContent = message;
     }
 
     configureSave({ canSerialize = false, backupExists = null } = {}) {
@@ -178,7 +287,8 @@ export default class TrackEditingPanel {
 
     showSaveSuccess(fileName, {
         refreshSucceeded = true,
-        backupCreated = false
+        backupCreated = false,
+        cleanupWarning = false
     } = {}) {
 
         this.#restoreAfterSave();
@@ -186,7 +296,9 @@ export default class TrackEditingPanel {
             ? "原本をTrailBook_Backupへ保存済みです。"
             : "初回原本Backupを維持しています。";
         this.#setStatus(
-            refreshSucceeded
+            cleanupWarning
+                ? `保存・検証完了: ${fileName}。旧sourceを削除できず重複fileが残っています。`
+                : refreshSucceeded
                 ? `保存・検証完了: ${fileName}`
                 : `保存・検証完了: ${fileName}。Libraryを再選択してください。`,
             refreshSucceeded ? "saved" : "warning"
@@ -268,6 +380,30 @@ export default class TrackEditingPanel {
                         value="${defaultToleranceMeters}" inputmode="decimal">
                     m
                 </label>
+                <fieldset class="editor-date-correction">
+                    <legend>日付修正</legend>
+                    <p>現在の開始日時: <span class="editor-current-start">—</span></p>
+                    <label>
+                        新しい開始日
+                        <input class="editor-start-date" type="date">
+                    </label>
+                    <button type="button" data-editor-action="date-apply">
+                        日付を適用
+                    </button>
+                    <span class="editor-date-status" role="status"
+                        aria-live="polite"></span>
+                </fieldset>
+                <fieldset class="editor-filename">
+                    <legend>Filename</legend>
+                    <p>現在: <span class="editor-current-filename">—</span></p>
+                    <p>日付候補: <span class="editor-candidate-filename">—</span></p>
+                    <label>
+                        <input class="editor-rename-by-date" type="checkbox">
+                        ファイル名を日付形式に変更
+                    </label>
+                    <span class="editor-rename-status" role="status"
+                        aria-live="polite"></span>
+                </fieldset>
                 <fieldset class="editor-preview-modes">
                     <legend>Map preview</legend>
                     <label><input type="radio" name="editor-preview-mode"
@@ -287,6 +423,17 @@ export default class TrackEditingPanel {
                         value="after"> After</label>
                     <label><input type="radio" name="editor-point-mode"
                         value="both"> Both</label>
+                </fieldset>
+                <fieldset class="editor-translation">
+                    <legend>トラック移動</legend>
+                    <label>
+                        <input class="editor-translation-mode" type="checkbox">
+                        地図上でAfter Trackをドラッグ
+                    </label>
+                    <p>
+                        北/南: <span class="editor-translation-north">0.0 m</span><br>
+                        東/西: <span class="editor-translation-east">0.0 m</span>
+                    </p>
                 </fieldset>
                 <div class="editor-legend" aria-label="Preview layer legend">
                     <span class="editor-legend-before">Before: dashed</span>
@@ -331,7 +478,10 @@ export default class TrackEditingPanel {
                 ?.dataset.editorAction;
 
             if (action) {
-                this.#emit(action);
+                this.#emit(
+                    action,
+                    action === "date-apply" ? this.dateInput.value : undefined
+                );
             }
         });
         this.toleranceInput.addEventListener("input", () => {
@@ -342,6 +492,10 @@ export default class TrackEditingPanel {
                 this.#emit("mode", event.target.value);
             } else if (event.target.name === "editor-point-mode") {
                 this.#emit("point-mode", event.target.value);
+            } else if (event.target.classList.contains("editor-rename-by-date")) {
+                this.#emit("filename-toggle", event.target.checked);
+            } else if (event.target.classList.contains("editor-translation-mode")) {
+                this.#emit("translation-mode", event.target.checked);
             }
         });
         this.element.addEventListener("keydown", event => {
@@ -379,6 +533,9 @@ export default class TrackEditingPanel {
         this.actionButtons.get("apply").disabled = true;
         this.setHistoryState(this.historyState);
         this.setSaveEnabled(this.saveEnabled);
+        this.dateInput.disabled = !this.dateCorrectionEnabled;
+        this.actionButtons.get("date-apply").disabled =
+            !this.dateCorrectionEnabled;
     }
 
     #setProgress(value) {
@@ -418,6 +575,23 @@ export default class TrackEditingPanel {
 
         const node = this.metrics.get(name);
         if (node) node.textContent = value;
+    }
+
+    #formatLocalDate(date) {
+
+        return [
+            date.getFullYear(),
+            String(date.getMonth() + 1).padStart(2, "0"),
+            String(date.getDate()).padStart(2, "0")
+        ].join("-");
+    }
+
+    #formatDirection(value, positive, negative) {
+
+        const amount = Number(value) || 0;
+        const direction = amount < 0 ? negative : positive;
+
+        return `${direction} ${Math.abs(amount).toFixed(1)} m`;
     }
 
 }

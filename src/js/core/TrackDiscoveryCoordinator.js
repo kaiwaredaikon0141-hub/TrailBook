@@ -66,7 +66,9 @@ export default class TrackDiscoveryCoordinator {
     bindEvents() {
 
         this.eventBus.on("selection:changed", ({ path }) => {
-            this.dateTree.setSelectedPath(path);
+            this.dateTree.setSelectedPath(path, {
+                reveal: this.mode === "date"
+            });
             void this.trackInfo.setSelectedPath(path);
         });
         this.eventBus.on("discovery:index-cancel-requested", () => {
@@ -180,6 +182,35 @@ export default class TrackDiscoveryCoordinator {
         return true;
     }
 
+    async renameFileEntry({ sourcePath, targetPath, fileHandle } = {}) {
+
+        if (
+            !this.available || !sourcePath || !targetPath || !fileHandle ||
+            !this.fileHandles.has(sourcePath) || this.fileHandles.has(targetPath)
+        ) return false;
+
+        const shouldReload = this.index.renameFileEntry({
+            sourcePath,
+            targetPath,
+            fileHandle
+        });
+
+        this.fileHandles.delete(sourcePath);
+        this.fileHandles.set(targetPath, fileHandle);
+
+        if (shouldReload || this.index.getStatus() === "ready") {
+            const entry = await this.index.loadEntry(targetPath, {
+                isCurrent: generation =>
+                    generation === this.generation && this.isCurrent()
+            });
+
+            if (!entry || !this.isCurrent()) return false;
+            if (this.index.getStatus() === "ready") this.#applyFilter();
+        }
+
+        return true;
+    }
+
     getMode() {
 
         return this.mode;
@@ -197,6 +228,7 @@ export default class TrackDiscoveryCoordinator {
         this.#applyMode();
 
         if (mode === "date") {
+            this.dateTree.revealSelectedPath();
             void this.#buildIndex();
         }
 

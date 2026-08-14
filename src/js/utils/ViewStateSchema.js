@@ -2,7 +2,8 @@ import { isValidLibraryId } from "./LibraryIdentity.js";
 
 const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/;
-const TOP_LEVEL_FIELDS = new Set(["version", "libraries"]);
+const TOP_LEVEL_FIELDS = new Set(["version", "global", "libraries"]);
+const BASE_MAPS = new Set(["osm", "gsiStandard"]);
 
 function createDictionary() {
 
@@ -68,8 +69,14 @@ export function createEmptyViewStateDocument(version = 1) {
 
     return {
         version,
+        global: { baseMap: "osm" },
         libraries: createDictionary()
     };
+}
+
+export function normalizeBaseMap(value) {
+
+    return BASE_MAPS.has(value) ? value : "osm";
 }
 
 function normalizeMap(map, { minZoom, maxZoom }) {
@@ -171,6 +178,8 @@ export function normalizeViewStateDocument(payload, options) {
 
     const normalized = createEmptyViewStateDocument(options.schemaVersion);
 
+    normalized.global.baseMap = normalizeBaseMap(payload.global?.baseMap);
+
     for (const libraryId of Object.keys(payload.libraries)) {
         const libraryState = normalizeLibraryViewState(
             payload.libraries[libraryId],
@@ -211,5 +220,9 @@ export function serializeViewStateDocument(document) {
         );
     });
 
-    return JSON.stringify({ version: document.version, libraries });
+    return JSON.stringify({
+        version: document.version,
+        global: { baseMap: normalizeBaseMap(document.global?.baseMap) },
+        libraries
+    });
 }

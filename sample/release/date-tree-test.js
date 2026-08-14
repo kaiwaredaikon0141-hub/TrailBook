@@ -48,6 +48,8 @@ function testBuilder() {
         entry("same-b.gpx", new Date(2026, 7, 8, 12), "Beta"),
         entry("same-a.gpx", new Date(2026, 7, 8, 12), "Alpha"),
         entry("new.gpx", new Date(2026, 7, 8, 18), "New"),
+        entry("previous-day.gpx", new Date(2026, 7, 7, 23), "Previous Day"),
+        entry("cross-month.gpx", new Date(2026, 6, 31, 23), "Cross Month"),
         entry("unknown.gpx", null, "Unknown")
     ]);
 
@@ -55,12 +57,19 @@ function testBuilder() {
     assert(groups.map(group => group.label).join(",") === "2026年,2025年,Unknown Date",
         "year or Unknown ordering");
     assert(groups[0].children[0].label === "8月", "month label");
-    assert(groups[0].children[0].children[0].label === "8日", "day label");
-    const tracks = groups[0].children[0].children[0].children;
-    assert(tracks.map(item => item.displayName).join(",") === "New,Alpha,Beta",
+    assert(groups[0].children[0].children.every(item => item.relativePath),
+        "day group was generated");
+    const tracks = groups[0].children[0].children;
+    assert(tracks.map(item => item.displayName).join(",") === "New,Alpha,Beta,Previous Day",
         "resolvedDate/displayName stable ordering");
-    assert(tracks[0] === groups[0].children[0].children[0].children[0],
+    assert(groups[0].children[1].label === "7月" &&
+        groups[0].children[1].children[0].displayName === "Cross Month",
+        "resolvedDate start month grouping");
+    assert(tracks[0] === groups[0].children[0].children[0],
         "entries were copied instead of referenced");
+    assert(groups.at(-1).kind === "unknown" &&
+        groups.at(-1).children[0].relativePath === "unknown.gpx",
+        "Unknown Date behavior changed");
 }
 
 function testModeStore() {
@@ -124,15 +133,13 @@ function testView() {
     assert(view.root.querySelectorAll(".date-tree-track-row").length === 0,
         "year expansion eagerly rendered Tracks");
     view.root.querySelector(".date-tree-group-row[aria-expanded='true'] + ul .date-tree-group-row").click();
-    assert(view.root.querySelectorAll(".date-tree-track-row").length === 0,
-        "month expansion eagerly rendered Tracks");
-    const dayRow = [...view.root.querySelectorAll(".date-tree-group-row")]
-        .find(row => row.querySelector(".date-tree-label")?.textContent === "8日");
-    dayRow.click();
     const trackRow = view.root.querySelector(".date-tree-track-row");
-    assert(trackRow, "day expansion did not render Tracks");
+    assert(trackRow, "month expansion did not render Tracks");
     assert(view.root.querySelectorAll(".date-tree-track-row").length === 1,
-        "unexpanded dates rendered Tracks");
+        "unexpanded months rendered Tracks");
+    assert(![...view.root.querySelectorAll(".date-tree-group-row")]
+        .some(row => /日$/.test(row.querySelector(".date-tree-label")?.textContent || "")),
+        "Date Tree rendered a day node");
     trackRow.click();
     assert(selected?.path === "new.gpx" && selected.source === "tree" && selected.refocus,
         "selection event contract");
@@ -167,6 +174,26 @@ function testView() {
     assert(trackRow.getAttribute("aria-current") === "true", "selection ARIA");
     view.setSelectedPath(null);
     assert(!trackRow.hasAttribute("aria-current"), "selection clear");
+    const yearRow = view.root.querySelector(".date-tree-group-row");
+
+    yearRow.click();
+    assert(yearRow.getAttribute("aria-expanded") === "false",
+        "test setup did not collapse selected year");
+    const checkedBeforeReveal = displayState.getCheckedPaths().join(",");
+
+    view.setSelectedPath("new.gpx", { reveal: true });
+    const revealedMonth = yearRow.nextElementSibling.querySelector(
+        ".date-tree-group-row"
+    );
+    const revealedTrack = view.renderedTrackRows.get("new.gpx");
+
+    assert(yearRow.getAttribute("aria-expanded") === "true" &&
+        revealedMonth.getAttribute("aria-expanded") === "true",
+    "selection reveal did not expand year/month");
+    assert(revealedTrack?.getAttribute("aria-current") === "true",
+        "revealed Date Track was not selected");
+    assert(displayState.getCheckedPaths().join(",") === checkedBeforeReveal,
+        "Date selection reveal changed visibility");
 }
 
 function testGroupBulk() {
@@ -334,18 +361,31 @@ async function testCoordinator() {
         "Folder/Date projection switch");
     assert(coordinator.dateTree.root.children.length === 2,
         "Date and Unknown groups missing");
-    let groupRow = coordinator.dateTree.root.querySelector(".date-tree-group-row");
-    groupRow.click();
-    groupRow = groupRow.nextElementSibling.querySelector(".date-tree-group-row");
-    groupRow.click();
-    groupRow = groupRow.nextElementSibling.querySelector(".date-tree-group-row");
-    groupRow.click();
-    const trackRow = coordinator.dateTree.root.querySelector(".date-tree-track-row");
+    const checkedBeforeSelection = displayState.getCheckedPaths().join(",");
+
+    eventBus.emit("selection:changed", { path: "a.gpx", source: "map" });
+    const yearRow = coordinator.dateTree.root.querySelector(
+        ".date-tree-group-row"
+    );
+    const monthRow = yearRow.nextElementSibling.querySelector(
+        ".date-tree-group-row"
+    );
+    const trackRow = coordinator.dateTree.root.querySelector(
+        ".date-tree-track-row"
+    );
+
+    assert(yearRow.getAttribute("aria-expanded") === "true" &&
+        monthRow.getAttribute("aria-expanded") === "true",
+    "Map selection did not reveal collapsed Date year/month");
+    assert(trackRow.getAttribute("aria-current") === "true",
+        "Map selection did not select the Date Track row");
+    assert(displayState.getCheckedPaths().join(",") === checkedBeforeSelection,
+        "Map selection changed Date visibility");
     displayState.setChecked("a.gpx", true);
     await flush();
     assert(trackRow.querySelector("input").checked,
         "DisplayState subscription did not synchronize Date Tree");
-    eventBus.emit("selection:changed", { path: "a.gpx" });
+    eventBus.emit("selection:changed", { path: "a.gpx", source: "map" });
     assert(trackRow.getAttribute("aria-current") === "true",
         "SelectionState event did not synchronize Date Tree");
     await flush();
@@ -363,6 +403,11 @@ async function testCoordinator() {
     assert(displayState.getCheckedPaths().join(",") === checkedBeforeSwitch,
         "Tree switch changed visibility");
     assert(modeStore.getMode() === "folder", "mode state not synchronized");
+    coordinator.setMode("date");
+    await flush();
+    assert(coordinator.dateTree.renderedTrackRows.get("a.gpx")
+        ?.getAttribute("aria-current") === "true",
+    "Folder/Date switch did not restore current Date selection");
     coordinator.clearLibrary();
     assert(loads === 2 && !folderTree.hidden, "Library clear rebuilt or hid Folder Tree");
 }

@@ -1093,3 +1093,12 @@ Unit 4実装ではBeforeをneutral dashed、Afterをsolid orangeとし、文字l
 - Waypoint / route / metadata / extension編集
 - multi-GPX / batch UI、Mobile editor
 - autosave、background save、editing session recovery
+
+# 25. Release 1.6 UI
+
+- Date Treeは`年 → 月 → Track`とUnknown Dateを表示し、日nodeを生成しない。年 / 月checkboxは既存DisplayStateとbulk display経路を使用する
+- Track Editing Panelは現在開始日時、新しい開始日、date-based filename候補とrename checkbox、Track平行移動mode / offsetを既存Apply / Undo / Redo / Done / Cancel / 保存へ統合する
+- single Track GPXをfilename rename付きで保存した場合だけ、Track nameを確定filenameのbasenameへ同期する。Backup originalは変更しない
+- Date modeでMap Trackを選択した場合、必要な年 / 月を展開してTrack nodeへselectionを同期し、visibilityとMap viewは変更しない
+- 背景地図selectorはOpenStreetMapと国土地理院標準地図だけを提供する。国土地理院淡色地図は提供せず、未知値はOSMへ戻す
+- 一括簡略化Panelは選択Folder配下 / Library全体、tolerance、解析、実行、Cancel、進捗、完了summaryとfile別errorを表示する。Track Editorとの同時実行を禁止する

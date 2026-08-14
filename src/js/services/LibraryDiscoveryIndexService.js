@@ -177,6 +177,29 @@ export default class LibraryDiscoveryIndexService {
         return true;
     }
 
+    renameFileEntry({ sourcePath, targetPath, fileHandle } = {}) {
+
+        const index = this.fileEntries.findIndex(
+            entry => entry.relativePath === sourcePath
+        );
+
+        if (
+            index < 0 || !targetPath || !fileHandle ||
+            this.fileEntries.some(entry => entry.relativePath === targetPath)
+        ) return false;
+
+        const hadLoadedEntry = this.entries.has(sourcePath);
+
+        this.fileEntries[index] = { relativePath: targetPath, fileHandle };
+        this.entryVersions.delete(sourcePath);
+        this.entryVersions.set(targetPath, 0);
+        this.entries.delete(sourcePath);
+        this.failures.delete(sourcePath);
+        this.entryPromises.delete(sourcePath);
+
+        return hadLoadedEntry;
+    }
+
     async #build({ token, generation, onProgress, isCurrent }) {
 
         const entries = this.fileEntries;

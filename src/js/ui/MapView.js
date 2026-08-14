@@ -5,6 +5,16 @@ const MAP_DISPLAY_MODES = new Set([
     DEFAULT_MAP_DISPLAY_MODE,
     "monochrome"
 ]);
+const DEFAULT_BASE_MAP = "osm";
+const BASE_MAPS = Object.freeze({
+    gsiStandard: Object.freeze({
+        url: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
+        attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html" ' +
+            'target="_blank" rel="noopener noreferrer" ' +
+            'style="text-decoration: underline;">国土地理院</a>',
+        maxZoom: 18
+    })
+});
 
 function normalizeMapDisplayMode(mode) {
 
@@ -37,6 +47,10 @@ export default class MapView {
         this.trackRenderer = null;
 
         this.mapDisplayMode = DEFAULT_MAP_DISPLAY_MODE;
+
+        this.baseMap = DEFAULT_BASE_MAP;
+
+        this.baseTileLayer = null;
 
         this.programmaticViewChangeDepth = 0;
 
@@ -78,7 +92,9 @@ export default class MapView {
 
             const mapElement = this.element.querySelector(".map-canvas");
 
-            this.map = L.map(mapElement).setView(
+            this.map = L.map(mapElement, {
+                maxZoom: this.config.map.tileMaxZoom
+            }).setView(
                 [
                     this.config.map.center.latitude,
                     this.config.map.center.longitude
@@ -86,13 +102,7 @@ export default class MapView {
                 this.config.map.initialZoom
             );
 
-            L.tileLayer(
-                this.config.map.tileUrl,
-                {
-                    attribution: this.config.map.tileAttribution,
-                    maxZoom: this.config.map.tileMaxZoom
-                }
-            ).addTo(this.map);
+            this.#replaceBaseLayer();
 
             this.trackRenderer = L.canvas({
                 tolerance: this.config.map.trackStyle.hitTolerance
@@ -381,6 +391,27 @@ export default class MapView {
         return this.mapDisplayMode;
     }
 
+    setBaseMap(value) {
+
+        const normalized = this.#normalizeBaseMap(value);
+        const changed = normalized !== this.baseMap;
+
+        this.baseMap = normalized;
+        const select = this.element.querySelector(".base-map-select");
+
+        if (select) select.value = normalized;
+        if (this.map && (changed || !this.baseTileLayer)) {
+            this.#replaceBaseLayer();
+        }
+
+        return changed;
+    }
+
+    getBaseMap() {
+
+        return this.baseMap;
+    }
+
     /**
      * Removes displayed GPX layers.
      *
@@ -432,6 +463,41 @@ export default class MapView {
         }
     }
 
+    #replaceBaseLayer() {
+
+        this.baseTileLayer?.remove?.();
+        if (this.baseTileLayer && !this.baseTileLayer.remove) {
+            this.map.removeLayer?.(this.baseTileLayer);
+        }
+
+        const definition = this.#getBaseMapDefinition(this.baseMap);
+
+        this.baseTileLayer = L.tileLayer(definition.url, {
+            attribution: definition.attribution,
+            maxZoom: definition.maxZoom
+        }).addTo(this.map);
+    }
+
+    #getBaseMapDefinition(value) {
+
+        if (value === DEFAULT_BASE_MAP) {
+            return {
+                url: this.config.map.tileUrl,
+                attribution: this.config.map.tileAttribution,
+                maxZoom: this.config.map.tileMaxZoom
+            };
+        }
+
+        return BASE_MAPS[value] || this.#getBaseMapDefinition(DEFAULT_BASE_MAP);
+    }
+
+    #normalizeBaseMap(value) {
+
+        return value === DEFAULT_BASE_MAP || Object.hasOwn(BASE_MAPS, value)
+            ? value
+            : DEFAULT_BASE_MAP;
+    }
+
     /**
      * Creates the map view elements.
      *
@@ -445,6 +511,13 @@ export default class MapView {
 
         section.innerHTML = `
             <div class="map-toolbar">
+                <label class="base-map-control">
+                    <span>背景:</span>
+                    <select class="base-map-select" aria-label="背景地図">
+                        <option value="osm">OSM</option>
+                        <option value="gsiStandard">地理院 標準</option>
+                    </select>
+                </label>
                 <label class="map-mode-control">
                     <span>Map:</span>
                     <select class="map-mode-select" aria-label="背景地図の表示モード">
@@ -483,6 +556,14 @@ export default class MapView {
             )
         );
 
+        section.querySelector(".base-map-select").addEventListener(
+            "change",
+            event => this.eventBus.emit(
+                "map:base-map-changed",
+                { baseMap: event.target.value }
+            )
+        );
+
         return section;
     }
 
@@ -501,3 +582,5 @@ export default class MapView {
     }
 
 }
+
+export { BASE_MAPS, DEFAULT_BASE_MAP };

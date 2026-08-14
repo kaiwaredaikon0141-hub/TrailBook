@@ -477,6 +477,64 @@ body.is-track-info-resizing{
     font-weight:600;
 }
 
+.batch-simplification{
+
+    margin:0 0 10px;
+}
+
+.batch-simplification-open,
+.batch-simplification-body select,
+.batch-simplification-body input{
+
+    box-sizing:border-box;
+
+    width:100%;
+}
+
+.batch-simplification-body{
+
+    padding:8px;
+
+    border:1px solid var(--border);
+
+    background:#fff;
+}
+
+.batch-simplification-body label{
+
+    display:block;
+
+    margin:0 0 6px;
+}
+
+.batch-simplification-actions{
+
+    display:flex;
+
+    gap:4px;
+}
+
+.batch-simplification-status,
+.batch-simplification-summary{
+
+    margin:6px 0 0;
+
+    font-size:12px;
+}
+
+.batch-simplification-errors{
+
+    max-height:120px;
+
+    margin:6px 0 0;
+
+    padding-left:20px;
+
+    overflow:auto;
+
+    font-size:12px;
+}
+
 .date-tree-status{
 
     min-height:18px;
@@ -1133,7 +1191,8 @@ body.is-track-info-resizing{
     gap:8px;
 }
 
-.map-mode-control{
+.map-mode-control,
+.base-map-control{
 
     display:inline-flex;
 

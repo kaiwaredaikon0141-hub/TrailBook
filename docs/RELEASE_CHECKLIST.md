@@ -3025,3 +3025,61 @@ Release 1.5 Status: Ready for final commit and tag
 - permission deny、Backup failure、source write / verification failureでViewerを継続し、Backup成功前にsourceを変更しない境界を維持する
 - `TrailBook_Backup`を通常Libraryから除外し、GPX、`trailbook.json`、Library stateへ意図しない書き込みを行わない
 - point move / add / delete、interval delete、split / merge、autosave、Mobile editing、batch simplification、whole-Track movement、date correction、filename date organizationはRelease 1.5対象外である
+
+## Release 1.6 — Completed
+
+Current Release: `1.6.0`
+
+### Unit Status
+
+- Unit 1 Date Tree year / month / Track: Completed
+- Unit 2 Track Date Correction: Completed
+- Unit 3 Date-based Filename Rename / Backup Index / Track name sync: Completed
+- Unit 4 Track Translation / Date mode Selection Sync: Completed
+- Unit 5 OSM / GSI Standard Base Map: Completed
+- Unit 6 Batch Simplification: Completed
+- Unit 7 Integration Acceptance / Release Finalization: Completed
+
+Unit 1〜6 Browser Acceptance Status: Completed
+
+Unit 7 Static Validation Status: Completed
+
+Unit 7 Status: Completed
+
+Release 1.6 Status: Ready for final commit and tag
+
+### Accepted Behavior
+
+- Date Treeは`年 → 月 → Track`で日nodeを生成せず、既存resolvedDate順とUnknown Dateを維持する
+- Date Correctionは全有効`trkpt/time`を同一offsetでshiftし、既存`metadata/time`だけを同offsetで更新する。Undo / Redo / draftへ統合する
+- Date-based filename renameはcollision suffixとBackup association indexを使用し、single Track GPXのTrack nameを確定basenameへ同期する。Backup originalをrenameしない
+- Track Translationは全Track Pointへ同一offsetを適用し、lat / lonだけを変更する。Waypoint / routeは変更しない
+- Date modeはMap selectionから必要な年 / 月を展開して同一pathのTrack nodeへ同期する
+- Base MapはOpenStreetMapと国土地理院標準地図だけを提供し、device-local preferenceとして復元する。旧`gsi-pale`はOSMへfallbackする
+- Batch Simplificationは選択Folder配下またはLibrary全体を解析後に明示実行し、0削減fileを変更せず、sequential処理、file単位failure継続、安全なfile境界Cancelを維持する
+- Original Backup + In-place Edited GPX、明示保存、verification、reserved Folder除外を維持する
+
+### Out of Scope
+
+- point個別move / add / delete、interval delete、split / merge、autosave
+- Mobile Viewer / Mobile editing、GPS current-position tracking、wake lock
+- Google Maps、白地図scan、historical trace
+
+### Unit 7 Static Validation
+
+| Test | Result |
+|---|---:|
+| Date Tree | 67 assertions Pass |
+| Editing Core | 68 assertions Pass |
+| Track Simplification | 58 assertions Pass |
+| Track Date Correction | 20 assertions Pass |
+| Filename Rename / Backup Index / Track name sync | 30 assertions Pass |
+| Editor Preview / lifecycle | 138 assertions Pass |
+| Track Translation | 23 assertions Pass |
+| Backup / in-place save | 49 assertions Pass |
+| Discovery / same-path refresh | 85 assertions Pass |
+| Base Map | 17 assertions Pass |
+| Batch Simplification | 22 assertions Pass |
+| Production modules | 87 / 87 import and main reachable |
+| Missing import / circular dependency | 0 / 0 |
+| App.js / TreeView.js | 954 / 997 lines |

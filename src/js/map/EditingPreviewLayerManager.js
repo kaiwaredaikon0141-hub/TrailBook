@@ -45,7 +45,9 @@ const AFTER_POINT_STYLE = Object.freeze({
  */
 export default class EditingPreviewLayerManager {
 
-    constructor(map) {
+    constructor(map, {
+        translationService = new TrackTranslationService()
+    } = {}) {
 
         this.map = map;
         this.source = null;
@@ -56,6 +58,12 @@ export default class EditingPreviewLayerManager {
         this.afterPointLayerGroup = null;
         this.mode = "both";
         this.pointMode = "off";
+        this.translation = ZERO_TRACK_TRANSLATION;
+        this.translationMode = false;
+        this.translationHandler = null;
+        this.dragState = null;
+        this.translationService = translationService;
+        this.wasDraggingEnabled = false;
         this.pointRenderer = L.canvas({
             padding: 0.5,
             pane: "trailbook-edit-after-points"
@@ -78,17 +86,23 @@ export default class EditingPreviewLayerManager {
         this.#applyPointMode();
     }
 
-    setCandidate(source, retainedPointMasks) {
+    setCandidate(
+        source,
+        retainedPointMasks,
+        translation = this.translation
+    ) {
 
         this.source = source;
         this.retainedPointMasks = retainedPointMasks;
+        this.translation = this.translationService.normalize(translation);
         this.#removeGroup("afterLayerGroup");
         this.#removeGroup("afterPointLayerGroup");
         this.afterLayerGroup = this.#createLineGroup(
             source,
             retainedPointMasks,
             AFTER_STYLE,
-            "trailbook-edit-after"
+            "trailbook-edit-after",
+            this.translation
         );
         this.#applyMode();
         this.#applyPointMode();
@@ -112,22 +126,81 @@ export default class EditingPreviewLayerManager {
         return true;
     }
 
+    setTranslationPreviewHandler(handler) {
+
+        this.translationHandler = typeof handler === "function"
+            ? handler
+            : null;
+    }
+
+    setTranslation(value) {
+
+        this.translation = this.translationService.normalize(value);
+        if (!this.source) return;
+
+        this.setCandidate(
+            this.source,
+            this.retainedPointMasks,
+            this.translation
+        );
+    }
+
+    setTranslationMode(enabled) {
+
+        const next = Boolean(enabled);
+
+        if (next === this.translationMode) return true;
+
+        this.#finishDrag();
+        this.translationMode = next;
+        const pane = this.map?.getPane?.("trailbook-edit-after");
+
+        if (pane?.style) pane.style.pointerEvents = next ? "auto" : "none";
+
+        if (next) {
+            this.wasDraggingEnabled = Boolean(this.map?.dragging?.enabled?.());
+            this.map?.dragging?.disable?.();
+        } else if (this.wasDraggingEnabled) {
+            this.map?.dragging?.enable?.();
+            this.wasDraggingEnabled = false;
+        }
+
+        if (this.source) {
+            this.setCandidate(
+                this.source,
+                this.retainedPointMasks,
+                this.translation
+            );
+        }
+        return true;
+    }
+
     clear() {
 
+        this.setTranslationMode(false);
         this.#removeGroup("beforeLayerGroup");
         this.#removeGroup("afterLayerGroup");
         this.#removeGroup("beforePointLayerGroup");
         this.#removeGroup("afterPointLayerGroup");
         this.source = null;
         this.retainedPointMasks = null;
+        this.translation = ZERO_TRACK_TRANSLATION;
     }
 
-    #createLineGroup(source, masks, style, pane) {
+    #createLineGroup(source, masks, style, pane, translation = null) {
 
         const group = L.layerGroup();
 
-        this.#segments(source, masks).forEach(latLngs => {
-            L.polyline(latLngs, { ...style, pane }).addTo(group);
+        this.#segments(source, masks, translation).forEach(latLngs => {
+            const line = L.polyline(latLngs, {
+                ...style,
+                pane,
+                interactive: Boolean(translation && this.translationMode)
+            }).addTo(group);
+
+            if (translation && this.translationMode) {
+                line.on("mousedown", event => this.#startDrag(event));
+            }
         });
 
         return group;
@@ -145,7 +218,15 @@ export default class EditingPreviewLayerManager {
                     if (mask && !mask[pointIndex]) return;
                     if (!this.#isValidPoint(point)) return;
 
-                    L.circleMarker([point.latitude, point.longitude], {
+                    const coordinate = pane === "trailbook-edit-after-points"
+                        ? this.translationService.translateCoordinate(
+                            point.latitude,
+                            point.longitude,
+                            this.translation
+                        )
+                        : { latitude: point.latitude, longitude: point.longitude };
+
+                    L.circleMarker([coordinate.latitude, coordinate.longitude], {
                         ...style,
                         pane,
                         renderer: this.pointRenderer
@@ -157,7 +238,7 @@ export default class EditingPreviewLayerManager {
         return group;
     }
 
-    #segments(source, masks) {
+    #segments(source, masks, translation = null) {
 
         const segments = [];
 
@@ -175,7 +256,15 @@ export default class EditingPreviewLayerManager {
                         return;
                     }
 
-                    current.push([point.latitude, point.longitude]);
+                    const coordinate = translation
+                        ? this.translationService.translateCoordinate(
+                            point.latitude,
+                            point.longitude,
+                            translation
+                        )
+                        : { latitude: point.latitude, longitude: point.longitude };
+
+                    current.push([coordinate.latitude, coordinate.longitude]);
                 });
 
                 if (current.length > 0) segments.push(current);
@@ -257,6 +346,52 @@ export default class EditingPreviewLayerManager {
         }
     }
 
+    #startDrag(event) {
+
+        if (!this.translationMode || !event?.originalEvent) return;
+
+        const originalEvent = event.originalEvent;
+
+        originalEvent.preventDefault?.();
+        originalEvent.stopPropagation?.();
+        this.dragState = {
+            startPoint: this.map.mouseEventToContainerPoint(originalEvent),
+            base: this.translation
+        };
+        document.addEventListener("mousemove", this.#moveDrag);
+        document.addEventListener("mouseup", this.#endDrag, { once: true });
+    }
+
+    #moveDrag = event => {
+
+        if (!this.dragState) return;
+
+        const endPoint = this.map.mouseEventToContainerPoint(event);
+        const next = this.translationService.calculateFromDrag(
+            this.map,
+            this.dragState.startPoint,
+            endPoint,
+            this.dragState.base
+        );
+
+        this.translation = next;
+        this.setCandidate(this.source, this.retainedPointMasks, next);
+        this.translationHandler?.(next);
+    };
+
+    #endDrag = event => {
+
+        event?.preventDefault?.();
+        this.#finishDrag();
+    };
+
+    #finishDrag() {
+
+        document.removeEventListener("mousemove", this.#moveDrag);
+        document.removeEventListener("mouseup", this.#endDrag);
+        this.dragState = null;
+    }
+
     #isValidPoint(point) {
 
         return Number.isFinite(point?.latitude) &&
@@ -274,3 +409,6 @@ export {
     POINT_MODES,
     PREVIEW_MODES
 };
+import TrackTranslationService, {
+    ZERO_TRACK_TRANSLATION
+} from "../services/TrackTranslationService.js";

@@ -1,6 +1,7 @@
 import {
     cloneLibraryViewState,
     createEmptyViewStateDocument,
+    normalizeBaseMap,
     normalizeLibraryViewState,
     normalizeViewStateDocument,
     serializeViewStateDocument
@@ -66,6 +67,22 @@ export default class ViewStateStore {
     createLibraryId(rootFolderName) {
 
         return createLibraryId(rootFolderName);
+    }
+
+    getBaseMap() {
+
+        return normalizeBaseMap(this.document.global?.baseMap);
+    }
+
+    setBaseMap(value) {
+
+        const normalized = normalizeBaseMap(value);
+
+        if (this.getBaseMap() === normalized) return false;
+
+        this.document.global = { baseMap: normalized };
+        this.#save();
+        return true;
     }
 
     hasLibraryState(libraryId) {

@@ -59,6 +59,28 @@ export default class DisplayState {
         this.#notify(path);
     }
 
+    replaceFilePath(sourcePath, targetPath, fileHandle, color) {
+
+        const previous = this.displays.get(sourcePath);
+
+        if (!previous || this.displays.has(targetPath)) return false;
+
+        this.displays.delete(sourcePath);
+        this.cache.delete(sourcePath);
+        this.requestIds.delete(sourcePath);
+        this.displays.set(targetPath, {
+            ...previous,
+            path: targetPath,
+            fileHandle,
+            color,
+            state: IDLE,
+            error: null,
+            requestId: 0
+        });
+        this.#notify(null);
+        return true;
+    }
+
     getDisplay(path) {
 
         return this.displays.get(path) || null;

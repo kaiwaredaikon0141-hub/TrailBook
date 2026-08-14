@@ -2,6 +2,7 @@ import EditingPreviewLayerManager from "../map/EditingPreviewLayerManager.js";
 import GPXEditingSession from "../models/GPXEditingSession.js";
 import GPXEditingSourceLoader from "../services/GPXEditingSourceLoader.js";
 import GPXEditingSaveService from "../services/GPXEditingSaveService.js";
+import TrackDateCorrectionService from "../services/TrackDateCorrectionService.js";
 import TrackSimplificationMetrics from "../services/TrackSimplificationMetrics.js";
 import TrackSimplificationService from "../services/TrackSimplificationService.js";
 import TrackEditingInteractionGuard from "../ui/TrackEditingInteractionGuard.js";
@@ -19,10 +20,12 @@ export default class TrackEditingCoordinator {
         getLibraryToken = () => null,
         refreshEditedFile = async () => true,
         setSaveBusy = () => {},
+        isExternalBusy = () => false,
         interactionRoot = null,
         sourceLoader = new GPXEditingSourceLoader(),
         saveService = new GPXEditingSaveService(),
         saveDialog = new GPXEditingSaveDialog(),
+        dateCorrection = new TrackDateCorrectionService(),
         simplification = new TrackSimplificationService(),
         metrics = new TrackSimplificationMetrics(),
         panel = new TrackEditingPanel(),
@@ -41,10 +44,12 @@ export default class TrackEditingCoordinator {
         this.getLibraryToken = getLibraryToken;
         this.refreshEditedFile = refreshEditedFile;
         this.setSaveBusy = setSaveBusy;
+        this.isExternalBusy = isExternalBusy;
         this.interactionGuard = interactionGuard;
         this.sourceLoader = sourceLoader;
         this.saveService = saveService;
         this.saveDialog = saveDialog;
+        this.dateCorrection = dateCorrection;
         this.simplification = simplification;
         this.metrics = metrics;
         this.panel = panel;
@@ -60,6 +65,11 @@ export default class TrackEditingCoordinator {
         this.confirmingSave = false;
         this.lastSavedMasks = null;
         this.draft = null;
+        this.fileNameCandidate = null;
+        this.fileNameCandidateOffsetMs = null;
+        this.previewLayers.setTranslationPreviewHandler?.(
+            translation => this.#handleTranslationPreview(translation)
+        );
     }
 
     attach(container) {
@@ -74,7 +84,8 @@ export default class TrackEditingCoordinator {
     async start() {
 
         if (
-            this.session || this.loading || this.saving || this.confirmingSave
+            this.session || this.loading || this.saving || this.confirmingSave ||
+            this.isExternalBusy()
         ) return false;
 
         const path = this.selectionState.getSelectedPath();
@@ -107,15 +118,41 @@ export default class TrackEditingCoordinator {
                 throw new Error("Trackを含む編集sourceを読み込めませんでした。");
             }
 
-            this.session = new GPXEditingSession(source);
+            const candidateFileName = this.dateCorrection.createDateFileName(source);
+            const resolvedCandidate = candidateFileName
+                ? await this.#resolveDateFileName(
+                    candidateFileName,
+                    source.sourceFileName,
+                    entry.parentFolderHandle
+                )
+                : null;
+
+            if (requestId !== this.requestId || this.sourcePath !== path) {
+                return false;
+            }
+            const defaultRename = Boolean(candidateFileName) &&
+                !this.dateCorrection.isDateFileName(source.sourceFileName);
+
+            this.session = new GPXEditingSession(source, {
+                desiredFileName: defaultRename
+                    ? resolvedCandidate
+                    : source.sourceFileName
+            });
+            this.fileNameCandidate = resolvedCandidate;
+            this.fileNameCandidateOffsetMs = 0;
             this.mapView.setEditingTargetSuppressed(path, true);
             this.previewLayers.setSource(source);
             this.previewLayers.setCandidate(
                 source,
-                this.session.getRetainedPointMasks()
+                this.session.getRetainedPointMasks(),
+                this.session.getTranslation()
             );
             this.previewLayers.setMode(this.panel.getMode());
             this.previewLayers.setPointMode(this.panel.getPointMode());
+            this.previewLayers.setTranslationMode?.(
+                this.panel.getTranslationMode?.()
+            );
+            this.#configureTranslation();
             let backupExists = null;
 
             try {
@@ -131,6 +168,8 @@ export default class TrackEditingCoordinator {
                 backupExists
             });
             this.panel.showReady({ canSerialize: source.canSerialize });
+            this.#configureDateCorrection();
+            this.#configureFileName();
             this.#updateHistory();
             this.loading = false;
             await this.requestPreview(this.panel.getTolerance());
@@ -144,6 +183,13 @@ export default class TrackEditingCoordinator {
             );
             return false;
         }
+    }
+
+    isBusy() {
+
+        return Boolean(
+            this.session || this.loading || this.saving || this.confirmingSave
+        );
     }
 
     schedulePreview(toleranceMeters) {
@@ -172,7 +218,7 @@ export default class TrackEditingCoordinator {
         const controller = new AbortController();
 
         this.abortController = controller;
-        session.clearPreview();
+        session.clearSimplificationPreview();
         this.panel.showPreviewing(this.#emptyProgress());
 
         try {
@@ -194,9 +240,13 @@ export default class TrackEditingCoordinator {
             session.setPreview(preview);
             this.previewLayers.setCandidate(
                 session.source,
-                preview.retainedPointMasks
+                preview.retainedPointMasks,
+                session.getTranslationPreview() || session.getTranslation()
             );
             this.panel.showPreview(preview.metrics);
+            this.panel.setSaveEnabled(
+                session.isDirty && session.source.canSerialize
+            );
             this.#updateHistory();
             return true;
         } catch (error) {
@@ -244,6 +294,60 @@ export default class TrackEditingCoordinator {
         return true;
     }
 
+    async applyDate(dateText) {
+
+        if (this.saving || !this.session?.isActive) return false;
+
+        const session = this.session;
+        const sourcePath = this.sourcePath;
+
+        try {
+            const offsetMs = this.dateCorrection.calculateOffset(
+                session.source,
+                dateText
+            );
+
+            const candidate = this.dateCorrection.createDateFileName(
+                session.source,
+                offsetMs
+            );
+            const renameEnabled = this.panel.isDateRenameEnabled?.();
+
+            this.panel.updateFileNameCandidate?.(candidate, renameEnabled);
+            const entry = this.getFileEntry(this.sourcePath);
+            const resolvedCandidate = candidate
+                ? await this.#resolveDateFileName(
+                    candidate,
+                    session.source.sourceFileName,
+                    entry?.parentFolderHandle
+                )
+                : null;
+            if (this.session !== session || this.sourcePath !== sourcePath) {
+                return false;
+            }
+            const desiredFileName = renameEnabled
+                ? resolvedCandidate
+                : session.source.sourceFileName;
+
+            this.fileNameCandidate = resolvedCandidate;
+            this.fileNameCandidateOffsetMs = offsetMs;
+
+            if (!session.applyDateOffset(offsetMs, desiredFileName)) {
+                this.panel.showDateMessage?.("指定日は現在の開始日と同じです。");
+                return false;
+            }
+
+            this.#invalidatePendingPreview();
+            this.#showWorkingState();
+            return true;
+        } catch (error) {
+            this.panel.showDateError?.(
+                error?.message || "日付を適用できませんでした。"
+            );
+            return false;
+        }
+    }
+
     async save() {
 
         if (
@@ -284,7 +388,10 @@ export default class TrackEditingCoordinator {
 
         try {
             confirmed = await this.saveDialog.confirm({
-                targetPath: sourcePath,
+                targetPath: this.#targetPath(
+                    sourcePath,
+                    session.getDesiredFileName()
+                ),
                 backupExists: backup.exists,
                 metrics: saveMetrics,
                 origin: this.panel.getSaveButton()
@@ -315,6 +422,9 @@ export default class TrackEditingCoordinator {
             const saved = await this.saveService.save({
                 source: session.source,
                 retainedPointMasks: savedMasks,
+                timeOffsetMs: session.getTimeOffsetMs(),
+                translation: session.getTranslation(),
+                desiredFileName: session.getDesiredFileName(),
                 directoryHandle: entry.parentFolderHandle,
                 relativePath: sourcePath
             });
@@ -323,6 +433,7 @@ export default class TrackEditingCoordinator {
             try {
                 refreshSucceeded = Boolean(await this.refreshEditedFile({
                     sourcePath,
+                    targetPath: saved.relativePath,
                     fileHandle: saved.fileHandle
                 }));
             } catch {
@@ -330,17 +441,27 @@ export default class TrackEditingCoordinator {
             }
 
             if (this.session === session) {
+                if (saved.relativePath !== sourcePath) {
+                    this.mapView.setEditingTargetSuppressed(sourcePath, false);
+                    this.mapView.setEditingTargetSuppressed(
+                        saved.relativePath,
+                        true
+                    );
+                }
+                this.sourcePath = saved.relativePath;
                 this.session = new GPXEditingSession(saved.source);
                 this.lastSavedMasks = this.session.getRetainedPointMasks();
                 this.previewLayers.setSource(saved.source);
                 this.previewLayers.setCandidate(
                     saved.source,
-                    this.lastSavedMasks
+                    this.lastSavedMasks,
+                    this.session.getTranslation()
                 );
                 this.#showWorkingState();
                 this.panel.showSaveSuccess(saved.fileName, {
                     refreshSucceeded,
-                    backupCreated: saved.backupCreated
+                    backupCreated: saved.backupCreated,
+                    cleanupWarning: saved.cleanupWarning
                 });
             }
 
@@ -417,7 +538,11 @@ export default class TrackEditingCoordinator {
         const masks = this.session.getRetainedPointMasks();
         const calculated = this.metrics.calculate(this.session.source, masks);
 
-        this.previewLayers.setCandidate(this.session.source, masks);
+        this.previewLayers.setCandidate(
+            this.session.source,
+            masks,
+            this.session.getTranslation()
+        );
         this.panel.showApplied(calculated.total, {
             canUndo: this.session.canUndo,
             canRedo: this.session.canRedo
@@ -425,6 +550,9 @@ export default class TrackEditingCoordinator {
         this.panel.setSaveEnabled(
             this.session.isDirty && this.session.source.canSerialize
         );
+        this.#configureDateCorrection();
+        this.#configureFileName();
+        this.#configureTranslation();
     }
 
     #bindPanel() {
@@ -436,9 +564,16 @@ export default class TrackEditingCoordinator {
             "point-mode",
             mode => this.previewLayers.setPointMode(mode)
         );
+        this.panel.on("translation-mode", enabled => {
+            this.previewLayers.setTranslationMode?.(enabled);
+        });
         this.panel.on("apply", () => this.apply());
         this.panel.on("undo", () => this.undo());
         this.panel.on("redo", () => this.redo());
+        this.panel.on("date-apply", value => void this.applyDate(value));
+        this.panel.on("filename-toggle", checked => {
+            void this.#applyFileNameToggle(checked);
+        });
         this.panel.on("save", () => void this.save());
         this.panel.on("done", () => this.done());
         this.panel.on("cancel", () => this.cancel());
@@ -491,6 +626,11 @@ export default class TrackEditingCoordinator {
             BACKUP_CREATE_FAILED: "The original Backup could not be created. The source was not changed.",
             BACKUP_WRITE_FAILED: "Writing the original Backup failed. The source was not changed.",
             BACKUP_VERIFICATION_FAILED: "The original Backup could not be verified. The source was not changed.",
+            BACKUP_INDEX_READ_FAILED: "The Backup association could not be read. The source was not changed.",
+            BACKUP_INDEX_WRITE_FAILED: "The Backup association could not be saved. The old source was retained.",
+            BACKUP_INDEX_VERIFICATION_FAILED: "The Backup association could not be verified. The old source was retained.",
+            FILENAME_COLLISION: "An available date filename could not be found. The old source was retained.",
+            INVALID_TARGET_FILENAME: "The date filename is invalid. The old source was retained.",
             SOURCE_WRITE_FAILED: "Writing the edited GPX failed. The Backup is retained for recovery.",
             EDITED_VERIFICATION_FAILED: "Edited GPX verification failed. Restore the original from TrailBook_Backup."
         };
@@ -535,9 +675,16 @@ export default class TrackEditingCoordinator {
         const masks = this.session.getRetainedPointMasks();
 
         this.previewLayers.setSource(this.session.source);
-        this.previewLayers.setCandidate(this.session.source, masks);
+        this.previewLayers.setCandidate(
+            this.session.source,
+            masks,
+            this.session.getTranslation()
+        );
         this.previewLayers.setMode(this.panel.getMode());
         this.previewLayers.setPointMode(this.panel.getPointMode());
+        this.previewLayers.setTranslationMode?.(
+            this.panel.getTranslationMode?.()
+        );
         this.panel.showReady({
             canSerialize: this.session.source.canSerialize
         });
@@ -555,7 +702,13 @@ export default class TrackEditingCoordinator {
 
     #isCurrentWorkingSaved(session = this.session) {
 
-        if (!session || !this.lastSavedMasks) return false;
+        if (
+            !session || !this.lastSavedMasks ||
+            session.getTimeOffsetMs() !== 0 ||
+            session.getDesiredFileName() !== session.source.sourceFileName ||
+            Math.abs(session.getTranslation().latitudeDelta) >= 1e-12 ||
+            Math.abs(session.getTranslation().longitudeDelta) >= 1e-12
+        ) return false;
 
         const current = session.getRetainedPointMasks();
 
@@ -565,6 +718,133 @@ export default class TrackEditingCoordinator {
                     value === this.lastSavedMasks[trackIndex]?.[segmentIndex]?.[pointIndex]
             )
         ));
+    }
+
+    #configureDateCorrection() {
+
+        if (!this.session || !this.panel.configureDateCorrection) return;
+
+        this.panel.configureDateCorrection({
+            sourceStartTime: this.dateCorrection.getFirstTrackPointTime(
+                this.session.source
+            ),
+            timeOffsetMs: this.session.getTimeOffsetMs()
+        });
+    }
+
+    #targetPath(sourcePath, fileName) {
+
+        const separator = sourcePath.lastIndexOf("/");
+
+        return separator < 0
+            ? fileName
+            : `${sourcePath.slice(0, separator + 1)}${fileName}`;
+    }
+
+    #configureFileName() {
+
+        if (!this.session || !this.panel.configureFileName) return;
+
+        const sourceFileName = this.session.source.sourceFileName;
+        const generatedCandidate = this.dateCorrection.createDateFileName(
+            this.session.source,
+            this.session.getTimeOffsetMs()
+        );
+        const desired = this.session.getDesiredFileName();
+        const candidate = desired !== sourceFileName
+            ? desired
+            : this.fileNameCandidateOffsetMs === this.session.getTimeOffsetMs()
+                ? this.fileNameCandidate
+                : generatedCandidate;
+
+        this.panel.configureFileName({
+            currentFileName: sourceFileName,
+            candidateFileName: candidate,
+            renameEnabled: Boolean(candidate),
+            defaultRename: Boolean(candidate) &&
+                this.session.getDesiredFileName() !== sourceFileName
+        });
+    }
+
+    async #applyFileNameToggle(checked) {
+
+        if (this.saving || !this.session?.isActive) return false;
+
+        const session = this.session;
+        const sourcePath = this.sourcePath;
+
+        const candidate = this.dateCorrection.createDateFileName(
+            session.source,
+            session.getTimeOffsetMs()
+        );
+        this.panel.updateFileNameCandidate?.(candidate, checked);
+        const entry = this.getFileEntry(this.sourcePath);
+        const resolvedCandidate = checked && candidate
+            ? await this.#resolveDateFileName(
+                candidate,
+                session.source.sourceFileName,
+                entry?.parentFolderHandle
+            )
+            : candidate;
+        if (this.session !== session || this.sourcePath !== sourcePath) {
+            return false;
+        }
+        const desiredFileName = checked && resolvedCandidate
+            ? resolvedCandidate
+            : session.source.sourceFileName;
+
+        this.fileNameCandidate = resolvedCandidate;
+        this.fileNameCandidateOffsetMs = session.getTimeOffsetMs();
+
+        if (!session.applyDesiredFileName(desiredFileName)) return false;
+
+        this.#invalidatePendingPreview();
+        this.#showWorkingState();
+        return true;
+    }
+
+    async #resolveDateFileName(candidate, sourceFileName, directoryHandle) {
+
+        try {
+            return await this.saveService.resolveTargetFileName(
+                directoryHandle,
+                sourceFileName,
+                candidate
+            );
+        } catch {
+            // Explicit Save performs the authoritative collision check.
+            return candidate;
+        }
+    }
+
+    #handleTranslationPreview(translation) {
+
+        if (!this.session?.isActive || this.saving) return;
+
+        const pending = this.session.setTranslationPreview(translation);
+
+        this.panel.configureTranslation?.({
+            ...translation,
+            pending,
+            canApply: pending || Boolean(this.session.getPreview())
+        });
+        this.panel.setSaveEnabled(
+            this.session.isDirty && this.session.source.canSerialize
+        );
+    }
+
+    #configureTranslation() {
+
+        if (!this.session || !this.panel.configureTranslation) return;
+
+        const translation = this.session.getTranslationPreview() ||
+            this.session.getTranslation();
+
+        this.panel.configureTranslation({
+            ...translation,
+            pending: Boolean(this.session.getTranslationPreview()),
+            canApply: this.session.hasPreview
+        });
     }
 }
 

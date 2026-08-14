@@ -310,6 +310,20 @@ export default class GeometryCacheRepository {
         }
     }
 
+    async invalidate(namespace, path) {
+
+        const key = this.#key(namespace, path);
+
+        if (!key) return false;
+
+        try {
+            await this.adapter.delete(key);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
     #key(namespace, path) {
 
         if (typeof namespace !== "string" || namespace.length === 0 ||

@@ -160,6 +160,13 @@ async function testFirstAndLaterSave() {
     const saved = await service.save({
         source,
         retainedPointMasks: [[[true, false, true]]],
+        timeOffsetMs: 24 * 60 * 60 * 1000,
+        translation: {
+            latitudeDelta: 0.25,
+            longitudeDelta: -0.5,
+            northMeters: 27830,
+            eastMeters: -45594
+        },
         directoryHandle: directory,
         relativePath: "rides/source.gpx"
     });
@@ -180,6 +187,13 @@ async function testFirstAndLaterSave() {
         new DOMParser().parseFromString(sourceHandle.text, "application/xml")
             .querySelectorAll("trkpt").length === 2,
     "source path does not contain the edited GPX");
+    assert(sourceHandle.text.includes("2026-08-09T00:00:00Z"),
+        "Save did not serialize the editing time offset");
+    assert(sourceHandle.text.includes('lat="35.2500000"') &&
+        sourceHandle.text.includes('lon="134.5000000"'),
+    "Save did not serialize the Track translation");
+    assert(sourceHandle.text.includes('<wpt lat="35" lon="135">'),
+        "Save translated a Waypoint");
     assert(!directory.entries.has("source-simplified.gpx"),
         "legacy simplified sibling was created");
 

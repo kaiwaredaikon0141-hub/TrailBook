@@ -40,6 +40,7 @@ export default class ViewStateCoordinator {
         this.selectionChangedDuringRestore = false;
         this.saveAfterRestore = false;
         this.#bindEvents();
+        this.mapView.setBaseMap?.(this.store.getBaseMap?.() ?? "osm");
     }
 
     flush() {
@@ -171,6 +172,10 @@ export default class ViewStateCoordinator {
             }
 
             this.#scheduleSave();
+        });
+        this.eventBus.on("map:base-map-changed", ({ baseMap } = {}) => {
+            this.mapView.setBaseMap?.(baseMap);
+            this.store.setBaseMap?.(this.mapView.getBaseMap?.());
         });
         this.eventBus.on("view-state:sidebar-toggled", () => {
             this.#handleRuntimeChange();

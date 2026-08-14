@@ -67,6 +67,7 @@ class PanelFake {
     getTolerance() { return this.tolerance; }
     getMode() { return this.mode; }
     getPointMode() { return this.pointMode; }
+    getTranslationMode() { return false; }
     showLoading(path) { this.calls.push(["loading", path]); }
     showReady(value) { this.calls.push(["ready", value]); }
     showPreviewing(value) { this.calls.push(["previewing", value]); }
@@ -74,6 +75,10 @@ class PanelFake {
     showApplied(value) { this.calls.push(["applied", value]); }
     showError(value) { this.calls.push(["error", value]); }
     configureSave(value) { this.saveConfig = value; }
+    configureDateCorrection(value) { this.dateConfig = value; }
+    configureTranslation(value) { this.translation = value; }
+    showDateError(value) { this.calls.push(["date-error", value]); }
+    showDateMessage(value) { this.calls.push(["date-message", value]); }
     setSaveEnabled(value) { this.saveEnabled = value; }
     showSaving(value) { this.calls.push(["saving", value]); }
     showSaveSuccess(value) { this.calls.push(["saved", value]); }
@@ -98,6 +103,8 @@ class PreviewLayersFake {
     setCandidate(source, masks) {
         this.calls.push(["candidate", source, masks]);
     }
+    setTranslationPreviewHandler(handler) { this.translationHandler = handler; }
+    setTranslationMode(value) { this.calls.push(["translation-mode", value]); }
     setMode(mode) { this.calls.push(["mode", mode]); }
     setPointMode(mode) { this.calls.push(["point-mode", mode]); }
     clear() { this.calls.push(["clear"]); }
@@ -160,6 +167,15 @@ async function testCoordinatorLifecycle() {
             }
         },
         simplification: new TrackSimplificationService(),
+        dateCorrection: {
+            getFirstTrackPointTime() { return new Date("2026-08-08T00:00:00Z"); },
+            createDateFileName() { return null; },
+            isDateFileName() { return false; },
+            calculateOffset(_source, value) {
+                assert(value === "2026-09-10", "wrong date correction input");
+                return 33 * 24 * 60 * 60 * 1000;
+            }
+        },
         saveService: {
             async inspectBackup() { return { exists: false }; },
             async save(request) {
@@ -168,6 +184,7 @@ async function testCoordinatorLifecycle() {
                     fileName: "trip.gpx",
                     fileHandle: { name: "trip.gpx" },
                     source,
+                    relativePath: "trip.gpx",
                     backupCreated: true
                 };
             }
@@ -205,16 +222,38 @@ async function testCoordinatorLifecycle() {
     assert(coordinator.apply(), "Apply did not update working mask");
     assert(coordinator.session.historyLength === 1,
         "Apply did not create exactly one command");
+    previewLayers.translationHandler({
+        latitudeDelta: 0.1,
+        longitudeDelta: 0.2,
+        northMeters: 11132,
+        eastMeters: 18200
+    });
+    assert(coordinator.apply(), "translation Apply failed");
+    assert(coordinator.session.getTranslation().latitudeDelta === 0.1,
+        "translation was not stored in the Session");
+    assert(coordinator.done(), "Done rejected translated draft");
+    assert(await coordinator.start(), "translated draft could not resume");
+    assert(coordinator.session.getTranslation().longitudeDelta === 0.2,
+        "Done/resume lost Track translation");
     assert(coordinator.undo(), "Undo failed");
     assert(coordinator.session.canRedo, "Undo did not enable Redo");
     assert(coordinator.redo(), "Redo failed");
     assert(coordinator.session.canUndo, "Redo did not restore Undo state");
+    assert(await coordinator.applyDate("2026-09-10"),
+        "date correction did not enter the editing history");
+    assert(coordinator.session.getTimeOffsetMs() === 33 * 24 * 60 * 60 * 1000,
+        "date correction offset was not stored in the Session");
 
     const saveResult = await coordinator.save();
     assert(saveResult?.refreshSucceeded,
         "verified in-place Save was not refreshed into the Library");
     assert(saved.length === 1 && refreshed.length === 1,
         "Save or Library refresh ran more than once");
+    assert(saved[0].timeOffsetMs === 33 * 24 * 60 * 60 * 1000,
+        "Save did not receive the Session date offset");
+    assert(saved[0].translation.latitudeDelta === 0.1 &&
+        saved[0].translation.longitudeDelta === 0.2,
+    "Save did not receive the Session Track translation");
     assert(saveBusy.join() === "true,false",
         "Save busy state was not bounded to the operation");
     assert(coordinator.session && !coordinator.session.isDirty,
@@ -244,7 +283,8 @@ async function testCoordinatorLifecycle() {
     assert(coordinator.cancel(), "Cancel did not close editing session");
     assert(coordinator.session === null, "Cancel retained session");
     assert(coordinator.draft === null, "Cancel retained the Done draft");
-    assert(interactionGuard.states.join() === "true,false,true,false",
+    assert(interactionGuard.states.join() ===
+        "true,false,true,false,true,false",
         "Done / resume / Cancel interaction lock lifecycle is incorrect");
     assert(previewLayers.calls.at(-1)[0] === "clear",
         "Cancel did not remove preview layers");
@@ -335,6 +375,7 @@ function createLeafletFakes() {
     const createdLines = [];
     const displayed = new Set();
     const panes = new Map();
+    let draggingEnabled = true;
     const map = {
         getPane: name => panes.get(name) || null,
         createPane(name) {
@@ -342,7 +383,20 @@ function createLeafletFakes() {
             panes.set(name, pane);
             return pane;
         },
-        hasLayer: group => displayed.has(group)
+        hasLayer: group => displayed.has(group),
+        getCenter: () => ({ lat: 35, lng: 135 }),
+        getZoom: () => 10,
+        project: value => ({ x: value.lng * 100, y: -value.lat * 100 }),
+        unproject: value => ({ lat: -value.y / 100, lng: value.x / 100 }),
+        mouseEventToContainerPoint: event => ({
+            x: event.clientX,
+            y: event.clientY
+        }),
+        dragging: {
+            enabled: () => draggingEnabled,
+            disable: () => { draggingEnabled = false; },
+            enable: () => { draggingEnabled = true; }
+        }
     };
 
     globalThis.L = {
@@ -498,6 +552,36 @@ function testPreviewLayers() {
     assert(afterPoints.every(layer => layer.options.renderer.kind === "canvas"),
         "point preview does not share Canvas renderer");
     assert(!manager.setPointMode("invalid"), "invalid point mode was accepted");
+    let translated = null;
+
+    manager.setTranslationPreviewHandler(value => { translated = value; });
+    assert(manager.setTranslationMode(true), "Track translation mode rejected");
+    assert(panes.get("trailbook-edit-after").style.pointerEvents === "auto",
+        "translation mode did not enable After Track hit testing");
+    const draggable = createdLines.findLast(line =>
+        !line.isPoint && line.options.interactive);
+
+    assert(typeof draggable?.handlers.mousedown === "function",
+        "interactive After Track has no drag handler");
+    draggable.handlers.mousedown({
+        originalEvent: {
+            clientX: 10,
+            clientY: 10,
+            preventDefault() {},
+            stopPropagation() {}
+        }
+    });
+    document.dispatchEvent(new MouseEvent("mousemove", {
+        clientX: 110,
+        clientY: -40
+    }));
+    document.dispatchEvent(new MouseEvent("mouseup"));
+    assert(translated?.latitudeDelta === 0.5 &&
+        translated?.longitudeDelta === 1,
+    "drag did not use project/unproject translation");
+    manager.setTranslationMode(false);
+    assert(panes.get("trailbook-edit-after").style.pointerEvents === "none",
+        "translation mode left After Track interactive");
     manager.clear();
     assert(displayed.size === 0, "point preview clear left layers on Map");
 }
@@ -507,9 +591,13 @@ function testPanelAccessibility() {
     const host = document.createElement("div");
     let editCount = 0;
     let saveCount = 0;
+    let appliedDate = null;
+    let translationMode = null;
 
     panel.on("edit", () => { editCount += 1; });
     panel.on("save", () => { saveCount += 1; });
+    panel.on("date-apply", value => { appliedDate = value; });
+    panel.on("translation-mode", value => { translationMode = value; });
     panel.attach(host);
     panel.setSelectedTrack("trip.gpx");
     assert(!panel.editButton.disabled, "selected Track did not enable Edit");
@@ -523,6 +611,21 @@ function testPanelAccessibility() {
     panel.configureSave({ canSerialize: true });
     assert(panel.backupStatus.textContent.includes("TrailBook_Backup"),
         "first-save Backup policy was not shown");
+    panel.configureDateCorrection({
+        sourceStartTime: new Date(2026, 7, 8, 12, 34, 56),
+        timeOffsetMs: 0
+    });
+    assert(panel.dateInput.value === "2026-08-08" &&
+        !panel.actionButtons.get("date-apply").disabled,
+        "valid Track time did not enable date correction");
+    panel.dateInput.value = "2026-09-10";
+    panel.actionButtons.get("date-apply").click();
+    assert(appliedDate === "2026-09-10",
+        "date correction action did not emit the input value");
+    panel.configureDateCorrection({ sourceStartTime: null });
+    assert(panel.actionButtons.get("date-apply").disabled &&
+        panel.dateStatus.textContent.includes("修正できません"),
+        "missing Track time did not disable date correction");
     panel.showPreview({
         sourcePointCount: 3,
         retainedPointCount: 2,
@@ -534,6 +637,22 @@ function testPanelAccessibility() {
     });
     assert(!panel.actionButtons.get("apply").disabled,
         "completed preview did not enable Apply");
+    panel.configureTranslation({ northMeters: 0, eastMeters: 0 });
+    assert(panel.actionButtons.get("apply").disabled,
+        "zero translation enabled Apply");
+    panel.translationMode.checked = true;
+    panel.translationMode.dispatchEvent(new Event("change", { bubbles: true }));
+    assert(translationMode === true,
+        "translation mode checkbox did not emit its state");
+    panel.configureTranslation({
+        northMeters: -12.3,
+        eastMeters: 45.6,
+        pending: true
+    });
+    assert(!panel.actionButtons.get("apply").disabled &&
+        panel.translationNorth.textContent.includes("南") &&
+        panel.translationEast.textContent.includes("東"),
+    "translation amount/status was not presented");
     assert(panel.status.getAttribute("role") === "status",
         "Editor status lacks status role");
     assert(panel.status.getAttribute("aria-live") === "polite",
