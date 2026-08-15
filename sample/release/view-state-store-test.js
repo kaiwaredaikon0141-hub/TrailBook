@@ -1114,7 +1114,12 @@ function testSidebarControls() {
     const controls = new ViewStateControls(eventBus, {
         requestFrame: callback => callback(),
         confirmAction: () => true,
-        isDesktop: () => true
+        isDesktop: () => true,
+        mobileMedia: {
+            matches: false,
+            addEventListener() {}
+        },
+        windowObject: { addEventListener() {} }
     });
 
     treeMarker.textContent = "tree-state";
@@ -1255,7 +1260,12 @@ function testSidebarControls() {
     const mobileTrackInfo = document.createElement("section");
     const mobileControls = new ViewStateControls(new EventBus(), {
         requestFrame: callback => callback(),
-        isDesktop: () => false
+        isDesktop: () => false,
+        mobileMedia: {
+            matches: false,
+            addEventListener() {}
+        },
+        windowObject: { addEventListener() {} }
     });
 
     mobileTrackList.className = "sidebar";
@@ -1508,7 +1518,7 @@ function testPreviousLibraryPanel() {
 }
 
 try {
-    assert(Config.version === "1.3.0", "Config version changed");
+    assert(Config.version === "1.6.0", "Config version changed");
     assert(Config.uiSettings.schemaVersion === 1, "UI schema changed");
     assert(Config.sharedLibrarySettings.schemaVersion === 1, "shared schema changed");
     assert(Config.viewState.storageKey === "trailbook.viewState", "view key");

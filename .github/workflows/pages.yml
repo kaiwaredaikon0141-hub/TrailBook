@@ -1,0 +1,73 @@
+name: Deploy TrailBook to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Build static artifact
+        env:
+          TRAILBOOK_GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.TRAILBOOK_GOOGLE_OAUTH_CLIENT_ID }}
+          TRAILBOOK_GOOGLE_API_KEY: ${{ secrets.TRAILBOOK_GOOGLE_API_KEY }}
+          TRAILBOOK_GOOGLE_PICKER_APP_ID: ${{ secrets.TRAILBOOK_GOOGLE_PICKER_APP_ID }}
+        run: |
+          mkdir _site
+          cp -a src/. _site/
+          rm -f _site/trailbook.local-config.js
+          rm -f _site/trailbook.local-config.example.js
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          config = {
+              "googleOAuthClientId": os.environ.get(
+                  "TRAILBOOK_GOOGLE_OAUTH_CLIENT_ID", ""
+              ),
+              "googleApiKey": os.environ.get("TRAILBOOK_GOOGLE_API_KEY", ""),
+              "googlePickerAppId": os.environ.get(
+                  "TRAILBOOK_GOOGLE_PICKER_APP_ID", ""
+              ),
+          }
+          output = "window.TRAILBOOK_CONFIG = " + json.dumps(
+              config,
+              ensure_ascii=False,
+              separators=(",", ":"),
+          ) + ";\n"
+          with Path("_site/trailbook.local-config.js").open(
+              "w", encoding="utf-8", newline="\n"
+          ) as config_file:
+              config_file.write(output)
+          PY
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

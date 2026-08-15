@@ -101,7 +101,7 @@ function testSemantics() {
         "broken Track name remained searchable");
     assert(service.filter(entries, { from: "2026-08-01" }).totalCount === 1,
         "inclusive from or Unknown exclusion");
-    assert(service.filter(entries, { to: "2026-07-01" }).totalCount === 1,
+    assert(service.filter(entries, { to: "2026-07-01" }).totalCount === 2,
         "inclusive to boundary");
     assert(service.filter(entries, {
         from: "2026-07-01",

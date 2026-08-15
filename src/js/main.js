@@ -1,4 +1,7 @@
 import App from "./core/App.js";
+import CurrentPositionController from "./core/CurrentPositionController.js";
+import DrivingModeController from "./core/DrivingModeController.js";
+import DriveLibraryCoordinator from "./core/DriveLibraryCoordinator.js";
 import BatchSimplificationCoordinator, {
     collectBatchEntries
 } from "./core/BatchSimplificationCoordinator.js";
@@ -11,6 +14,18 @@ window.addEventListener("DOMContentLoaded", () => {
     const app = new App();
 
     app.initialize();
+
+    const currentPosition = new CurrentPositionController({
+        mapView: app.mapView,
+        eventBus: app.eventBus
+    });
+    currentPosition.attach(app.mapView.element);
+    const drivingMode = new DrivingModeController({
+        currentPosition, eventBus: app.eventBus,
+        viewStateControls: app.viewStateControls, workspace: app.workspace,
+        trackInfoElement: app.trackDiscoveryCoordinator.trackInfo.element
+    });
+    drivingMode.attach(app.mapView.element);
 
     const editedFileRefresh = new EditedGPXLibraryRefreshCoordinator({
         treeView: app.treeView,
@@ -66,6 +81,7 @@ window.addEventListener("DOMContentLoaded", () => {
     });
 
     let batchSimplification = null;
+    let driveLibrary = null;
     const editor = new TrackEditingCoordinator({
         eventBus: app.eventBus,
         selectionState: app.selectionState,
@@ -73,7 +89,8 @@ window.addEventListener("DOMContentLoaded", () => {
         getLibraryToken: () => app.currentLibrary,
         refreshEditedFile: saved => editedFileRefresh.refreshVerifiedFile(saved),
         setSaveBusy: busy => app.toolbar.setFolderPickerBusy(busy),
-        isExternalBusy: () => Boolean(batchSimplification?.isBusy()),
+        isExternalBusy: () => Boolean(batchSimplification?.isBusy()) ||
+            Boolean(driveLibrary?.isReadOnlyActive()),
         interactionRoot: app.workspace.querySelector(".sidebar-shell"),
         getFileEntry: path => {
             const entry = app.treeView.getFileEntries()
@@ -95,12 +112,37 @@ window.addEventListener("DOMContentLoaded", () => {
         getEntries: scope => collectBatchEntries(app.treeView, scope),
         getRootDirectoryHandle: () => app.currentLibrary?.rootFolder?.handle,
         getLibraryToken: () => app.currentLibrary,
-        isLibraryAvailable: () => Boolean(app.currentLibrary),
+        isLibraryAvailable: () => Boolean(app.currentLibrary) &&
+            !driveLibrary?.isReadOnlyActive(),
         isEditorBusy: () => editor.isBusy(),
         refreshSavedFile: saved => editedFileRefresh.refreshVerifiedFile(saved),
         setBusy: busy => app.toolbar.setFolderPickerBusy(busy)
     });
     batchSimplification.attach(
+        app.trackDiscoveryCoordinator.sidebarShell
+            ?.querySelector(".sidebar-fixed-controls") ||
+        app.trackDiscoveryCoordinator.sidebarShell
+    );
+
+    driveLibrary = new DriveLibraryCoordinator({
+        config: app.config.googleDrive,
+        canSwitchLibrary: () =>
+            !editor.isBusy() &&
+            !batchSimplification.isBusy() &&
+            app.librarySettingsCoordinator.canSwitchLibrary(),
+        flushViewState: () => app.viewStateCoordinator.flush(),
+        beforeLoad: () => {
+            app.clearSelection("library-switch");
+            app.trackDiscoveryCoordinator.clearLibrary();
+        },
+        applyLibrary: (library, context) =>
+            app.handleLibraryLoaded(library, context),
+        getCurrentLibrary: () => app.currentLibrary,
+        setReadOnlyPresentation: readOnly => {
+            if (readOnly) app.librarySettingsPanel.setAvailable(false);
+        }
+    });
+    driveLibrary.attach(
         app.trackDiscoveryCoordinator.sidebarShell
             ?.querySelector(".sidebar-fixed-controls") ||
         app.trackDiscoveryCoordinator.sidebarShell

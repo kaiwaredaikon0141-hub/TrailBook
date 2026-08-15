@@ -1,4 +1,5 @@
 import LayerManager from "../map/LayerManager.js";
+import drivePerformance from "../services/DrivePerformanceMonitor.js";
 
 const DEFAULT_MAP_DISPLAY_MODE = "color";
 const MAP_DISPLAY_MODES = new Set([
@@ -52,6 +53,10 @@ export default class MapView {
 
         this.baseTileLayer = null;
 
+        this.currentPositionMarker = null;
+
+        this.currentPositionAccuracy = null;
+
         this.programmaticViewChangeDepth = 0;
 
         this.selectionInteractionEnabled = true;
@@ -66,6 +71,10 @@ export default class MapView {
             if (this.selectionInteractionEnabled) {
                 this.eventBus.emit("map:background-clicked");
             }
+        };
+
+        this.handleDragStart = () => {
+            this.eventBus.emit("map:user-drag-started");
         };
 
         this.handleMoveEnd = () => {
@@ -128,6 +137,7 @@ export default class MapView {
             this.map.on("zoomend", this.handleZoomEnd);
             this.map.on("moveend", this.handleMoveEnd);
             this.map.on("click", this.handleMapClick);
+            this.map.on("dragstart", this.handleDragStart);
 
             this.showEmpty();
 
@@ -182,7 +192,15 @@ export default class MapView {
             throw new Error("MapView is not initialized.");
         }
 
-        this.layerManager.displayGPX(path, result, style, options);
+        const endLayer = drivePerformance.begin("mapLayerMs", "mapLayerCount");
+
+        drivePerformance.recordComponentCall("MapView.displayGPX");
+
+        try {
+            this.layerManager.displayGPX(path, result, style, options);
+        } finally {
+            endLayer();
+        }
 
         this.setState("loaded", "");
     }
@@ -310,6 +328,94 @@ export default class MapView {
             silent
         );
 
+        return true;
+    }
+
+    setCurrentPosition({ latitude, longitude, accuracy } = {}) {
+
+        if (
+            !this.map || !Number.isFinite(latitude) ||
+            !Number.isFinite(longitude)
+        ) {
+            return false;
+        }
+
+        const latLng = [latitude, longitude];
+
+        if (!this.currentPositionMarker) {
+            this.currentPositionMarker = L.circleMarker(latLng, {
+                radius: 7,
+                color: "#ffffff",
+                weight: 3,
+                fillColor: "#2563eb",
+                fillOpacity: 1,
+                interactive: false,
+                bubblingMouseEvents: false,
+                pane: "markerPane",
+                className: "current-position-marker"
+            }).addTo(this.map);
+        } else {
+            this.currentPositionMarker.setLatLng(latLng);
+        }
+
+        if (Number.isFinite(accuracy) && accuracy >= 0) {
+            if (!this.currentPositionAccuracy) {
+                this.currentPositionAccuracy = L.circle(latLng, {
+                    radius: accuracy,
+                    color: "#2563eb",
+                    weight: 1,
+                    fillColor: "#60a5fa",
+                    fillOpacity: 0.16,
+                    interactive: false,
+                    bubblingMouseEvents: false,
+                    pane: "overlayPane",
+                    className: "current-position-accuracy"
+                }).addTo(this.map);
+            } else {
+                this.currentPositionAccuracy
+                    .setLatLng(latLng)
+                    .setRadius(accuracy);
+            }
+        } else if (this.currentPositionAccuracy) {
+            this.currentPositionAccuracy.remove();
+            this.currentPositionAccuracy = null;
+        }
+
+        return true;
+    }
+
+    followCurrentPosition({ latitude, longitude } = {}, {
+        verticalRatio = 0.5
+    } = {}) {
+
+        if (
+            !this.map || !Number.isFinite(latitude) ||
+            !Number.isFinite(longitude)
+        ) {
+            return false;
+        }
+
+        const zoom = this.map.getZoom();
+        let center = [latitude, longitude];
+
+        if (
+            verticalRatio !== 0.5 &&
+            typeof this.map.project === "function" &&
+            typeof this.map.unproject === "function" &&
+            typeof this.map.getSize === "function"
+        ) {
+            const point = this.map.project(center, zoom);
+            const size = this.map.getSize();
+            center = this.map.unproject(
+                [point.x, point.y - (verticalRatio - 0.5) * size.y],
+                zoom
+            );
+        }
+
+        this.#runViewChange(
+            () => this.map.setView(center, zoom, { animate: false }),
+            true
+        );
         return true;
     }
 

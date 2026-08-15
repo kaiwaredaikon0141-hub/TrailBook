@@ -1,4 +1,5 @@
 import { createDefaultLibraryViewState } from "../utils/ViewStateSchema.js";
+import drivePerformance from "../services/DrivePerformanceMonitor.js";
 
 /**
  * Coordinates device-local view snapshots without replacing runtime state.
@@ -62,6 +63,12 @@ export default class ViewStateCoordinator {
             return false;
         }
 
+        const endDriveRestore = drivePerformance.begin("restoreLifecycleMs");
+
+        drivePerformance.recordComponentCall("ViewStateCoordinator.restoreLibrary");
+        drivePerformance.markRestoreProducerStarted(isCurrent);
+        drivePerformance.setRestoreGeneration(generation);
+
         this.flush();
         this.#cancelTimer();
         this.pendingSave = false;
@@ -98,17 +105,28 @@ export default class ViewStateCoordinator {
         });
         this.mapView.invalidateSize({ silent: true });
 
-        this.#resolveVisibleDisplays(state?.visibleTracks ?? [])
-            .forEach(display => {
-                this.eventBus.emit("gpx:display-toggled", {
-                    path: display.path,
-                    fileHandle: display.fileHandle,
-                    checked: true,
-                    source: "view-state-restore"
-                });
+        const visibleDisplays = this.#resolveVisibleDisplays(
+            state?.visibleTracks ?? []
+        );
+        const expectedEnqueueCount = visibleDisplays.length;
+        drivePerformance.setRestoreGeneration(generation, expectedEnqueueCount);
+        const restoreEnqueuesComplete = this.displayQueue.whenEnqueued?.({
+            generation,
+            count: expectedEnqueueCount
+        }) ?? Promise.resolve();
+        visibleDisplays.forEach(display => {
+            this.eventBus.emit("gpx:display-toggled", {
+                path: display.path,
+                fileHandle: display.fileHandle,
+                checked: true,
+                source: "view-state-restore"
             });
+        });
 
-        await this.displayQueue.whenIdle();
+        await restoreEnqueuesComplete;
+        drivePerformance.markRestoreProducerCompleted(isCurrent);
+        await this.displayQueue.whenIdle({ generation });
+        drivePerformance.markDisplayQueueIdle(isCurrent);
 
         if (
             restoreRequestId !== this.restoreRequestId ||
@@ -117,6 +135,7 @@ export default class ViewStateCoordinator {
             if (restoreRequestId === this.restoreRequestId) {
                 this.restoring = false;
             }
+            endDriveRestore();
             return false;
         }
 
@@ -139,6 +158,7 @@ export default class ViewStateCoordinator {
             this.#scheduleSave();
         }
 
+        endDriveRestore();
         return true;
     }
 

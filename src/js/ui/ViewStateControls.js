@@ -3,6 +3,8 @@ import TrackInfoResizeHandle from "./TrackInfoResizeHandle.js";
 
 const SIDEBAR_ID = "trailbook-sidebar";
 const STATUS_ID = "view-state-status";
+const MOBILE_QUERY =
+    "(max-width: 768px), (max-height: 500px) and (pointer: coarse)";
 
 /**
  * Presents device-local view-state controls without owning persistence.
@@ -24,7 +26,9 @@ export default class ViewStateControls {
         trackInfoMaxHeight = 420,
         trackListMinHeight = 100,
         trackInfoKeyboardStep = 16,
-        isDesktop
+        isDesktop,
+        mobileMedia = globalThis.matchMedia?.(MOBILE_QUERY) ?? null,
+        windowObject = globalThis.window
     } = {}) {
 
         this.eventBus = eventBus;
@@ -35,6 +39,13 @@ export default class ViewStateControls {
         this.toolbar = null;
         this.libraryName = "";
         this.sidebarOpen = true;
+        this.desktopSidebarOpen = true;
+        this.mobileMedia = mobileMedia;
+        this.windowObject = windowObject;
+        this.mobileLayout = Boolean(mobileMedia?.matches);
+        this.layoutFrame = null;
+        this.trackInfo = null;
+        this.trackInfoParent = null;
         this.resizeHandle = new SidebarResizeHandle(eventBus, {
             minWidth: sidebarMinWidth,
             maxWidth: sidebarMaxWidth,
@@ -64,6 +75,9 @@ export default class ViewStateControls {
         const trackList = sidebar.querySelector(".sidebar");
         const trackInfo = sidebar.querySelector(".track-info");
 
+        this.trackInfo = trackInfo;
+        this.trackInfoParent = trackInfo?.parentNode || null;
+
         if (trackList && trackInfo) {
             this.trackInfoResizeHandle.attach({
                 shell: sidebar,
@@ -72,11 +86,41 @@ export default class ViewStateControls {
             });
         }
         this.sidebar.id = SIDEBAR_ID;
+        this.sidebarCloseButton = document.createElement("button");
+        this.sidebarCloseButton.className = "mobile-sidebar-close";
+        this.sidebarCloseButton.type = "button";
+        this.sidebarCloseButton.textContent = "閉じる";
+        this.sidebarCloseButton.setAttribute("aria-label", "Library sidebarを閉じる");
+        this.sidebar.prepend(this.sidebarCloseButton);
+        this.backdrop = document.createElement("button");
+        this.backdrop.className = "mobile-sidebar-backdrop";
+        this.backdrop.type = "button";
+        this.backdrop.setAttribute("aria-label", "Library sidebarを閉じる");
+        this.workspace.append(this.backdrop);
         this.toolbar.sidebarToggleButton.setAttribute("aria-controls", SIDEBAR_ID);
         this.toolbar.sidebarToggleButton.addEventListener("click", () => {
-            this.setSidebarOpen(!this.sidebarOpen, { emit: true });
+            this.setSidebarOpen(!this.sidebarOpen, {
+                emit: !this.mobileLayout,
+                allowMobileOpen: true
+            });
         });
-        this.setSidebarOpen(true);
+        this.sidebarCloseButton.addEventListener("click", () => {
+            this.setSidebarOpen(false, { allowMobileOpen: true });
+            this.toolbar.sidebarToggleButton.focus();
+        });
+        this.backdrop.addEventListener("click", () => {
+            this.setSidebarOpen(false, { allowMobileOpen: true });
+            this.toolbar.sidebarToggleButton.focus();
+        });
+        this.mobileMedia?.addEventListener?.(
+            "change",
+            event => this.#setMobileLayout(Boolean(event.matches))
+        );
+        this.windowObject?.addEventListener?.(
+            "resize",
+            () => this.#scheduleLayoutNotification()
+        );
+        this.#setMobileLayout(this.mobileLayout, { initial: true });
     }
 
     setLibrary({ name, hasState }) {
@@ -97,9 +141,15 @@ export default class ViewStateControls {
             : "保存された前回表示状態はありません。";
     }
 
-    setSidebarOpen(open, { emit = false, notifyLayout = true } = {}) {
+    setSidebarOpen(open, {
+        emit = false,
+        notifyLayout = true,
+        allowMobileOpen = false
+    } = {}) {
 
-        const normalizedOpen = Boolean(open);
+        const normalizedOpen = this.mobileLayout && !allowMobileOpen
+            ? false
+            : Boolean(open);
 
         if (
             !normalizedOpen &&
@@ -109,7 +159,15 @@ export default class ViewStateControls {
         }
 
         this.sidebarOpen = normalizedOpen;
-        this.sidebar.hidden = !normalizedOpen;
+        this.sidebar.hidden = this.mobileLayout ? false : !normalizedOpen;
+        this.sidebar.classList.toggle("is-mobile-open", normalizedOpen);
+        this.sidebar.setAttribute(
+            "aria-hidden",
+            String(this.mobileLayout && !normalizedOpen)
+        );
+        if (this.backdrop) {
+            this.backdrop.hidden = !this.mobileLayout || !normalizedOpen;
+        }
         this.workspace.classList.toggle(
             "is-sidebar-closed",
             !normalizedOpen
@@ -175,6 +233,59 @@ export default class ViewStateControls {
         return this.confirmAction(
             `「${this.libraryName}」の端末内に保存された前回表示状態を消去しますか？`
         );
+    }
+
+    isMobile() {
+
+        return this.mobileLayout;
+    }
+
+    #setMobileLayout(mobile, { initial = false } = {}) {
+
+        const changed = mobile !== this.mobileLayout;
+
+        if (changed && mobile) {
+            this.desktopSidebarOpen = this.sidebarOpen;
+        }
+
+        this.mobileLayout = mobile;
+        this.workspace.classList.toggle("is-mobile-layout", mobile);
+        this.toolbar.element.classList.toggle("is-mobile-layout", mobile);
+        this.toolbar.sidebarToggleButton.textContent = mobile
+            ? "ライブラリ"
+            : "サイドバー";
+
+        if (mobile) {
+            if (this.trackInfo && this.trackInfo.parentNode !== this.workspace) {
+                this.workspace.append(this.trackInfo);
+            }
+            this.setSidebarOpen(false, { notifyLayout: false });
+        } else {
+            if (this.trackInfo && this.trackInfoParent) {
+                this.trackInfoParent.append(this.trackInfo);
+            }
+            this.setSidebarOpen(
+                initial ? true : this.desktopSidebarOpen,
+                { notifyLayout: false }
+            );
+        }
+
+        if (changed || initial) this.#scheduleLayoutNotification();
+    }
+
+    #scheduleLayoutNotification() {
+
+        if (this.layoutFrame !== null) return;
+
+        this.layoutFrame = true;
+        const frame = this.requestFrame(() => {
+            this.layoutFrame = null;
+            this.eventBus.emit("view-state:sidebar-layout-changed");
+        });
+
+        if (this.layoutFrame !== null) {
+            this.layoutFrame = frame ?? true;
+        }
     }
 
     #create() {

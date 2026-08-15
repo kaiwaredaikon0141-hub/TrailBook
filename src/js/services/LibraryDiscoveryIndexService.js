@@ -1,4 +1,5 @@
 import TrackSummaryBuilder from "./TrackSummaryBuilder.js";
+import drivePerformance from "./DrivePerformanceMonitor.js";
 
 /**
  * Lazily builds one compact discovery entry per GPX path.
@@ -57,12 +58,18 @@ export default class LibraryDiscoveryIndexService {
         const generation = this.generation;
 
         this.status = "building";
+        drivePerformance.recordComponentCall("LibraryDiscoveryIndexService");
+        const endDiscovery = drivePerformance.begin(
+            "discoveryMs",
+            "discoveryCount"
+        );
         this.buildPromise = this.#build({
             token,
             generation,
             onProgress,
             isCurrent
         }).finally(() => {
+            endDiscovery();
             if (token === this.buildToken) {
                 this.buildPromise = null;
             }

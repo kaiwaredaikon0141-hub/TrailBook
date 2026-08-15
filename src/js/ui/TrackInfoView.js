@@ -27,18 +27,22 @@ export default class TrackInfoView {
 
     showEmpty() {
 
+        this.element.classList.remove("has-track-info", "is-mobile-dismissed");
         this.state.textContent = "Trackを選択すると情報を表示します。";
         this.#setAllEmpty();
     }
 
     showLoading() {
 
+        this.element.classList.add("has-track-info");
+        this.element.classList.remove("is-mobile-dismissed");
         this.state.textContent = "Track情報を読み込み中…";
         this.#setAllEmpty();
     }
 
     showUnavailable() {
 
+        this.element.classList.remove("has-track-info", "is-mobile-dismissed");
         this.state.textContent = "このTrackの情報を表示できません。";
         this.#setAllEmpty();
     }
@@ -52,6 +56,8 @@ export default class TrackInfoView {
 
         const complete = entry.status === "ready";
 
+        this.element.classList.add("has-track-info");
+        this.element.classList.remove("is-mobile-dismissed");
         this.state.textContent = complete
             ? "選択中のTrack情報"
             : "一部の情報を取得できませんでした。";
@@ -89,7 +95,11 @@ export default class TrackInfoView {
         section.className = "track-info";
         section.setAttribute("aria-labelledby", "track-info-title");
         section.innerHTML = `
-            <h4 id="track-info-title" class="track-info-title">Track Info</h4>
+            <div class="track-info-heading">
+                <h4 id="track-info-title" class="track-info-title">Track Info</h4>
+                <button class="track-info-close" type="button"
+                    aria-label="Track Infoを閉じる">×</button>
+            </div>
             <p class="track-info-state" aria-live="polite"></p>
             <dl class="track-info-list">
                 <dt>名前</dt><dd data-track-info-field="displayName"></dd>
@@ -105,6 +115,10 @@ export default class TrackInfoView {
                 <dt>最高標高</dt><dd data-track-info-field="elevationMax"></dd>
             </dl>
         `;
+        section.querySelector(".track-info-close").addEventListener(
+            "click",
+            () => section.classList.add("is-mobile-dismissed")
+        );
 
         return section;
     }

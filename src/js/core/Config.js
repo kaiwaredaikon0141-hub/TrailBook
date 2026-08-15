@@ -2,6 +2,17 @@
  * TrailBook Global Configuration
  */
 
+export function getGoogleDriveRuntimeConfig(
+    runtimeConfig = globalThis.TRAILBOOK_CONFIG
+) {
+
+    return {
+        clientId: runtimeConfig?.googleOAuthClientId || "",
+        apiKey: runtimeConfig?.googleApiKey || "",
+        appId: runtimeConfig?.googlePickerAppId || ""
+    };
+}
+
 const Config = {
 
     version: "1.6.0",
@@ -41,6 +52,8 @@ const Config = {
         objectStoreName: "previousLibrary",
         recordKey: "last"
     },
+
+    googleDrive: getGoogleDriveRuntimeConfig(),
 
     geometryCache: {
         databaseName: "trailbook.geometryCache",
