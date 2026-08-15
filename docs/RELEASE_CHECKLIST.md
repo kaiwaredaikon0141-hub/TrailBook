@@ -3083,3 +3083,63 @@ Release 1.6 Status: Ready for final commit and tag
 | Production modules | 87 / 87 import and main reachable |
 | Missing import / circular dependency | 0 / 0 |
 | App.js / TreeView.js | 954 / 997 lines |
+
+## Release 1.7 — Completed
+
+Current Release: `1.7.0`
+
+### Unit Status
+
+- Unit 1 Mobile Viewer Foundation / responsive layout: Completed
+- Unit 2 GPS Current Position / Follow: Completed
+- Unit 3 Google Drive Library Reader / Geometry Cache / cold-load concurrency: Completed
+- Unit 4 Driving Mode / Screen Wake Lock: Completed
+- Unit 5 GitHub Pages HTTPS deployment / runtime config: Completed
+- Unit 6 Mobile UI acceptance / Library Open UI / Release Finalization: Completed
+
+Unit 1〜5 Browser Acceptance Status: Completed
+
+Unit 6 Static Validation Status: Completed
+
+Unit 6 Status: Completed
+
+Release 1.7 Status: Ready for final commit and tag
+
+### Accepted Behavior
+
+- MobileはMap-first responsive layout、overlay Sidebar、bottom-sheet Track Info、44px touch target、safe areaを使用し、desktop layoutと同じSelectionState / DisplayState / Tree / Mapを共有する
+- GPSは1つのwatch、current marker、accuracy circle、Followをsession memoryで管理し、manual dragでFollowだけを解除する
+- Driving ModeはGPS / Follow / Screen Wake Lockを明示操作で開始し、unsupported / rejectでもViewerとGPSを継続する
+- Google Drive Readerは`drive.readonly`、Picker、recursive metadata scan、read-only virtual Library、lazy GPX loadを使用し、tokenを永続化しない
+- Drive Geometry Cache hitはmedia download / parseを行わず、cold missだけを最大4並列で処理する
+- GitHub Pages artifact rootは`src/`内容で、runtime Google configはActions secretsからartifact内だけに生成する
+- Library Open UIは端末 / Filesを主導線、Google Drive API Readerを補助的な直接接続とし、一時Mobile Drive診断panel / hook / CSSは削除した
+
+### Known Limitations
+
+- Geometry CacheがないGoogle Drive大量Libraryの初回visible GPX表示はnetwork-boundで重い
+- offline map、Mobile editing、GPS track recording、heading-up、PWA / service workerは未実装
+- File System Access、Geolocation、Wake Lockの対応とpermissionはbrowser / OSに依存する
+
+### Unit 6 Static Validation
+
+| Test | Result |
+|---|---:|
+| Mobile Viewer | 34 assertions Pass |
+| GPS Current Position / Follow | 23 assertions Pass |
+| Driving Mode / Screen Wake Lock | 20 assertions Pass |
+| Google Drive Reader / Geometry Cache / 4 concurrency | 106 assertions Pass |
+| Folder / Date Tree | 67 assertions Pass |
+| Discovery / Geometry Cache integration | 85 assertions Pass |
+| Search / Filter | 28 assertions Pass |
+| Track Info | 53 assertions Pass |
+| Editor Core / filename / preview / save | 68 / 30 / 138 / 49 assertions Pass |
+| Track Simplification / Date Correction / Translation | 58 / 20 / 23 assertions Pass |
+| Batch Simplification | 22 assertions Pass |
+| Base Map | 17 assertions Pass |
+| Shared Library Settings regression | 121 / 136 / 103 assertions Pass |
+| Track Alpha Blending | 19 assertions Pass |
+| View State / Geometry Cache / Previous Library | 312 assertions Pass |
+| Production modules | 96 / 96 import and main reachable |
+| Missing import / circular dependency | 0 / 0 |
+| App.js / TreeView.js | 954 / 995 lines |

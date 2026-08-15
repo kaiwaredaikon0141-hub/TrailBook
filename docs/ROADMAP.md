@@ -1,8 +1,8 @@
 # ROADMAP.md
 
-Version: 1.5 Completed
+Version: 1.7 Completed
 Status: Official
-Current Release: 1.6.0
+Current Release: 1.7.0
 Next Release: Not defined
 
 ## Version Policy
@@ -686,6 +686,39 @@ Goal: Release 1.5のOriginal Backup + In-place Edited GPXを維持し、日付�
 - GPS current-position tracking、wake lock
 - Google Maps、白地図scan、historical trace
 
+## Current Release — Release 1.7 Mobile Viewer / Drive Reader
+
+Status: Completed
+
+Goal: 既存Viewerをresponsive Mobile UIへ拡張し、HTTPS上でGPS / Driving Modeとread-only Google Drive Libraryを利用できるようにする。
+
+### Completed Scope
+
+- 768px breakpointのresponsive Map-first layout、overlay Library Sidebar、mobile Track Info、touch target、safe area対応
+- Geolocation `watchPosition()`による現在地marker、accuracy circle、Follow ON / OFF、manual drag時のFollow解除
+- GPS Follow、minimal UI、Screen Wake Lockを統合するsession-only走行中モード
+- `drive.readonly` OAuth、Google Picker、recursive metadata scan、virtual read-only Library、lazy GPX load
+- Drive metadataによるGPX download前Geometry Cache lookupと、cold cache miss時の最大4並列download / parse / cache write
+- `src/`をartifact rootとするGitHub Pages Actions deployment、repository secretsからのruntime Google config生成
+- Library Open UIの主導線を端末 / Files、補助導線をGoogle Drive直接接続として明確化
+- Mobile / Leaflet control overlapとMobile Sidebarの縦flow / scroll / Folder row layoutを修正し、一時Drive診断hookを削除
+
+### Units
+
+1. Mobile Viewer Foundation / responsive layout（Completed）
+2. GPS Current Position / Follow（Completed）
+3. Google Drive Library Reader / Geometry Cache / cold-load concurrency（Completed）
+4. Driving Mode / Screen Wake Lock（Completed）
+5. GitHub Pages HTTPS deployment / runtime Google config（Completed）
+6. Mobile UI acceptance / Library Open UI / Release finalization（Completed）
+
+### Out of Scope / Future
+
+- Mobile editing、GPS track recording、heading-up navigation、PWA / service worker
+- offline map tiles
+- Google Drive cold cacheで大量visible GPXを初回表示する際の追加高速化
+- Google Drive write / sync、access token永続化
+
 ## Future Design Boundaries
 
 以下は過去Releaseから保全している将来設計境界である。Release 1.4で実装済みとなった項目は、上記Release 1.4節を優先する。
@@ -747,14 +780,16 @@ Release 0.9では、車両情報の読み込み、保存、編集、色変更を
 
 ## Future Candidates
 
-Release 1.2 Shared Library Settings、Release 1.3 Previous View Restoration、Release 1.4 Library Browsing / Track Discovery、Release 1.5 Safe GPX Editing / Track Simplification、Release 1.6はCompletedである。以下は完了ReleaseのOut of Scopeまたは後続候補である。
+Release 1.2 Shared Library Settings、Release 1.3 Previous View Restoration、Release 1.4 Library Browsing / Track Discovery、Release 1.5 Safe GPX Editing / Track Simplification、Release 1.6、Release 1.7 Mobile Viewer / Drive ReaderはCompletedである。以下は完了ReleaseのOut of Scopeまたは後続候補である。
 
 - GPX Metadata Index
 - Date-based Display（Release 1.4でCompleted）
 - Vehicle Metadata / Track Style
 - GPX Editing Foundation（Release 1.5でCompleted）
 - TrackPoint Editing
-- Mobile Viewer UX
+- Mobile Viewer UX（Release 1.7でCompleted。Mobile editingは未実装）
+- Google Drive large cold-load optimization
+- Offline Map
 - Waypoint Performance Optimization
 - Unit 2-equivalent Performance Remeasurement
 - Stable Library Identity / Alias

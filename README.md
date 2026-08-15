@@ -4,11 +4,11 @@ TrailBookは、GPXを含むFolderをLibraryとして閲覧する、個人利用�
 
 ## Current Status
 
-- Current Release: `1.6.0`
-- Release 1.6: Completed
+- Current Release: `1.7.0`
+- Release 1.7: Completed
 - Next Release: Not defined
 
-Release 1.6はDate Tree簡略化、Trackの日付修正・日付filename整理・平行移動、Date mode選択同期、OSM / 国土地理院標準地図の切替、一括簡略化を追加したCompleted Releaseです。Release 1.5のOriginal Backup + In-place Edited GPXを維持します。
+Release 1.7はMobile Viewer、GPS現在地 / Follow、走行中モード / Screen Wake Lock、read-only Google Drive Library Reader、GitHub Pages HTTPS deploymentを追加したCompleted Releaseです。Release 1.6までのViewer / Editorとdata protection境界を維持します。
 
 ## Implemented Features
 
@@ -45,13 +45,19 @@ Release 1.6はDate Tree簡略化、Trackの日付修正・日付filename整理�
 - Track Point timeの一括日付shift、日付based filename rename、Track全体の平行移動
 - OpenStreetMap / 国土地理院標準地図の背景地図切替（device-local設定）
 - 選択Folder配下またはLibrary全体を対象にした解析後明示実行の一括簡略化
+- 768px以下のresponsive Mobile Viewer、overlay Sidebar、touch target、mobile Track Info
+- session-only GPS現在地、accuracy circle、Follow ON / OFF
+- GPS FollowとScreen Wake Lockをまとめる走行中モード
+- OAuth / Pickerによるread-only Google Drive Libraryの直接接続とlazy GPX load
+- Drive geometry cacheのpre-download lookupとcold cache missの最大4並列取得
+- GitHub Pages HTTPS deploymentとcredentialをcommitしないruntime config生成
 - ローカル同梱したLeaflet 1.9.4による地図表示
 
 従来のFolder名、GPXファイル名、relative path Searchはmetadataだけで動作します。Track名またはdate filterを明示した場合だけDiscovery Indexを遅延構築し、filter入力だけではGPX表示、SelectionState、DisplayState、Map center / zoomを変更しません。
 
 ## Data Principles
 
-- Current Release 1.6は、利用者の明示`保存`時にoriginal bytesのBackupを検証した後だけGPXを更新します。日付filename rename時もBackup originalはrenameしません。
+- Current Release 1.7は、利用者の明示`保存`時にoriginal bytesのBackupを検証した後だけGPXを更新します。日付filename rename時もBackup originalはrenameしません。
 - Backup成功前、自動、backgroundではGPXを変更・移動・削除しません。date-based filename renameは明示`保存`と検証成功後だけ旧source pathを削除します。
 - `trailbook.json`への書き込みはSave、Migration、明示Overwriteの利用者操作時だけ行います。
 - SQLiteやIndexedDBをFolder / GPXに代わるLibrary正本として使用しません。
@@ -71,6 +77,7 @@ Release 1.6はDate Tree簡略化、Trackの日付修正・日付filename整理�
 Best effort:
 
 - その他のChromium系desktop browser
+- HTTPSで開いたAndroid Chrome Mobile Viewer（端末機能に依存）
 
 非対応または未確認:
 
@@ -82,9 +89,9 @@ File System Access API、secure context、対応originが必要です。対応or
 
 ### Mobile
 
-iPhone Chromeでは、HTTPSでの起動、Google Drive上のFolder選択、Folder走査、Tree表示までは成功しました。一方、GPX checkbox、Track表示、touch UIは動作しなかったため、Release 1.6では非対応です。原因分類はAPI不足ではなくMobile UI / touch操作未対応です。
+Release 1.7はMap主体のresponsive layout、overlay Library Sidebar、touch向けcontrol、GPS現在地 / Follow、走行中モードを提供します。GitHub PagesのHTTPS URLでGoogle Drive直接接続を利用できます。
 
-Android ChromeとiPad Chromeは未確認です。将来候補`Mobile Viewer UX`でresponsive layout、touch操作、gesture分離などを検討します。
+Mobile editingは対象外で、編集入口はmobile幅で非表示です。File System Access API、Geolocation、Wake Lockの利用可否とpermissionはbrowser / OSに依存します。iPhone / iPadのRelease 1.7統合操作は未確認です。
 
 ## Start TrailBook
 
@@ -115,9 +122,13 @@ http://localhost:8000/src/index.html
 
 任意の静的HTTP serverでrepository rootを配信し、`src/index.html`を開きます。HTTPS、`http://localhost`、`http://127.0.0.1`を使用してください。
 
+### D. GitHub Pages
+
+GitHub PagesのHTTPS deployment手順は[docs/GITHUB_PAGES.md](docs/GITHUB_PAGES.md)を参照してください。
+
 ### Open a Library
 
-1. 「ライブラリを開く」を押します。
+1. 主導線の「端末からライブラリを開く」を押します。Google Drive API Readerを使う場合は「Google Driveに直接接続」を選びます。
 2. GPXを含むFolderを選択します。
 3. browserのpermission確認を許可します。
 

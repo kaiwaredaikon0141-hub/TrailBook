@@ -1,5 +1,36 @@
 # Changelog
 
+## v1.7.0
+
+Date: 2026-08-15
+Status: Ready for final commit and tag
+
+### Added
+
+- Responsive Mobile Viewer with overlay Library sidebar and mobile Track Info presentation
+- Session-only GPS current position, accuracy circle, Follow control, and manual-drag Follow release
+- Driving Mode integrating GPS Follow with Screen Wake Lock and visibility-based reacquisition
+- Read-only Google Drive Library Reader with OAuth, Folder Picker, recursive metadata scan, and lazy GPX loading
+- GitHub Pages HTTPS deployment workflow with runtime Google configuration generated from repository secrets
+
+### Changed
+
+- Drive geometry cache lookup now occurs before GPX media download; cold cache misses use at most four concurrent Drive GPX operations
+- Library open actions distinguish the primary device / Files route from the supplemental direct Google Drive connection
+- Mobile controls, Sidebar flow, Folder rows, safe-area spacing, and Leaflet control overlap handling were improved
+- Temporary Mobile Drive diagnostic panel and hooks were removed after field diagnosis
+
+### Security and Privacy
+
+- Google credentials are runtime configuration only; actual values and access tokens are not committed or logged
+- OAuth scope remains `drive.readonly`, and access tokens, GPS positions, and Driving Mode state remain session-only
+- GPX editing, Backup, `trailbook.json`, and local Library data-protection boundaries are unchanged
+
+### Known Limitations
+
+- Initial display of a large Google Drive Library remains network-bound when geometry cache entries do not yet exist
+- Offline map tiles, Mobile editing, GPS track recording, and heading-up navigation are not implemented
+
 ## v1.6.0
 
 Date: 2026-08-15

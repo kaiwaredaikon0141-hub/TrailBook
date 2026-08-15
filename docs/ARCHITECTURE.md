@@ -1341,3 +1341,15 @@ Status: Completed
 - `MapView`はOSMまたは国土地理院標準地図のbase layerを1枚だけ保持する。選択値はdevice-local view stateへ保存し、unknown値と旧`gsi-pale`はOSMへfallbackする
 - `BatchSimplificationCoordinator` / `BatchSimplificationService` / `BatchSimplificationPanel`は既存RDP、Serializer、Backup + in-place save、targeted refreshを再利用する。解析はread-only、実行はsequentialで、0削減fileを変更せず、file単位failure後も継続し、安全なfile境界でCancelする
 - Release 1.5のOriginal Backup + In-place Edited GPX、explicit save、verification、reserved `TrailBook_Backup`境界を変更しない
+
+## Release 1.7 Architecture
+
+Status: Completed
+
+- 既存`ViewStateControls`とCSS breakpointがdesktop / mobile presentationを切り替え、Map instance、DisplayState、SelectionState、Folder / Date Treeを共有する。resize時はMapを再生成せずinvalidateだけを行う
+- `CurrentPositionService` / `CurrentPositionController`が1つのGeolocation watch、marker / accuracy circle、Follow stateをsession memoryで管理する。位置は永続化・送信しない
+- `ScreenWakeLockService` / `DrivingModeController`が明示的な走行中モード操作だけでWake Lockを取得し、visible復帰時に必要な場合だけ再取得する。unsupported / rejectはGPS / Viewerを停止させない
+- `DriveLibraryCoordinator`がOAuth / Picker / Library lifecycle、`DriveLibraryService`がread-only virtual handlesとrecursive metadata scanを担当する。access tokenはsession memoryだけに保持する
+- Drive GPXはmetadataのrelative path / size / lastModifiedで既存Geometry Cacheをmedia download前にlookupする。hitはdownload / parseを行わず、missだけを最大4並列でdownload / parse / cache writeする
+- GitHub Pages workflowは`src/`だけをartifact rootへコピーし、repository secretsからartifact内だけのruntime configを生成する。actual credentialはsource / workflow / logへ保存しない
+- Google Drive Readerは補助的な直接接続手段とし、端末 / Files / OS pickerの既存Library openを主導線とする

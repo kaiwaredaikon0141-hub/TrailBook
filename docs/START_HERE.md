@@ -4,9 +4,9 @@ TrailBookの開発を始める人とAIのための入口です。
 
 ## Current Status
 
-- Current Version: `1.6.0`
-- Current Release: Release 1.6
-- Completed: Release 0.1からRelease 1.6
+- Current Version: `1.7.0`
+- Current Release: Release 1.7
+- Completed: Release 0.1からRelease 1.7
 - Next Release: Not defined
 - Branch: `main`
 
@@ -27,13 +27,13 @@ GPXを独自形式へ取り込むのではなく、ユーザーのGPX資産を�
 3. `ARCHITECTURE.md` — 現在の責務分割とデータフロー
 4. `CODING_RULES.md` — 実装規約
 5. `ROADMAP.md` — 完了Releaseと将来候補
-6. `UI_SPEC.md` — Release 1.6までの確定UI仕様
+6. `UI_SPEC.md` — Release 1.7までの確定UI仕様
 7. `DECISIONS.md` — 採用済み設計判断と理由
 8. `AI_GUIDE.md` — AIとの開発手順
 9. `CONTRIBUTING.md` — 作業規約
 10. `GLOSSARY.md` — 用語
 11. リポジトリルートの`README.md`、`CHANGELOG.md` — 公開概要とリリース履歴
-12. `RELEASE_CHECKLIST.md` — Release 1.0〜1.6のbaseline / 完了記録
+12. `RELEASE_CHECKLIST.md` — Release 1.0〜1.7のbaseline / 完了記録
 
 ## Current Architecture
 
@@ -67,13 +67,15 @@ Release 1.5 Safe GPX Editing / Track SimplificationのUnit 1〜6はCompletedで�
 
 Release 1.6のUnit 1〜7はCompletedである。Date Treeを年 / 月 / Trackへ簡略化し、Track日付修正、date-based filename renameとBackup association、Track平行移動、Date mode selection同期、OSM / 国土地理院標準地図切替、Folder / Library一括簡略化を追加した。Release 1.5のOriginal Backup + In-place Edited GPXを維持する。
 
-## Implemented Through Release 1.6
+Release 1.7のUnit 1〜6はCompletedである。responsive Mobile Viewer、GPS Current Position / Follow、Driving Mode / Screen Wake Lock、read-only Google Drive Library Reader、Drive cache pre-download lookup / cold-load 4並列、GitHub Pages HTTPS deployment、Library Open UI整理を追加した。Mobile editing、offline map、Drive large cold-loadの追加高速化は対象外である。
+
+## Implemented Through Release 1.7
 
 Release 1.0 Stable Viewerは完了している。Release 0.9までのFolder Library、GPX Parser、複数GPX表示、Folder / root一括表示、Waypoint option、Searchを維持し、個人利用向けの起動・互換性UX、品質整理、文書、licenseと第三者表記を確定した。
 
 GPXファイル名、Folder名、相対パスをmetadataから検索する。検索のためにGPX内容を解析せず、query入力だけでは表示Queue、解析cache、主選択、表示状態、Mapへ影響させない。
 
-現在の制限としてMobile UIは非対応であり、Android ChromeとiPad Chromeは未確認である。大量GPX表示中のWaypoint ONは操作が重くなるため、大量LibraryではWaypoint OFFを推奨する。OSM背景tileはオンライン接続を必要とする。
+現在の制限としてMobile editing、offline map、GPS track recordingは未実装である。大量GPX表示中のWaypoint ONは操作が重くなるため、大量LibraryではWaypoint OFFを推奨する。OSM / GSI背景tileとGoogle Drive直接接続はオンライン接続を必要とする。
 
 Release 1.1 Track Selection & Stylingは完了している。zoom連動Track線幅、Map / TreeView / Searchの単一選択同期、selected highlight / outline、Folder色と継承、UI設定限定の`localStorage`、Color / Monochrome背景地図表示を実装した。806 GPX Libraryの人間による定性的性能評価はAcceptableで、明確な回帰やUIが固まる操作は確認されていない。数値benchmarkと20%比較は実施していない。
 
@@ -86,7 +88,7 @@ Release 1.2 Shared Library SettingsはCompletedである。Library root直下の
 - Folder構造とGPXファイルをデータの正本とする。
 - SQLite、IndexedDBなどをFolder / GPXに代わるLibrary正本として持たない。一時的なセッションcacheは独自DBに含めない。
 - Release 1.3追加設計はDecision 0039 / 0040により、IndexedDBをprevious DirectoryHandleと、性能gate不達時の再生成可能geometry cacheにだけ使用可能とする。これはLibrary正本ではなく、削除・失敗時にViewerが継続できるorigin-local補助である。
-- 現行production 1.6はMap表示mode、base map、legacy Folder色fallbackに加え、専用keyへ再生成可能なdevice-local Map / sidebar / visible / selected Track / Discovery UI stateを`localStorage`へ保存する。Folder色はvalidなshared JSONがある場合に項目単位でlegacy値を混ぜない。DirectoryHandleはorigin-local IndexedDBだけへ保存し、localStorage / `trailbook.json`へ保存しない。GPX内容とLeaflet Layerは永続化しない。
+- 現行production 1.7はMap表示mode、base map、legacy Folder色fallbackに加え、専用keyへ再生成可能なdevice-local Map / sidebar / visible / selected Track / Discovery UI stateを`localStorage`へ保存する。Folder色はvalidなshared JSONがある場合に項目単位でlegacy値を混ぜない。DirectoryHandleはorigin-local IndexedDBだけへ保存し、localStorage / `trailbook.json`へ保存しない。GPS位置、access token、Driving Modeは永続化しない。
 - `trailbook.json`への書き込みはSave、migration、明示Overwriteだけに限定し、permissionの永続化を前提にしない。
 - Framework、TypeScript、Node.jsを追加しない。
 - UI同士を直接接続せず、EventBusとAppの調停を使用する。

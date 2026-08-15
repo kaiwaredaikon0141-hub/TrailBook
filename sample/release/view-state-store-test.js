@@ -642,6 +642,7 @@ async function testStaleVisibleRestore() {
         isCurrent: fixture.isCurrent(2)
     });
 
+    await Promise.resolve();
     idleResolvers.splice(0).forEach(resolve => resolve());
     assert(!await firstRestore, "stale visible restore completed");
     assert(await secondRestore, "current visible restore rejected");
@@ -803,6 +804,7 @@ async function testSelectedTrackRestore() {
         previousPath: overrideChange.previousPath,
         reason: "tree"
     });
+    await Promise.resolve();
     releaseIdle();
     assert(await restoring, "selection override restore failed");
     assert(override.selectionState.getSelectedPath() === "user.gpx",
@@ -857,6 +859,7 @@ async function testMapOverrideDuringRestore() {
     });
     fixture.mapView.current = { lat: 45, lng: 145, zoom: 12 };
     fixture.eventBus.emit("map:view-changed", { programmatic: false });
+    await Promise.resolve();
     releaseIdle();
 
     assert(await restore, "Map override restore failed");
@@ -1518,7 +1521,7 @@ function testPreviousLibraryPanel() {
 }
 
 try {
-    assert(Config.version === "1.6.0", "Config version changed");
+    assert(Config.version === "1.7.0", "Config version changed");
     assert(Config.uiSettings.schemaVersion === 1, "UI schema changed");
     assert(Config.sharedLibrarySettings.schemaVersion === 1, "shared schema changed");
     assert(Config.viewState.storageKey === "trailbook.viewState", "view key");

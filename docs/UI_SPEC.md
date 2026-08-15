@@ -1102,3 +1102,13 @@ Unit 4実装ではBeforeをneutral dashed、Afterをsolid orangeとし、文字l
 - Date modeでMap Trackを選択した場合、必要な年 / 月を展開してTrack nodeへselectionを同期し、visibilityとMap viewは変更しない
 - 背景地図selectorはOpenStreetMapと国土地理院標準地図だけを提供する。国土地理院淡色地図は提供せず、未知値はOSMへ戻す
 - 一括簡略化Panelは選択Folder配下 / Library全体、tolerance、解析、実行、Cancel、進捗、完了summaryとfile別errorを表示する。Track Editorとの同時実行を禁止する
+
+# 26. Release 1.7 UI
+
+- 768px以下はMapをviewport全体に表示し、Library Sidebarをbackdrop付きoverlay、Track Infoをclose可能なbottom sheetとする。desktop layoutは維持する
+- Mobile SidebarはSearch、date range、Folder / Date、Drive controls、status、Treeの順に縦flowで表示し、Sidebar / Treeを縦scroll可能とする
+- Mobileの主要tap targetはおおむね44px以上とし、Library controlとdesktop EditorはLeaflet zoom controlの右側に配置する
+- Library openは「端末からライブラリを開く」を主導線とし、「Google Driveに直接接続」を補助導線とする
+- GPS buttonは未開始 / 取得中 / 取得済み / errorを表し、tracking中の操作でFollowを切り替える。manual dragはFollowだけをOFFにする
+- 走行中モードはMobileだけに表示し、ONでGPS / Follow / Wake Lockを開始してSidebar / Track Infoを閉じる。Wake Lock不可でもGPSと走行中モードを継続する
+- Mobile幅ではTrack Edit / Batch Simplificationの入口を表示せず、既存editing session自体は破棄しない

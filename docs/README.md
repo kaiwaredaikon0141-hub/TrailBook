@@ -4,8 +4,8 @@
 
 ## Current Status
 
-- Current Release: `1.6.0`
-- Completed: Release 0.1からRelease 1.6
+- Current Release: `1.7.0`
+- Completed: Release 0.1からRelease 1.7
 - Next Release: Not defined
 
 Release 1.4 Library Browsing / Track DiscoveryはCompletedです。Release 1.3の前回Library / view restorationとgeometry cacheを維持し、1つのDiscovery IndexからDate Tree、Track Info、Track名 / Folder / date range Search・Filterを提供します。
@@ -13,6 +13,8 @@ Release 1.4 Library Browsing / Track DiscoveryはCompletedです。Release 1.3�
 Release 1.4 Unit 1〜6の設計、実装、Browser Acceptance、performance、data protection、finalization記録はCompletedです。warm Discovery Indexは約806 GPXで中央値3秒、warm Track restoreは既存中央値3秒を維持する定性的受け入れを完了しています。
 
 Release 1.6はCompletedです。Date Tree簡略化、Track日付修正・date-based filename rename・平行移動、Date mode selection同期、OSM / 国土地理院標準地図切替、一括簡略化を確定し、Release 1.5のOriginal Backup + In-place Edited GPXを維持します。
+
+Release 1.7はCompletedです。Mobile Viewer、GPS Current Position / Follow、Driving Mode / Screen Wake Lock、read-only Google Drive Library Reader、Drive Geometry Cache / cold-load 4並列、GitHub Pages HTTPS deployment、Mobile UI改善を確定します。
 
 ## Read Order
 
@@ -28,7 +30,7 @@ Release 1.6はCompletedです。Date Tree簡略化、Track日付修正・date-ba
 10. [CONTRIBUTING.md](CONTRIBUTING.md) — Gitと変更手順
 11. [GLOSSARY.md](GLOSSARY.md) — 用語
 
-Release 1.0のUnit 1〜8、Release 1.1のUnit 1〜7、Release 1.2のUnit 1〜5、Release 1.3のUnit 1〜7、Release 1.4のUnit 1〜6、Release 1.5のUnit 1〜6、Release 1.6のUnit 1〜7は[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)に記録しています。
+Release 1.0のUnit 1〜8、Release 1.1のUnit 1〜7、Release 1.2のUnit 1〜5、Release 1.3のUnit 1〜7、Release 1.4のUnit 1〜6、Release 1.5のUnit 1〜6、Release 1.6のUnit 1〜7、Release 1.7のUnit 1〜6は[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)に記録しています。
 
 Release 1.1 Unit roles:
 
@@ -76,7 +78,7 @@ Release 1.5 Unit roles:
 5. Original Backup + In-place Save、verification、reserved Folder、targeted refresh
 6. Integration acceptance、documentation、Release finalization
 
-## Implemented Through Release 1.6
+## Implemented Through Release 1.7
 
 - Folder Libraryと再帰走査
 - GPX Parser
@@ -111,14 +113,18 @@ Release 1.5 Unit roles:
 - Segment単位Ramer–Douglas–Peucker、metrics、line / point preview
 - Apply、Undo / Redo、Done / draft再開、Cancel
 - 作業中のOriginal Backup + In-place Save、source protection、read-back verification、targeted Library refresh
+- responsive Mobile Viewer、overlay Sidebar、touch UI、mobile Track Info
+- GPS現在地 / Follow、Driving Mode、Screen Wake Lock
+- read-only Google Drive Library Reader、pre-download Geometry Cache lookup、cold cache miss 4並列
+- GitHub Pages HTTPS deploymentとruntime Google config
 
 実装済み範囲の詳細は[CHANGELOG.md](../CHANGELOG.md)、Release順序は[ROADMAP.md](ROADMAP.md)を正本とします。
 
 ## Current Release and Future Features
 
-Release 1.6はCompletedです。Release 1.5のoriginal Backupを維持した編集保存へ日付修正、date-based filename rename、Track平行移動を統合し、Date Tree簡略化、base map切替、一括簡略化を追加しました。Backupの自動上書き・削除・automatic restoreは行いません。
+Release 1.7はCompletedです。Release 1.6までのViewer / Editorを維持し、Mobile Viewer、GPS / Follow、Driving Mode / Wake Lock、read-only Google Drive Reader、GitHub Pages deploymentを追加しました。Drive large cold-loadの追加高速化とoffline mapは将来候補です。
 
-Search / Tree navigation復元、Stable Library Identity / Alias、point移動・追加・削除、区間削除、Track分割・結合、Backup overwrite / deleteに加え、Statistics、Replay、HeatMap、vehicle metadata、Cloud Sync、Mobile Viewer UX、Waypoint性能最適化、数値性能再測定、Plugin、AI Searchなどは未実装の将来候補です。
+Search / Tree navigation復元、Stable Library Identity / Alias、point移動・追加・削除、区間削除、Track分割・結合、Backup overwrite / deleteに加え、Statistics、Replay、HeatMap、vehicle metadata、Cloud Sync、Mobile editing、offline map、Drive large cold-load optimization、Waypoint性能最適化、Plugin、AI Searchなどは未実装の将来候補です。
 
 ## Source of Truth
 
