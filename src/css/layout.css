@@ -120,7 +120,7 @@ body{
 
     top:10px;
 
-    left:10px;
+    left:52px;
 
     z-index:1001;
 
@@ -180,9 +180,13 @@ body{
 
         width:min(85vw, 360px);
 
-        display:grid;
+        display:flex;
 
-        grid-template-rows:auto auto minmax(0, 1fr);
+        flex-direction:column;
+
+        overflow-x:hidden;
+
+        overflow-y:auto;
 
         transform:translateX(-105%);
     }
@@ -190,6 +194,22 @@ body{
     .sidebar-shell.is-mobile-open{
 
         transform:translateX(0);
+    }
+
+    .sidebar-shell > .sidebar-fixed-controls{
+
+        flex:0 0 auto;
+    }
+
+    .sidebar-shell > .sidebar{
+
+        flex:1 0 240px;
+
+        min-height:240px;
+
+        overflow-x:hidden;
+
+        overflow-y:auto;
     }
 
     .track-info{

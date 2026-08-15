@@ -1496,7 +1496,7 @@ body.is-track-info-resizing{
 
         top:max(8px, env(safe-area-inset-top));
 
-        left:max(8px, env(safe-area-inset-left));
+        left:max(52px, calc(env(safe-area-inset-left) + 44px));
 
         width:auto;
 
@@ -1543,11 +1543,52 @@ body.is-track-info-resizing{
             max(8px, env(safe-area-inset-bottom))
             max(12px, env(safe-area-inset-left));
 
-        overflow:hidden;
+        overflow-x:hidden;
+
+        overflow-y:auto;
 
         transition:transform 160ms ease-out;
 
         box-shadow:3px 0 18px rgba(0, 0, 0, 0.28);
+    }
+
+    .sidebar-fixed-controls{
+
+        position:static;
+
+        display:flex;
+
+        flex-direction:column;
+
+        flex:0 0 auto;
+    }
+
+    .sidebar-fixed-controls > *,
+    .sidebar > *{
+
+        position:static;
+
+        min-width:0;
+    }
+
+    .search-view,
+    .search-date-filter,
+    .discovery-mode-switch,
+    .drive-library-control{
+
+        width:100%;
+
+        max-width:100%;
+    }
+
+    .search-date-filter{
+
+        grid-template-columns:minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .search-filter-clear{
+
+        grid-column:1 / -1;
     }
 
     .mobile-sidebar-close{
@@ -1654,6 +1695,45 @@ body.is-track-info-resizing{
         display:flex;
 
         align-items:center;
+
+        width:100%;
+
+        max-width:100%;
+
+        overflow:hidden;
+    }
+
+    .tree-label,
+    .date-tree-label,
+    .date-tree-track-label{
+
+        flex:1 1 0;
+
+        min-width:0;
+    }
+
+    .folder-color-control{
+
+        flex:0 0 76px;
+
+        min-width:76px;
+
+        max-width:76px;
+
+        margin-left:4px;
+
+        overflow:hidden;
+    }
+
+    .folder-color-mode{
+
+        min-width:0;
+
+        overflow:hidden;
+
+        text-overflow:ellipsis;
+
+        white-space:nowrap;
     }
 
     input[type="checkbox"]{

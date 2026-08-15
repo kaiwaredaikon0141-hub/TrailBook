@@ -74,6 +74,55 @@ function createFixture(media) {
     };
 }
 
+function createMobileSidebarProbe(trackCount = 1122) {
+    const shell = document.createElement("section");
+    const close = document.createElement("button");
+    const fixed = document.createElement("div");
+    const search = document.createElement("section");
+    const dates = document.createElement("div");
+    const modes = document.createElement("div");
+    const drive = document.createElement("section");
+    const sidebar = document.createElement("aside");
+    const tree = document.createElement("ul");
+
+    shell.className = "sidebar-shell is-mobile-open";
+    close.className = "mobile-sidebar-close";
+    close.textContent = "Close";
+    fixed.className = "sidebar-fixed-controls";
+    search.className = "search-view";
+    search.innerHTML = '<input class="search-input"><p class="search-summary">1122 GPX</p>';
+    dates.className = "search-date-filter";
+    dates.innerHTML = '<label><span>From</span><input type="date"></label>' +
+        '<label><span>To</span><input type="date"></label>' +
+        '<button class="search-filter-clear">Clear</button>';
+    search.append(dates);
+    modes.className = "discovery-mode-switch";
+    modes.innerHTML = "<button>Folder</button><button>Date</button>";
+    drive.className = "drive-library-control";
+    drive.innerHTML = "<button>別のGoogle Drive Libraryを開く</button>" +
+        '<p class="drive-library-status">Drive Library: 1122 GPX</p>';
+    fixed.append(search, modes, drive);
+    sidebar.className = "sidebar";
+    tree.className = "tree-root";
+
+    for (let index = 0; index < trackCount; index += 1) {
+        const item = document.createElement("li");
+
+        item.innerHTML = '<div class="tree-row folder-row">' +
+            '<input class="folder-display-toggle" type="checkbox">' +
+            '<span class="tree-icon"></span>' +
+            `<span class="tree-label">Long folder label ${index}</span>` +
+            '<button class="folder-color-control">' +
+            '<span class="folder-color-swatch"></span>' +
+            '<span class="folder-color-mode">Explicit</span></button></div>';
+        tree.append(item);
+    }
+    sidebar.append(tree);
+    shell.append(close, fixed, sidebar);
+    document.body.append(shell);
+    return { shell, close, fixed, search, modes, drive, sidebar, tree };
+}
+
 async function run() {
     const media = new FakeMedia(false);
     const fixture = createFixture(media);
@@ -156,11 +205,25 @@ async function run() {
         layoutCss.includes("height:100dvh") &&
         layoutCss.includes("width:min(85vw, 360px)"),
     "mobile viewport or Sidebar CSS contract missing");
+    assert(layoutCss.includes("flex-direction:column") &&
+        layoutCss.includes("overflow-y:auto") &&
+        layoutCss.includes("flex:1 0 240px"),
+    "mobile Sidebar is not a scrollable vertical flow");
     assert(themeCss.includes("min-height:44px") &&
         themeCss.includes(".track-editor") &&
         themeCss.includes(".batch-simplification") &&
         themeCss.includes("env(safe-area-inset-bottom)"),
     "touch, editing guard, or safe-area CSS contract missing");
+    assert(themeCss.includes(
+        "left:max(52px, calc(env(safe-area-inset-left) + 44px))"
+    ), "mobile Library control does not clear the Leaflet zoom control");
+    assert(themeCss.includes("grid-column:1 / -1") &&
+        themeCss.includes("flex:0 0 76px") &&
+        themeCss.includes("text-overflow:ellipsis"),
+    "mobile controls or Folder rows can overlap horizontally");
+    assert(layoutCss.includes(".track-editor") &&
+        layoutCss.includes("left:52px"),
+    "desktop Track Editor does not clear the Leaflet zoom control");
     assert(indexHtml.includes('name="viewport"') &&
         indexHtml.includes("viewport-fit=cover"),
     "mobile viewport metadata missing");
@@ -209,6 +272,38 @@ async function run() {
     assert(themeCss.includes(".mobile-drive-diagnostic") &&
         themeCss.includes("@media (max-width:768px)"),
     "mobile-only Drive diagnostic CSS contract missing");
+
+    if (matchMedia("(max-width:768px)").matches) {
+        const probe = createMobileSidebarProbe();
+        const flow = [probe.close, probe.fixed, probe.sidebar]
+            .map(element => element.getBoundingClientRect());
+        const row = probe.tree.querySelector(".tree-row");
+        const label = row.querySelector(".tree-label").getBoundingClientRect();
+        const colorButton = row.querySelector(".folder-color-control");
+        const color = colorButton.getBoundingClientRect();
+
+        assert(flow[0].bottom <= flow[1].top + 1 &&
+            flow[1].bottom <= flow[2].top + 1,
+        "mobile Sidebar sections overlap vertically");
+        assert(probe.sidebar.scrollHeight > probe.sidebar.clientHeight,
+            "1122-row Folder Tree is not vertically scrollable");
+        assert(probe.shell.scrollWidth <= probe.shell.clientWidth + 1 &&
+            probe.sidebar.scrollWidth <= probe.sidebar.clientWidth + 1,
+        "mobile Sidebar introduces horizontal scrolling");
+        assert(label.right <= color.left + 1 && color.width >= 75 &&
+            color.height >= 43,
+        "Folder label and Explicit color control overlap");
+        let colorActivations = 0;
+
+        colorButton.addEventListener("click", () => { colorActivations += 1; });
+        colorButton.click();
+        assert(colorActivations === 1,
+            "Explicit color control is not operable in the mobile row");
+        assert(getComputedStyle(probe.shell).overflowY === "auto" &&
+            getComputedStyle(probe.sidebar).overflowY === "auto",
+        "mobile Sidebar or Tree scrolling contract is inactive");
+        probe.shell.remove();
+    }
 
     output.textContent = `PASS: ${assertions} assertions`;
 }
