@@ -1,5 +1,4 @@
 import DateTreeVisibilityIndex from "../services/DateTreeVisibilityIndex.js";
-import mobileDriveDiagnostic from "./MobileDriveDiagnosticPanel.js";
 
 const ROW_SELECTOR = "[data-date-tree-row]";
 
@@ -60,7 +59,6 @@ export default class DateTreeView {
 
     showTree(groups, { fileHandles, getDisplay }) {
 
-        mobileDriveDiagnostic.recordTreeRenderStarted();
         this.groups = groups;
         this.fileHandles = fileHandles;
         this.getDisplay = getDisplay;
@@ -83,7 +81,6 @@ export default class DateTreeView {
         this.root.hidden = groups.length === 0;
         if (this.revealSelected) this.#revealSelectedPath();
         this.#setInitialTabStop();
-        mobileDriveDiagnostic.recordTreeRendered({ folderCount: groups.length, trackCount });
     }
 
     clear() {

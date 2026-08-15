@@ -25,8 +25,9 @@ export default class LibraryAccessPanel {
     showInitial() {
 
         this.#show(
-            "ライブラリを開く",
-            "「ライブラリを開く」を押し、GPXを含むFolderを選択します。" +
+            "端末からライブラリを開く",
+            "「端末からライブラリを開く」を押し、" +
+            "端末・Files・Google DriveなどからGPXを含むFolderを選択します。" +
             "TrailBookはGPXを読み取り専用で扱い、移動・変更・削除・保存しません。"
         );
     }
@@ -100,7 +101,8 @@ export default class LibraryAccessPanel {
 
         this.#show(
             "Folderを開けませんでした",
-            "Folderへのアクセスを許可して、もう一度「ライブラリを開く」を押してください。" +
+            "Folderへのアクセスを許可して、もう一度" +
+            "「端末からライブラリを開く」を押してください。" +
             "現在のLibraryがある場合、その内容は維持されています。",
             "error"
         );

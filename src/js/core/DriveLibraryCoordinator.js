@@ -2,7 +2,6 @@ import DriveAuthService from "../services/DriveAuthService.js";
 import DrivePickerService from "../services/DrivePickerService.js";
 import DriveLibraryService from "../services/DriveLibraryService.js";
 import drivePerformance from "../services/DrivePerformanceMonitor.js";
-import mobileDriveDiagnostic from "../ui/MobileDriveDiagnosticPanel.js";
 
 const STORAGE_KEY = "trailbook.driveLibrary";
 
@@ -63,7 +62,6 @@ export default class DriveLibraryCoordinator {
 
         this.busy = true;
         this.button.disabled = true;
-        mobileDriveDiagnostic.beginAttempt();
         this.#showStatus("Google Driveへ接続しています…");
         const requestId = ++this.requestId;
         const isCurrent = () => requestId === this.requestId;
@@ -72,13 +70,11 @@ export default class DriveLibraryCoordinator {
 
         try {
             await this.auth.authorize();
-            mobileDriveDiagnostic.recordAuth(true);
             console.info("[TrailBook Drive] Authorization completed");
             this.diagnosticStep = "picker";
             const root = this.previousRoot || await this.picker.pickFolder(
                 this.auth.getAccessToken()
             );
-            mobileDriveDiagnostic.recordPicker(Boolean(root));
 
             console.info("[TrailBook Drive] Folder received by coordinator", {
                 folderId: root?.id ? "present" : "missing",
@@ -105,7 +101,6 @@ export default class DriveLibraryCoordinator {
             if (requestId !== this.requestId) return false;
             await this.flushViewState();
             this.beforeLoad();
-            mobileDriveDiagnostic.recordLibraryApplyStarted();
             this.diagnosticStep = "library-apply";
             const applied = await this.applyLibrary(library, {
                 generation: requestId,
@@ -118,15 +113,11 @@ export default class DriveLibraryCoordinator {
             this.previousRoot = { id: root.id, name: root.name };
             this.#savePreviousRoot(this.previousRoot);
             this.setReadOnlyPresentation(true);
-            this.button.textContent = "別のGoogle Drive Libraryを開く";
+            this.button.textContent = "別のGoogle Drive Libraryに直接接続";
             this.#showStatus(`${root.name}（Google Drive・読み取り専用）`);
             return true;
         } catch (error) {
             drivePerformance.cancel();
-            mobileDriveDiagnostic.recordError(
-                this.diagnosticStep || "unknown",
-                error
-            );
             const diagnostic = {
                 step: this.diagnosticStep || "unknown",
                 name: error?.name || "Error",
@@ -165,8 +156,11 @@ export default class DriveLibraryCoordinator {
         section.className = "drive-library-control";
         section.innerHTML = `
             <button class="drive-library-open" type="button">
-                Google Driveから開く
+                Google Driveに直接接続
             </button>
+            <p class="drive-library-description">
+                TrailBookからGoogle Driveへ接続
+            </p>
             <p class="drive-library-status" role="status"
                 aria-live="polite" aria-atomic="true"></p>
         `;
@@ -192,7 +186,7 @@ export default class DriveLibraryCoordinator {
             return;
         }
         if (this.previousRoot) {
-            this.button.textContent = "Google Drive Libraryを再接続";
+            this.button.textContent = "前回のGoogle Drive Libraryに直接接続";
             this.#showStatus(`${this.previousRoot.name} への再接続には認証が必要です。`);
         }
     }

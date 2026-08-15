@@ -1,5 +1,4 @@
 import TreeMetadataBuilder from "./TreeMetadataBuilder.js";
-import mobileDriveDiagnostic from "./MobileDriveDiagnosticPanel.js";
 
 const ROOT_PATH = "";
 const NODE_SELECTOR = "[data-tree-path]";
@@ -54,7 +53,6 @@ export default class TreeView {
      * @returns {Promise<void>}
      */
     async render(library) {
-        mobileDriveDiagnostic.recordTreeRenderStarted();
         const requestId = ++this.renderRequestId;
         const previousState = this.captureNavigationState();
         const previousCommittedState = this.captureCommittedState();
@@ -108,14 +106,12 @@ export default class TreeView {
                 : 0;
 
             this.scrollTop = this.element.scrollTop;
-            mobileDriveDiagnostic.recordTreeRendered({ folderCount: prepared.library.folderCount, trackCount: prepared.library.gpxFileCount });
 
         } catch (error) {
 
             Object.assign(this, previousCommittedState);
 
             console.error("TreeView render failed.", error);
-            mobileDriveDiagnostic.recordError("folder-tree-render", error);
         }
     }
 

@@ -4,7 +4,6 @@ import DiscoveryFilterService from "../services/DiscoveryFilterService.js";
 import DateTreeView from "../ui/DateTreeView.js";
 import FolderTreeFilterProjection from "../ui/FolderTreeFilterProjection.js";
 import TrackInfoCoordinator from "./TrackInfoCoordinator.js";
-import mobileDriveDiagnostic from "../ui/MobileDriveDiagnosticPanel.js";
 
 /**
  * Coordinates lazy Discovery Index construction and Folder / Date projection.
@@ -86,9 +85,6 @@ export default class TrackDiscoveryCoordinator {
 
     setLibrary({ namespace, libraryId, fileEntries, generation, isCurrent }) {
 
-        if (namespace?.startsWith("drive:")) {
-            mobileDriveDiagnostic.recordDiscoveryCount(fileEntries.length);
-        }
         this.available = true;
         this.generation = generation;
         this.isCurrent = isCurrent;
@@ -289,9 +285,7 @@ export default class TrackDiscoveryCoordinator {
             }
 
             this.#applyFilter(entries);
-            mobileDriveDiagnostic.recordDiscoveryCount(entries.length);
         } catch {
-            mobileDriveDiagnostic.recordError("discovery", "Discovery build failed");
             if (generation === this.generation && this.isCurrent()) {
                 this.dateTree.showError();
             }

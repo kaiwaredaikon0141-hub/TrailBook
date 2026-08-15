@@ -1,8 +1,7 @@
 import TrackInfoView from "../../src/js/ui/TrackInfoView.js";
 import ViewStateControls from "../../src/js/ui/ViewStateControls.js";
-import {
-    MobileDriveDiagnosticPanel
-} from "../../src/js/ui/MobileDriveDiagnosticPanel.js";
+import Toolbar from "../../src/js/ui/Toolbar.js";
+import LibraryAccessPanel from "../../src/js/ui/LibraryAccessPanel.js";
 
 const output = document.getElementById("result");
 let assertions = 0;
@@ -99,7 +98,8 @@ function createMobileSidebarProbe(trackCount = 1122) {
     modes.className = "discovery-mode-switch";
     modes.innerHTML = "<button>Folder</button><button>Date</button>";
     drive.className = "drive-library-control";
-    drive.innerHTML = "<button>別のGoogle Drive Libraryを開く</button>" +
+    drive.innerHTML = "<button>別のGoogle Drive Libraryに直接接続</button>" +
+        '<p class="drive-library-description">TrailBookからGoogle Driveへ接続</p>' +
         '<p class="drive-library-status">Drive Library: 1122 GPX</p>';
     fixed.append(search, modes, drive);
     sidebar.className = "sidebar";
@@ -228,50 +228,17 @@ async function run() {
         indexHtml.includes("viewport-fit=cover"),
     "mobile viewport metadata missing");
 
-    const diagnosticMedia = new FakeMedia(false);
-    const diagnostic = new MobileDriveDiagnosticPanel({
-        documentRef: document,
-        mobileMedia: diagnosticMedia
-    });
+    const toolbarCopy = new Toolbar("test");
+    const accessCopy = new LibraryAccessPanel();
 
-    diagnostic.beginAttempt();
-    assert(diagnostic.element.hidden,
-        "Drive diagnostic panel was exposed on desktop");
-    diagnosticMedia.set(true);
-    diagnostic.recordAuth(true);
-    diagnostic.recordPicker(true);
-    diagnostic.recordScanStarted();
-    diagnostic.recordFilesListRequest();
-    diagnostic.recordDiscovered({ folderCount: 12, gpxCount: 34 });
-    diagnostic.recordLibraryApplyStarted();
-    diagnostic.recordTreeRenderStarted();
-    diagnostic.recordTreeRendered({ folderCount: 12, trackCount: 34 });
-    const diagnosticState = diagnostic.getState();
-
-    assert(!diagnostic.element.hidden && diagnosticState.auth === "ok" &&
-        diagnosticState.picker === "ok",
-    "mobile Drive diagnostic auth or Picker status missing");
-    assert(diagnosticState.scanStarted &&
-        diagnosticState.filesListRequests === 1 &&
-        diagnosticState.discoveredGpxCount === 34 &&
-        diagnosticState.discoveredFolderCount === 12,
-    "mobile Drive scan counters are incorrect");
-    assert(diagnosticState.libraryApplyStarted &&
-        diagnosticState.treeRenderStarted &&
-        diagnosticState.treeFolderCount === 12 &&
-        diagnosticState.treeTrackCount === 34,
-    "mobile Drive apply or Tree counters are incorrect");
-    diagnostic.recordError(
-        "tree-render",
-        new Error("https://example.invalid/library/secret.gpx token_12345678901234567890")
-    );
-    assert(!diagnostic.getState().lastErrorMessage.includes("example.invalid") &&
-        !diagnostic.getState().lastErrorMessage.includes("secret.gpx") &&
-        !diagnostic.getState().lastErrorMessage.includes("12345678901234567890"),
-    "mobile Drive diagnostic exposed a URL, path, or token-like value");
-    assert(themeCss.includes(".mobile-drive-diagnostic") &&
-        themeCss.includes("@media (max-width:768px)"),
-    "mobile-only Drive diagnostic CSS contract missing");
+    accessCopy.showInitial();
+    assert(toolbarCopy.pickFolderButton.textContent.includes(
+        "端末からライブラリを開く"
+    ), "local Library action wording is unclear");
+    assert(accessCopy.element.textContent.includes("端末・Files・Google Driveなど"),
+        "local Library source explanation is missing");
+    assert(!themeCss.includes(".mobile-drive-diagnostic"),
+        "obsolete Mobile Drive diagnostic CSS remains");
 
     if (matchMedia("(max-width:768px)").matches) {
         const probe = createMobileSidebarProbe();

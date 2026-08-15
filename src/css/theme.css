@@ -51,49 +51,6 @@ body{
     overflow:hidden;
 }
 
-@media (max-width:768px){
-
-    .mobile-drive-diagnostic{
-        position:fixed;
-        z-index:1800;
-        right:max(8px, env(safe-area-inset-right));
-        bottom:max(8px, env(safe-area-inset-bottom));
-        width:min(310px, calc(100vw - 16px));
-        max-height:46dvh;
-        overflow:auto;
-        padding:6px 8px;
-        border:1px solid #64748b;
-        border-radius:8px;
-        background:rgb(15 23 42 / 92%);
-        color:#f8fafc;
-        font:11px/1.35 ui-monospace, monospace;
-    }
-
-    .mobile-drive-diagnostic[hidden]{
-        display:none;
-    }
-
-    .mobile-drive-diagnostic summary{
-        min-height:28px;
-        cursor:pointer;
-        font:600 12px/28px system-ui, sans-serif;
-    }
-
-    .mobile-drive-diagnostic dl{
-        display:grid;
-        grid-template-columns:minmax(0, 1fr) minmax(0, 1fr);
-        gap:2px 8px;
-        margin:4px 0;
-    }
-
-    .mobile-drive-diagnostic dt,
-    .mobile-drive-diagnostic dd{
-        min-width:0;
-        margin:0;
-        overflow-wrap:anywhere;
-    }
-}
-
 .sidebar{
 
     min-width:0;
@@ -1469,6 +1426,17 @@ body.is-track-info-resizing{
 .drive-library-open{
 
     width:100%;
+}
+
+.drive-library-description{
+
+    margin:0;
+
+    color:#667085;
+
+    font-size:0.75rem;
+
+    line-height:1.35;
 }
 
 .drive-library-status{

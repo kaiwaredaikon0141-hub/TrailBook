@@ -2,7 +2,6 @@ import Folder from "../models/Folder.js";
 import Library from "../models/Library.js";
 import { isReservedLibraryFolderName } from "./LibraryReservedFolderPolicy.js";
 import drivePerformance from "./DrivePerformanceMonitor.js";
-import mobileDriveDiagnostic from "../ui/MobileDriveDiagnosticPanel.js";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3/files";
 const FOLDER_MIME_TYPE = "application/vnd.google-apps.folder";
@@ -99,7 +98,6 @@ export default class DriveLibraryService {
 
     async scan({ id, name }) {
 
-        mobileDriveDiagnostic.recordScanStarted();
         drivePerformance.recordComponentCall("DriveLibraryService.scan");
         const endMetadataScan = drivePerformance.begin("metadataScanMs");
         const rootHandle = new DriveDirectoryHandle({ fileId: id, name });
@@ -161,7 +159,6 @@ export default class DriveLibraryService {
             }
 
             await Promise.resolve();
-            mobileDriveDiagnostic.recordDiscovered({ folderCount, gpxCount: gpxFileCount });
         }
 
         const library = new Library(name, rootFolder, folderCount, gpxFileCount);
@@ -228,7 +225,6 @@ export default class DriveLibraryService {
 
         do {
             drivePerformance.increment("filesListRequests");
-            mobileDriveDiagnostic.recordFilesListRequest();
             const parameters = new URLSearchParams({
                 q: `'${folderId.replaceAll("'", "\\'")}' in parents and trashed = false`,
                 fields: "nextPageToken,files(id,name,mimeType,size,modifiedTime,parents,trashed)",

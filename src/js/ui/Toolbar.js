@@ -36,7 +36,7 @@ export default class Toolbar {
                     サイドバー
                 </button>
                 <button id="pick-folder" type="button">
-                    📁 ライブラリを開く
+                    📁 端末からライブラリを開く
                 </button>
             </div>
 
