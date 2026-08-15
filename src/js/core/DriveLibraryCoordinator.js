@@ -2,6 +2,7 @@ import DriveAuthService from "../services/DriveAuthService.js";
 import DrivePickerService from "../services/DrivePickerService.js";
 import DriveLibraryService from "../services/DriveLibraryService.js";
 import drivePerformance from "../services/DrivePerformanceMonitor.js";
+import mobileDriveDiagnostic from "../ui/MobileDriveDiagnosticPanel.js";
 
 const STORAGE_KEY = "trailbook.driveLibrary";
 
@@ -62,6 +63,7 @@ export default class DriveLibraryCoordinator {
 
         this.busy = true;
         this.button.disabled = true;
+        mobileDriveDiagnostic.beginAttempt();
         this.#showStatus("Google Driveへ接続しています…");
         const requestId = ++this.requestId;
         const isCurrent = () => requestId === this.requestId;
@@ -70,11 +72,13 @@ export default class DriveLibraryCoordinator {
 
         try {
             await this.auth.authorize();
+            mobileDriveDiagnostic.recordAuth(true);
             console.info("[TrailBook Drive] Authorization completed");
             this.diagnosticStep = "picker";
             const root = this.previousRoot || await this.picker.pickFolder(
                 this.auth.getAccessToken()
             );
+            mobileDriveDiagnostic.recordPicker(Boolean(root));
 
             console.info("[TrailBook Drive] Folder received by coordinator", {
                 folderId: root?.id ? "present" : "missing",
@@ -101,6 +105,8 @@ export default class DriveLibraryCoordinator {
             if (requestId !== this.requestId) return false;
             await this.flushViewState();
             this.beforeLoad();
+            mobileDriveDiagnostic.recordLibraryApplyStarted();
+            this.diagnosticStep = "library-apply";
             const applied = await this.applyLibrary(library, {
                 generation: requestId,
                 isCurrent,
@@ -117,6 +123,10 @@ export default class DriveLibraryCoordinator {
             return true;
         } catch (error) {
             drivePerformance.cancel();
+            mobileDriveDiagnostic.recordError(
+                this.diagnosticStep || "unknown",
+                error
+            );
             const diagnostic = {
                 step: this.diagnosticStep || "unknown",
                 name: error?.name || "Error",

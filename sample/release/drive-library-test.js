@@ -10,6 +10,7 @@ import GPXDisplayQueue from "../../src/js/services/GPXDisplayQueue.js";
 import drivePerformance from "../../src/js/services/DrivePerformanceMonitor.js";
 import DriveLibraryCoordinator from "../../src/js/core/DriveLibraryCoordinator.js";
 import { getGoogleDriveRuntimeConfig } from "../../src/js/core/Config.js";
+import mobileDriveDiagnostic from "../../src/js/ui/MobileDriveDiagnosticPanel.js";
 
 const results = document.querySelector("#results");
 let assertions = 0;
@@ -103,6 +104,7 @@ async function testPicker() {
 }
 
 async function testLibrary() {
+    mobileDriveDiagnostic.beginAttempt();
     let listCalls = 0;
     let downloads = 0;
     const fetchFunction = async url => {
@@ -141,6 +143,14 @@ async function testLibrary() {
     assert(library.gpxFileCount === 2 && library.folderCount === 2, "recursive GPX scan");
     assert(listCalls === 3, "pagination and nested folder processed");
     assert(downloads === 0, "scan does not download GPX bodies");
+    const diagnosticState = mobileDriveDiagnostic.getState();
+
+    assert(diagnosticState.scanStarted &&
+        diagnosticState.filesListRequests === 3,
+    "Drive diagnostic did not receive scan request counters");
+    assert(diagnosticState.discoveredGpxCount === 2 &&
+        diagnosticState.discoveredFolderCount === 2,
+    "Drive diagnostic did not receive discovered metadata counts");
     assert(!library.rootFolder.folders.some(folder => folder.name === "TrailBook_Backup"), "backup excluded");
     assert(library.rootFolder.gpxFiles.length === 1, "non-GPX excluded");
     const nested = library.rootFolder.folders[0].gpxFiles[0];

@@ -1,5 +1,8 @@
 import TrackInfoView from "../../src/js/ui/TrackInfoView.js";
 import ViewStateControls from "../../src/js/ui/ViewStateControls.js";
+import {
+    MobileDriveDiagnosticPanel
+} from "../../src/js/ui/MobileDriveDiagnosticPanel.js";
 
 const output = document.getElementById("result");
 let assertions = 0;
@@ -161,6 +164,51 @@ async function run() {
     assert(indexHtml.includes('name="viewport"') &&
         indexHtml.includes("viewport-fit=cover"),
     "mobile viewport metadata missing");
+
+    const diagnosticMedia = new FakeMedia(false);
+    const diagnostic = new MobileDriveDiagnosticPanel({
+        documentRef: document,
+        mobileMedia: diagnosticMedia
+    });
+
+    diagnostic.beginAttempt();
+    assert(diagnostic.element.hidden,
+        "Drive diagnostic panel was exposed on desktop");
+    diagnosticMedia.set(true);
+    diagnostic.recordAuth(true);
+    diagnostic.recordPicker(true);
+    diagnostic.recordScanStarted();
+    diagnostic.recordFilesListRequest();
+    diagnostic.recordDiscovered({ folderCount: 12, gpxCount: 34 });
+    diagnostic.recordLibraryApplyStarted();
+    diagnostic.recordTreeRenderStarted();
+    diagnostic.recordTreeRendered({ folderCount: 12, trackCount: 34 });
+    const diagnosticState = diagnostic.getState();
+
+    assert(!diagnostic.element.hidden && diagnosticState.auth === "ok" &&
+        diagnosticState.picker === "ok",
+    "mobile Drive diagnostic auth or Picker status missing");
+    assert(diagnosticState.scanStarted &&
+        diagnosticState.filesListRequests === 1 &&
+        diagnosticState.discoveredGpxCount === 34 &&
+        diagnosticState.discoveredFolderCount === 12,
+    "mobile Drive scan counters are incorrect");
+    assert(diagnosticState.libraryApplyStarted &&
+        diagnosticState.treeRenderStarted &&
+        diagnosticState.treeFolderCount === 12 &&
+        diagnosticState.treeTrackCount === 34,
+    "mobile Drive apply or Tree counters are incorrect");
+    diagnostic.recordError(
+        "tree-render",
+        new Error("https://example.invalid/library/secret.gpx token_12345678901234567890")
+    );
+    assert(!diagnostic.getState().lastErrorMessage.includes("example.invalid") &&
+        !diagnostic.getState().lastErrorMessage.includes("secret.gpx") &&
+        !diagnostic.getState().lastErrorMessage.includes("12345678901234567890"),
+    "mobile Drive diagnostic exposed a URL, path, or token-like value");
+    assert(themeCss.includes(".mobile-drive-diagnostic") &&
+        themeCss.includes("@media (max-width:768px)"),
+    "mobile-only Drive diagnostic CSS contract missing");
 
     output.textContent = `PASS: ${assertions} assertions`;
 }
