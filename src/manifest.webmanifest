@@ -1,0 +1,26 @@
+{
+  "name": "TrailBook",
+  "short_name": "TrailBook",
+  "description": "GPX Library viewer and editor",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#164e63",
+  "background_color": "#f8fafc",
+  "icons": [
+    {
+      "src": "icons/trailbook-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/trailbook-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

@@ -10,21 +10,27 @@ TrailBookは`src/`の静的ファイルをGitHub Pagesへ配置できます。�
    - `TRAILBOOK_GOOGLE_API_KEY`
    - `TRAILBOOK_GOOGLE_PICKER_APP_ID`
 3. `main`へpushするか、Actions画面から **Deploy TrailBook to GitHub Pages** を手動実行します。
-4. `https://USERNAME.github.io/REPOSITORY/` を開き、TrailBookが起動することを確認します。
+4. `https://USERNAME.github.io/REPOSITORY/`を開き、TrailBookが起動することを確認します。
 
-Secretsが未設定の場合もViewerは起動しますが、Google Driveボタンは無効になります。実credentialはsource、workflow、logへ記録しません。localhost開発用の`src/trailbook.local-config.js`もGit管理対象外です。
+Secretsが未設定でもViewerは起動しますが、Google Drive直接接続は利用できません。実credentialはsource、workflow、logへ記録しません。localhost開発用の`src/trailbook.local-config.js`はGit管理対象外です。
 
 ## Google Cloud setup
 
-1. OAuth 2.0 Web ClientのAuthorized JavaScript originsへPagesのHTTPS originを追加します。originにはpathを含めません。
+1. OAuth 2.0 Web ClientのAuthorized JavaScript originsへPagesのHTTPS originを追加します。originにpathは含めません。
    - 例: `https://USERNAME.github.io`
    - repository名はAuthorized JavaScript originへ含めません。
 2. API KeyのWebsite restrictionsには実際のPages URL配下を許可します。
    - 例: `https://USERNAME.github.io/REPOSITORY/*`
 3. API KeyのAPI restrictionsでGoogle Drive APIとGoogle Picker APIの利用条件を維持します。
 
+## PWA / offline app shell
+
+Release 1.8 Unit 1以降、Pages artifactにはrelative `start_url` / `scope`のManifest、PWA icon、Service Workerが含まれます。AndroidではPagesのHTTPS URLを開き、browserのinstall操作からTrailBookをstandalone appとして追加できます。
+
+Service Workerが保存するのはTrailBook本体のHTML、CSS、production JavaScript modules、Leaflet vendor assets、Manifest、iconだけです。offlineでもViewer UIと既存device-local stateは起動できますが、未取得のmap tile、Google Drive API、OAuth、GPX本文をService Workerから利用することはできません。Service Workerはこれらをcacheしません。
+
+localhostでもService Workerを利用できます。開発中にapp-shell cacheが不要な場合はbrowser DevToolsのApplication / StorageからTrailBookのService Workerと`trailbook-app-shell-*` cacheを解除してください。
+
 ## Browser acceptance
 
-スマートフォンからPagesのHTTPS URLを開き、Google Drive login、Folder選択、GPS現在地、Follow、走行中モード、Screen Wake Lockを確認します。GeolocationやWake Lockの対応状況・permissionはbrowserと端末に依存します。
-
-GitHub Pages設定、Google Cloud origin登録、実端末確認はdeployment後に手動で行います。PWA、service worker、install対応は含みません。
+スマートフォンからPagesのHTTPS URLを開き、PWA install、standalone起動、offline app-shell起動、Google Drive login、Folder選択、GPS現在地、Follow、走行中モード、Screen Wake Lockを確認します。GeolocationとWake Lockの対応状況・permissionはbrowserと端末に依存します。

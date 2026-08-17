@@ -3,7 +3,7 @@
 Version: 1.7 Completed
 Status: Official
 Current Release: 1.7.0
-Next Release: Not defined
+Next Release: Release 1.8（In Progress）
 
 ## Version Policy
 
@@ -718,6 +718,29 @@ Goal: 既存Viewerをresponsive Mobile UIへ拡張し、HTTPS上でGPS / Driving
 - offline map tiles
 - Google Drive cold cacheで大量visible GPXを初回表示する際の追加高速化
 - Google Drive write / sync、access token永続化
+
+## Next Release — Release 1.8 PWA
+
+Status: In Progress
+
+Goal: GitHub Pages版TrailBookをinstallable PWAとし、network未接続でもapp shellを起動できるようにする。
+
+### Unit 1 — PWA Foundation
+
+Status: Browser Acceptance Pending
+
+- relative Manifest、standalone表示、192 / 512px icon
+- version付きService Worker app-shell cache
+- index、CSS、production modules、Leaflet vendor assetsのoffline起動
+- Google API / OAuth response、map tile、GPXをService Worker cache対象外として維持
+- GitHub Pages repository subpathとlocalhost起動を維持
+
+Out of scope:
+
+- GPX完全offline化
+- map tile offline cache
+- Google Drive offline access
+- PWA update UI / forced reload
 
 ## Future Design Boundaries
 

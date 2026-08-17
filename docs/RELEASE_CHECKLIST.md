@@ -3143,3 +3143,44 @@ Release 1.7 Status: Ready for final commit and tag
 | Production modules | 96 / 96 import and main reachable |
 | Missing import / circular dependency | 0 / 0 |
 | App.js / TreeView.js | 954 / 995 lines |
+
+## Release 1.8 — In Progress
+
+Current production version: `1.7.0`
+
+### Unit 1 — PWA Foundation
+
+- Implementation Status: Completed
+- Static Test Status: Completed
+- Browser Acceptance Status: Pending
+- Unit 1 Status: Browser Acceptance Pending
+
+Accepted implementation scope:
+
+- relative `start_url` / `scope`のWeb App Manifestと192 / 512px icon
+- standalone表示用theme / Apple mobile metadata
+- version付きTrailBook app-shell cacheと旧TrailBook cacheだけのcleanup
+- index、CSS、全production module、Leaflet vendor asset、Manifest、iconのprecache
+- Google API / OAuth response、map tile、GPXをService Worker cache対象外として維持
+- HTTPS / localhostだけのService Worker登録と、登録失敗時の通常Web継続
+- GitHub Pages repository subpath互換をrelative URLで維持
+
+Static validation:
+
+- PWA foundation: 44 assertions Pass
+- actual offline reload: Pass（113 app-shell entries、UI / CSS / JS / Leaflet起動）
+- Mobile Viewer regression: 34 assertions Pass
+- GPS regression: 23 assertions Pass
+- Driving Mode regression: 20 assertions Pass
+- Google Drive regression: 106 assertions Pass
+- Production modules: 97 / 97 reachable
+- Missing import / circular dependency: 0 / 0
+- App.js / TreeView.js: 954 / 995 lines
+- `git diff --check`: Pass
+
+Out of scope:
+
+- GPX完全offline化
+- map tile offline cache
+- Google Drive offline access
+- PWA update UI、forced reload、service workerによるcredential保存

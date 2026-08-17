@@ -7,6 +7,7 @@ import BatchSimplificationCoordinator, {
 } from "./core/BatchSimplificationCoordinator.js";
 import EditedGPXLibraryRefreshCoordinator from "./core/EditedGPXLibraryRefreshCoordinator.js";
 import TrackEditingCoordinator from "./core/TrackEditingCoordinator.js";
+import { registerTrailBookServiceWorker } from "./services/PWAServiceWorker.js";
 import { folderPathFromFilePath } from "./utils/PathUtils.js";
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -147,5 +148,7 @@ window.addEventListener("DOMContentLoaded", () => {
             ?.querySelector(".sidebar-fixed-controls") ||
         app.trackDiscoveryCoordinator.sidebarShell
     );
+
+    registerTrailBookServiceWorker();
 
 });
