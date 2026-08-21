@@ -1331,7 +1331,9 @@ function createPreviousLibraryFixture({
     pickedHandles = [],
     storeFailure = false,
     persistSave = true,
-    staleName = null
+    staleName = null,
+    applyResult = true,
+    scanError = null
 } = {}) {
 
     const applied = [];
@@ -1394,6 +1396,7 @@ function createPreviousLibraryFixture({
         store,
         scanner: {
             async scan(handle) {
+                if (scanError) throw scanError;
                 if (handle.name === staleName) {
                     throw new DOMException("missing", "NotFoundError");
                 }
@@ -1415,7 +1418,8 @@ function createPreviousLibraryFixture({
             assert(context.cacheNamespace === `cache:${library.name}`,
                 "Library cache namespace not forwarded");
             applied.push(library.rootFolder.handle);
-            return true;
+            if (applyResult) panel.hide();
+            return applyResult;
         },
         getCurrentLibrary: () => null,
         getSupport: () => ({ available: true, reason: null, isMobile: false }),
@@ -1508,6 +1512,30 @@ async function testPreviousLibraryCoordinator() {
     assert(granted.requestCalls === 0, "startup requested permission");
     assert(auto.panel.persistenceStatus === "saved / granted",
         "granted persistence status missing");
+    assert(auto.panel.state === "hidden",
+        "successful auto restore did not collapse its primary action");
+
+    const unappliedHandle = createDirectoryHandle("Unapplied");
+    const unapplied = createPreviousLibraryFixture({
+        storedHandle: unappliedHandle,
+        applyResult: false
+    });
+
+    assert(!await unapplied.coordinator.initialize(),
+        "unapplied auto restore reported success");
+    assert(unapplied.panel.state === "previous:Unapplied:granted",
+        "unapplied granted restore left no previous Library action");
+
+    const failedHandle = createDirectoryHandle("Failed");
+    const failed = createPreviousLibraryFixture({
+        storedHandle: failedHandle,
+        scanError: new Error("provider unavailable")
+    });
+
+    assert(!await failed.coordinator.initialize(),
+        "failed auto restore reported success");
+    assert(failed.panel.state === "previous:Failed:granted",
+        "failed granted restore left no manual recovery action");
 
     const prompted = createDirectoryHandle("Prompted", { query: "prompt" });
     const prompt = createPreviousLibraryFixture({ storedHandle: prompted });
@@ -1559,6 +1587,8 @@ async function testPreviousLibraryCoordinator() {
 
     assert(!await staleFixture.coordinator.initialize(), "stale Handle opened");
     assert(staleFixture.store.cleared === 1, "stale Handle not discarded");
+    assert(staleFixture.panel.state === "initial",
+        "invalid Handle did not restore normal Library open");
 
     const first = createDirectoryHandle("First");
     const second = createDirectoryHandle("Second");
@@ -1586,6 +1616,8 @@ async function testPreviousLibraryCoordinator() {
     assert(!await noHandle.coordinator.initialize(), "empty Store opened Library");
     assert(noHandle.panel.persistenceStatus === "no persistent handle",
         "empty Store persistence status missing");
+    assert(noHandle.panel.state === "initial",
+        "empty Store did not retain normal Library open");
 
     const fallbackHandle = createDirectoryHandle("Fallback");
     const nonPersistent = createPreviousLibraryFixture({
@@ -1604,6 +1636,9 @@ function testPreviousLibraryPanel() {
     let requests = 0;
 
     panel.setPreviousLibraryAction(() => { requests += 1; });
+    panel.showPreviousLibrary("Previous", "granted");
+    assert(!panel.previousLibraryButton.hidden,
+        "granted previous Library button hidden before auto restore");
     panel.showPreviousLibrary("Previous", "prompt");
     assert(!panel.previousLibraryButton.hidden, "previous Library button hidden");
     assert(panel.previousLibraryButton.type === "button", "previous button type");
@@ -1616,6 +1651,11 @@ function testPreviousLibraryPanel() {
     panel.setPreviousLibraryStatus("saved / granted");
     panel.hide();
     assert(!panel.element.hidden, "persistence status hidden with panel content");
+    assert(panel.previousLibraryButton.hidden &&
+        panel.element.querySelector(".manual-library-primary").hidden,
+    "successful restore retained a duplicate primary action");
+    assert(!panel.libraryChange.hidden && !panel.libraryChange.open,
+        "successful restore removed compact Library change access");
     assert(panel.previousLibraryStatus.textContent.endsWith("saved / granted"),
         "persistence status text missing");
     panel.setPreviousLibraryStatus("invalid");

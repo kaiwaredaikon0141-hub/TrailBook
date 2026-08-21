@@ -85,7 +85,16 @@ export default class PreviousLibraryCoordinator {
         this.#setPersistenceStatus(`saved / ${permission}`);
 
         if (permission === "granted") {
-            return this.#openHandle(handle, { remember: false });
+            this.accessPanel.showPreviousLibrary(handle.name, permission);
+            const opened = await this.#openHandle(handle, { remember: false });
+
+            if (!opened && !this.getCurrentLibrary() && this.previousHandle) {
+                this.accessPanel.showPreviousLibrary(
+                    handle.name,
+                    this.previousPermission
+                );
+            }
+            return opened;
         }
 
         if (permission === "prompt") {
@@ -221,6 +230,7 @@ export default class PreviousLibraryCoordinator {
             });
 
             if (!applied || !isCurrent()) {
+                if (isCurrent()) this.#restoreAccessState();
                 return false;
             }
 
@@ -250,6 +260,17 @@ export default class PreviousLibraryCoordinator {
                 this.#setPersistenceStatus("invalid");
             }
             this.#showLoadFailure(error);
+            if (isCurrent() && !this.getCurrentLibrary()) {
+                if (this.previousHandle) {
+                    this.accessPanel.showPreviousLibrary(
+                        this.previousHandle.name,
+                        this.previousPermission
+                    );
+                } else {
+                    this.#configureAccess();
+                    this.statusBar.showError();
+                }
+            }
             return false;
         }
     }

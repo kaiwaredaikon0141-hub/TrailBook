@@ -3274,6 +3274,19 @@ Static validation:
 - App.js / TreeView.js: 954 / 995 lines
 - `git diff --check`: Pass
 
+#### Mobile Library Open Action Regression Fix
+
+- Library未openでPrevious Handleが`granted` / `prompt`なら「前回のライブラリを開く」、`denied` / no Handle / invalidなら「端末からライブラリを開く」を常に主操作として表示する
+- granted auto restoreのapply失敗、provider read失敗、switch不可ではPrevious主操作へ戻し、statusだけで操作不能な状態を残さない
+- auto restore成功後は重複主操作を隠すが、「ライブラリを変更」disclosureとPrevious Library statusは維持する
+- 「ライブラリを変更」の展開先は端末open / Google Drive直接接続の既存補助導線を維持する
+
+Static validation:
+
+- View State / Previous Library: 346 assertions Pass
+- Mobile Viewer: 48 assertions Pass（portrait / landscape）、Desktop layout: 41 assertions Pass
+- PWA: 59 assertions Pass
+
 ### Unit 2 Android PWA Previous Library Restore Diagnostic
 
 - Implementation Status: Completed

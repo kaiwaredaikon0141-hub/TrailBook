@@ -96,7 +96,7 @@ body{
 }
 
 .library-access-panel.is-content-hidden >
-    :not(.previous-library-status){
+    :not(.previous-library-status):not(.library-change){
 
     display:none;
 }

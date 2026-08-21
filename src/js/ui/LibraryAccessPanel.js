@@ -97,13 +97,16 @@ export default class LibraryAccessPanel {
     showPreviousLibrary(folderName, permission = "prompt") {
 
         const denied = permission === "denied";
+        const granted = permission === "granted";
 
         this.#show(
             "前回のライブラリがあります",
             denied
                 ? `${folderName}へのアクセスは許可されていません。` +
                     "明示的に開き直すか、通常のLibraryを選択できます。"
-                : `${folderName}を開くにはアクセスの確認が必要です。`,
+                : granted
+                    ? `${folderName}を開けます。`
+                    : `${folderName}を開くにはアクセスの確認が必要です。`,
             denied ? "error" : "info",
             denied ? "manual" : "previous"
         );
@@ -189,6 +192,11 @@ export default class LibraryAccessPanel {
 
     hide() {
 
+        this.previousLibraryButton.hidden = true;
+        this.element.querySelector(".manual-library-primary").hidden = true;
+        this.element.querySelector(".manual-library-secondary").hidden = false;
+        this.libraryChange.hidden = false;
+        this.libraryChange.open = false;
         this.element.classList.add("is-content-hidden");
         this.element.hidden = false;
     }
