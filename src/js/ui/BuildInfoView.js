@@ -21,7 +21,7 @@ export function createBuildInfoElement({
     const element = document.createElement("footer");
     element.className = "trailbook-build-info";
     element.textContent =
-        `TrailBook v${config.version} · ${getBuildIdentifier(runtimeBuild)}`;
+        `TrailBook v${config.version} \u00b7 ${getBuildIdentifier(runtimeBuild)}`;
 
     return element;
 }

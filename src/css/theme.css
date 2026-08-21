@@ -82,6 +82,71 @@ body{
     text-align:center;
 }
 
+.previous-library-status{
+
+    display:block;
+
+    margin-top:6px;
+
+    color:#777;
+
+    font-size:11px;
+
+    line-height:1.3;
+}
+
+.library-access-panel.is-content-hidden >
+    :not(.previous-library-status){
+
+    display:none;
+}
+
+.manual-library-primary,
+.manual-library-secondary{
+
+    width:100%;
+}
+
+.library-change{
+
+    margin-top:6px;
+}
+
+.library-change > summary{
+
+    cursor:pointer;
+
+    color:#52606d;
+
+    font-size:12px;
+}
+
+.library-change-options{
+
+    display:grid;
+
+    gap:4px;
+
+    margin-top:6px;
+}
+
+.library-device-description{
+
+    margin:0;
+
+    color:#667085;
+
+    font-size:11px;
+}
+
+@media (min-width:769px){
+
+    .manual-library-primary{
+
+        display:none;
+    }
+}
+
 .sidebar-resize-handle{
 
     position:relative;
@@ -1514,6 +1579,41 @@ body.is-track-info-resizing{
         background:rgba(255, 255, 255, 0.96);
     }
 
+    .toolbar.is-mobile-layout #pick-folder{
+
+        display:none;
+    }
+
+    .toolbar.is-mobile-layout #toggle-sidebar{
+
+        width:48px;
+
+        min-width:48px;
+
+        height:48px;
+
+        min-height:48px;
+
+        padding:10px;
+    }
+
+    .mobile-library-icon{
+
+        display:block;
+
+        width:100%;
+
+        height:100%;
+
+        fill:none;
+
+        stroke:currentColor;
+
+        stroke-width:1.8;
+
+        stroke-linejoin:round;
+    }
+
     .sidebar-shell{
 
         box-sizing:border-box;
@@ -1542,6 +1642,16 @@ body.is-track-info-resizing{
         flex-direction:column;
 
         flex:0 0 auto;
+    }
+
+    .trailbook-build-info{
+
+        flex:0 0 auto;
+
+        margin-top:4px;
+
+        padding:8px 0 max(2px, env(safe-area-inset-bottom));
+
     }
 
     .sidebar-fixed-controls > *,

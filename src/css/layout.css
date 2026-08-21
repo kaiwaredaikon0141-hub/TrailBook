@@ -203,9 +203,9 @@ body{
 
     .sidebar-shell > .sidebar{
 
-        flex:1 0 240px;
+        flex:1 0 120px;
 
-        min-height:240px;
+        min-height:120px;
 
         overflow-x:hidden;
 

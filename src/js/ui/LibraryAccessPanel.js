@@ -11,9 +11,25 @@ export default class LibraryAccessPanel {
         this.previousLibraryButton = this.element.querySelector(
             ".previous-library-open"
         );
+        this.previousLibraryStatus = this.element.querySelector(
+            ".previous-library-status"
+        );
+        this.manualLibraryButtons = [
+            ...this.element.querySelectorAll(".manual-library-open")
+        ];
+        this.libraryChange = this.element.querySelector(".library-change");
+        this.libraryChangeContainer = this.element.querySelector(
+            ".library-change-options"
+        );
         this.previousLibraryAction = null;
+        this.manualLibraryAction = null;
         this.previousLibraryButton.addEventListener("click", () => {
             this.previousLibraryAction?.();
+        });
+        this.manualLibraryButtons.forEach(button => {
+            button.addEventListener("click", () => {
+                this.manualLibraryAction?.();
+            });
         });
     }
 
@@ -26,9 +42,9 @@ export default class LibraryAccessPanel {
 
         this.#show(
             "端末からライブラリを開く",
-            "「端末からライブラリを開く」を押し、" +
-            "端末・Files・Google DriveなどからGPXを含むFolderを選択します。" +
-            "TrailBookはGPXを読み取り専用で扱い、移動・変更・削除・保存しません。"
+            "GPXを含むFolderを選択します。",
+            "info",
+            "manual"
         );
     }
 
@@ -39,7 +55,8 @@ export default class LibraryAccessPanel {
             "このページは安全な接続で開かれていません。HTTPS、" +
             "http://localhost、http://127.0.0.1で開いてください。" +
             "file://や通常のLAN内HTTP IPでは利用できません。",
-            "error"
+            "error",
+            "manual"
         );
     }
 
@@ -51,7 +68,8 @@ export default class LibraryAccessPanel {
             "Windows版ChromeまたはEdge desktopを推奨します。" +
             "Mobileでは必要APIが利用できる端末だけ実機試験できます。" +
             "代替のFolder選択方式はRelease 1.0では実装していません。",
-            "error"
+            "error",
+            "manual"
         );
     }
 
@@ -60,7 +78,9 @@ export default class LibraryAccessPanel {
         this.#show(
             "未検証のMobile環境です",
             "Folder選択APIを利用できるため実機試験を続行できます。" +
-            "この端末は正式対応環境ではなく、合格するまでbest effort対応にも含めません。"
+            "この端末は正式対応環境ではなく、合格するまでbest effort対応にも含めません。",
+            "info",
+            "manual"
         );
     }
 
@@ -68,7 +88,9 @@ export default class LibraryAccessPanel {
 
         this.#show(
             "ライブラリを読み込み中",
-            `${folderName}を確認しています。`
+            `${folderName}を確認しています。`,
+            "info",
+            "none"
         );
     }
 
@@ -81,20 +103,55 @@ export default class LibraryAccessPanel {
             denied
                 ? `${folderName}へのアクセスは許可されていません。` +
                     "明示的に開き直すか、通常のLibraryを選択できます。"
-                : `${folderName}を開くにはアクセスの確認が必要です。` +
-                    "通常のLibrary選択も引き続き利用できます。",
-            denied ? "error" : "info"
+                : `${folderName}を開くにはアクセスの確認が必要です。`,
+            denied ? "error" : "info",
+            denied ? "manual" : "previous"
         );
-        this.previousLibraryButton.hidden = false;
-        this.previousLibraryButton.setAttribute(
-            "aria-label",
-            `前回のライブラリ ${folderName} を開く`
-        );
+        if (!denied) {
+            this.previousLibraryButton.setAttribute(
+                "aria-label",
+                `前回のライブラリ ${folderName} を開く`
+            );
+        }
     }
 
     setPreviousLibraryAction(action) {
 
         this.previousLibraryAction = action;
+    }
+
+    setManualLibraryAction(action) {
+
+        this.manualLibraryAction = action;
+    }
+
+    setFolderPickerState({ disabled, descriptionId, disabledReason = "" }) {
+
+        this.manualLibraryButtons.forEach(button => {
+            button.disabled = disabled;
+            if (descriptionId) {
+                button.setAttribute("aria-describedby", descriptionId);
+            }
+            button.title = disabled ? disabledReason : "";
+        });
+    }
+
+    setPreviousLibraryStatus(status) {
+
+        const allowed = new Set([
+            "saved / granted",
+            "saved / prompt",
+            "saved / denied",
+            "no persistent handle",
+            "invalid",
+            "unsupported"
+        ]);
+        const normalized = allowed.has(status)
+            ? status
+            : "no persistent handle";
+
+        this.previousLibraryStatus.textContent =
+            `Previous Library: ${normalized}`;
     }
 
     showPermissionFailure() {
@@ -104,7 +161,8 @@ export default class LibraryAccessPanel {
             "Folderへのアクセスを許可して、もう一度" +
             "「端末からライブラリを開く」を押してください。" +
             "現在のLibraryがある場合、その内容は維持されています。",
-            "error"
+            "error",
+            "manual"
         );
     }
 
@@ -114,7 +172,8 @@ export default class LibraryAccessPanel {
             "ライブラリを開けませんでした",
             "Folderを読み取れませんでした。内容とアクセス権を確認して、もう一度お試しください。" +
             "現在のLibraryがある場合、その内容は維持されています。",
-            "error"
+            "error",
+            "manual"
         );
     }
 
@@ -122,13 +181,16 @@ export default class LibraryAccessPanel {
 
         this.#show(
             `${libraryName}: GPX 0件`,
-            "このFolderにはGPXファイルがありません。別のLibraryへ切り替えることができます。"
+            "このFolderにはGPXファイルがありません。別のLibraryへ切り替えることができます。",
+            "info",
+            "manual"
         );
     }
 
     hide() {
 
-        this.element.hidden = true;
+        this.element.classList.add("is-content-hidden");
+        this.element.hidden = false;
     }
 
     #create() {
@@ -146,14 +208,42 @@ export default class LibraryAccessPanel {
             <button class="previous-library-open" type="button" hidden>
                 前回のライブラリを開く
             </button>
+            <button class="manual-library-open manual-library-primary"
+                type="button" hidden>
+                端末からライブラリを開く
+            </button>
+            <details class="library-change" hidden>
+                <summary>ライブラリを変更</summary>
+                <div class="library-change-options">
+                    <button class="manual-library-open manual-library-secondary"
+                        type="button">
+                        端末からライブラリを開く
+                    </button>
+                    <p class="library-device-description">
+                        端末・Files・Google Driveなど
+                    </p>
+                </div>
+            </details>
+            <small class="previous-library-status">
+                Previous Library: no persistent handle
+            </small>
         `;
 
         return section;
     }
 
-    #show(title, message, state = "info") {
+    #show(title, message, state = "info", action = "none") {
 
-        this.previousLibraryButton.hidden = true;
+        this.element.classList.remove("is-content-hidden");
+        this.previousLibraryButton.hidden = action !== "previous";
+        this.element.querySelector(".manual-library-primary").hidden =
+            action !== "manual";
+        const canChangeLibrary = ["manual", "previous"].includes(action);
+
+        this.element.querySelector(".manual-library-secondary").hidden =
+            !canChangeLibrary;
+        this.libraryChange.hidden = !canChangeLibrary;
+        this.libraryChange.open = false;
         this.element.dataset.state = state;
         this.element.querySelector(".library-access-title").textContent = title;
         this.element.querySelector(".library-access-message").textContent = message;

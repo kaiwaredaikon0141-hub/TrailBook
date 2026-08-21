@@ -83,6 +83,7 @@ function createMobileSidebarProbe(trackCount = 1122) {
     const drive = document.createElement("section");
     const sidebar = document.createElement("aside");
     const tree = document.createElement("ul");
+    const buildInfo = document.createElement("footer");
 
     shell.className = "sidebar-shell is-mobile-open";
     close.className = "mobile-sidebar-close";
@@ -118,9 +119,13 @@ function createMobileSidebarProbe(trackCount = 1122) {
         tree.append(item);
     }
     sidebar.append(tree);
-    shell.append(close, fixed, sidebar);
+    buildInfo.className = "trailbook-build-info";
+    buildInfo.textContent = "TrailBook v1.7.0 · testbuild";
+    shell.append(close, fixed, sidebar, buildInfo);
     document.body.append(shell);
-    return { shell, close, fixed, search, modes, drive, sidebar, tree };
+    return {
+        shell, close, fixed, search, modes, drive, sidebar, tree, buildInfo
+    };
 }
 
 async function run() {
@@ -146,8 +151,10 @@ async function run() {
         "closed mobile Sidebar was not hidden from accessibility tree");
     assert(fixture.info.element.parentNode === fixture.workspace,
         "mobile Track Info was not moved to the bottom-sheet layer");
-    assert(fixture.toolbar.sidebarToggleButton.textContent === "ライブラリ",
-        "mobile Library button label missing");
+    assert(fixture.toolbar.sidebarToggleButton.textContent === "" &&
+        fixture.toolbar.sidebarToggleButton.getAttribute("aria-label") ===
+            "ライブラリ",
+    "mobile Library control is not icon-only accessible UI");
 
     fixture.toolbar.sidebarToggleButton.click();
     assert(fixture.controls.isSidebarOpen() &&
@@ -207,7 +214,8 @@ async function run() {
     "mobile viewport or Sidebar CSS contract missing");
     assert(layoutCss.includes("flex-direction:column") &&
         layoutCss.includes("overflow-y:auto") &&
-        layoutCss.includes("flex:1 0 240px"),
+        layoutCss.includes("flex:1 0 120px") &&
+        layoutCss.includes("min-height:120px"),
     "mobile Sidebar is not a scrollable vertical flow");
     assert(themeCss.includes("min-height:44px") &&
         themeCss.includes(".track-editor") &&
@@ -224,6 +232,11 @@ async function run() {
         themeCss.includes("line-height:48px"),
         "mobile Leaflet zoom targets are not 48px"
     );
+    assert(
+        themeCss.includes(".trailbook-build-info") &&
+        themeCss.includes("flex:0 0 auto"),
+        "mobile build information can shrink out of the sidebar"
+    );
     assert(themeCss.includes("grid-column:1 / -1") &&
         themeCss.includes("flex:0 0 76px") &&
         themeCss.includes("text-overflow:ellipsis"),
@@ -238,18 +251,52 @@ async function run() {
     const toolbarCopy = new Toolbar("test");
     const accessCopy = new LibraryAccessPanel();
 
+    toolbarCopy.setMobileLayout(true);
+    assert(toolbarCopy.sidebarToggleButton.textContent.trim() === "" &&
+        toolbarCopy.sidebarToggleButton.querySelector("svg path"),
+    "mobile Library control does not use the inline SVG icon");
+    assert(toolbarCopy.sidebarToggleButton.getAttribute("aria-label") ===
+        "ライブラリ" && toolbarCopy.sidebarToggleButton.title === "ライブラリ",
+    "mobile Library icon accessible name missing");
+    toolbarCopy.setMobileLayout(false);
+    assert(toolbarCopy.sidebarToggleButton.textContent === "サイドバー",
+        "desktop Sidebar presentation did not recover");
+
     accessCopy.showInitial();
     assert(toolbarCopy.pickFolderButton.textContent.includes(
         "端末からライブラリを開く"
     ), "local Library action wording is unclear");
     assert(accessCopy.element.textContent.includes("端末・Files・Google Driveなど"),
         "local Library source explanation is missing");
+    assert(!accessCopy.element.querySelector(".manual-library-primary").hidden &&
+        accessCopy.previousLibraryButton.hidden,
+    "no-previous state does not prioritize device Library open");
+    assert(!accessCopy.libraryChange.open,
+        "Library change options expanded by default");
+    assert(!accessCopy.element.querySelector(".manual-library-secondary").hidden,
+        "no-previous Library change route omits device open");
+    accessCopy.showPreviousLibrary("Previous", "prompt");
+    assert(!accessCopy.previousLibraryButton.hidden &&
+        accessCopy.element.querySelector(".manual-library-primary").hidden,
+    "previous Library is not the primary action");
+    assert(!accessCopy.element.querySelector(".manual-library-secondary").hidden,
+        "device Library change action missing");
+    const driveOption = document.createElement("section");
+    driveOption.className = "drive-library-control";
+    driveOption.textContent = "Google Driveに直接接続";
+    accessCopy.libraryChangeContainer.append(driveOption);
+    accessCopy.libraryChange.open = true;
+    assert(accessCopy.libraryChange.textContent.includes(
+        "端末からライブラリを開く"
+    ) && accessCopy.libraryChange.textContent.includes(
+        "Google Driveに直接接続"
+    ), "Library change disclosure does not contain both open routes");
     assert(!themeCss.includes(".mobile-drive-diagnostic"),
         "obsolete Mobile Drive diagnostic CSS remains");
 
     if (matchMedia("(max-width:768px)").matches) {
         const probe = createMobileSidebarProbe();
-        const flow = [probe.close, probe.fixed, probe.sidebar]
+        const flow = [probe.close, probe.fixed, probe.sidebar, probe.buildInfo]
             .map(element => element.getBoundingClientRect());
         const row = probe.tree.querySelector(".tree-row");
         const label = row.querySelector(".tree-label").getBoundingClientRect();
@@ -257,7 +304,8 @@ async function run() {
         const color = colorButton.getBoundingClientRect();
 
         assert(flow[0].bottom <= flow[1].top + 1 &&
-            flow[1].bottom <= flow[2].top + 1,
+            flow[1].bottom <= flow[2].top + 1 &&
+            flow[2].bottom <= flow[3].top + 1,
         "mobile Sidebar sections overlap vertically");
         assert(probe.sidebar.scrollHeight > probe.sidebar.clientHeight,
             "1122-row Folder Tree is not vertically scrollable");
@@ -276,6 +324,9 @@ async function run() {
         assert(getComputedStyle(probe.shell).overflowY === "auto" &&
             getComputedStyle(probe.sidebar).overflowY === "auto",
         "mobile Sidebar or Tree scrolling contract is inactive");
+        assert(probe.buildInfo.getBoundingClientRect().top >=
+            probe.sidebar.getBoundingClientRect().bottom - 1,
+        "BuildInfo overlaps the mobile Folder Tree");
         probe.shell.remove();
     }
 

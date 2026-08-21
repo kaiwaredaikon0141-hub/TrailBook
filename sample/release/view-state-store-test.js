@@ -1330,6 +1330,7 @@ function createPreviousLibraryFixture({
     storedHandle = null,
     pickedHandles = [],
     storeFailure = false,
+    persistSave = true,
     staleName = null
 } = {}) {
 
@@ -1339,6 +1340,7 @@ function createPreviousLibraryFixture({
     const panel = {
         descriptionId: "library-access-status",
         state: null,
+        persistenceStatus: "no persistent handle",
         previousAction: null,
         setPreviousLibraryAction(action) { this.previousAction = action; },
         showInitial() { this.state = "initial"; },
@@ -1352,6 +1354,7 @@ function createPreviousLibraryFixture({
         showPermissionFailure() { this.state = "permission-failure"; },
         showLoadFailure() { this.state = "load-failure"; },
         showEmpty(name) { this.state = `empty:${name}`; },
+        setPreviousLibraryStatus(status) { this.persistenceStatus = status; },
         hide() { this.state = "hidden"; }
     };
     const statusBar = {
@@ -1379,12 +1382,13 @@ function createPreviousLibraryFixture({
             assert(options.cacheNamespace === `cache:${handle.name}`,
                 "cache namespace not saved with Handle");
             saved.push(handle);
-            return !storeFailure;
+            return !storeFailure && persistSave;
         },
         async clear() {
             this.cleared += 1;
             return !storeFailure;
-        }
+        },
+        getStatus() { return storeFailure ? "unavailable" : "available"; }
     };
     const coordinator = new PreviousLibraryCoordinator({
         store,
@@ -1502,6 +1506,8 @@ async function testPreviousLibraryCoordinator() {
     assert(auto.applied[0] === granted, "auto-open used wrong Handle");
     assert(granted.queryCalls === 1, "granted permission not queried once");
     assert(granted.requestCalls === 0, "startup requested permission");
+    assert(auto.panel.persistenceStatus === "saved / granted",
+        "granted persistence status missing");
 
     const prompted = createDirectoryHandle("Prompted", { query: "prompt" });
     const prompt = createPreviousLibraryFixture({ storedHandle: prompted });
@@ -1509,6 +1515,8 @@ async function testPreviousLibraryCoordinator() {
     assert(!await prompt.coordinator.initialize(), "prompt Handle auto-opened");
     assert(prompted.requestCalls === 0, "startup prompted for permission");
     assert(prompt.panel.state === "previous:Prompted:prompt", "previous action missing");
+    assert(prompt.panel.persistenceStatus === "saved / prompt",
+        "prompt persistence status missing");
     assert(await prompt.coordinator.openPrevious(), "explicit previous open failed");
     assert(prompted.requestCalls === 1, "explicit action did not request permission");
     assert(prompt.getPickCalls() === 0, "explicit previous open used Folder picker");
@@ -1537,6 +1545,8 @@ async function testPreviousLibraryCoordinator() {
     assert(!await fallback.coordinator.initialize(), "denied Handle auto-opened");
     assert(fallback.panel.state === "initial", "denied Handle did not show manual fallback");
     assert(denied.requestCalls === 0, "denied startup requested permission");
+    assert(fallback.panel.persistenceStatus === "saved / denied",
+        "denied persistence status missing");
     assert(fallback.applied.length === 0, "denied Handle reached Library load");
     assert(await fallback.coordinator.openManual(), "manual picker fallback failed");
     assert(fallback.saved[0] === manual, "manual Library not saved as last");
@@ -1571,6 +1581,21 @@ async function testPreviousLibraryCoordinator() {
     assert(await storedSwitch.coordinator.openManual(), "second saved switch failed");
     assert(storedSwitch.saved.length === 2, "Library switch Handle save count");
     assert(storedSwitch.saved[1] === second, "last Library Handle not updated");
+
+    const noHandle = createPreviousLibraryFixture();
+    assert(!await noHandle.coordinator.initialize(), "empty Store opened Library");
+    assert(noHandle.panel.persistenceStatus === "no persistent handle",
+        "empty Store persistence status missing");
+
+    const fallbackHandle = createDirectoryHandle("Fallback");
+    const nonPersistent = createPreviousLibraryFixture({
+        pickedHandles: [fallbackHandle],
+        persistSave: false
+    });
+    assert(await nonPersistent.coordinator.openManual(),
+        "non-persistent fallback did not open");
+    assert(nonPersistent.panel.persistenceStatus === "no persistent handle",
+        "fallback path did not report missing persistent Handle");
 }
 
 function testPreviousLibraryPanel() {
@@ -1588,6 +1613,14 @@ function testPreviousLibraryPanel() {
     assert(requests === 1, "previous Library explicit action missing");
     panel.showInitial();
     assert(panel.previousLibraryButton.hidden, "previous button remained visible");
+    panel.setPreviousLibraryStatus("saved / granted");
+    panel.hide();
+    assert(!panel.element.hidden, "persistence status hidden with panel content");
+    assert(panel.previousLibraryStatus.textContent.endsWith("saved / granted"),
+        "persistence status text missing");
+    panel.setPreviousLibraryStatus("invalid");
+    assert(panel.previousLibraryStatus.textContent.endsWith("invalid"),
+        "invalid persistence status missing");
 }
 
 try {

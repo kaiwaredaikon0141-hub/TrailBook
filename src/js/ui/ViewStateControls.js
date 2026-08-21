@@ -251,9 +251,20 @@ export default class ViewStateControls {
         this.mobileLayout = mobile;
         this.workspace.classList.toggle("is-mobile-layout", mobile);
         this.toolbar.element.classList.toggle("is-mobile-layout", mobile);
-        this.toolbar.sidebarToggleButton.textContent = mobile
-            ? "ライブラリ"
-            : "サイドバー";
+        if (typeof this.toolbar.setMobileLayout === "function") {
+            this.toolbar.setMobileLayout(mobile);
+        } else {
+            this.toolbar.sidebarToggleButton.textContent = mobile
+                ? ""
+                : "サイドバー";
+            this.toolbar.sidebarToggleButton.setAttribute(
+                "aria-label",
+                mobile ? "ライブラリ" : "サイドバー"
+            );
+            this.toolbar.sidebarToggleButton.title = mobile
+                ? "ライブラリ"
+                : "サイドバー";
+        }
 
         if (mobile) {
             if (this.trackInfo && this.trackInfo.parentNode !== this.workspace) {

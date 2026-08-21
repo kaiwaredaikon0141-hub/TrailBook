@@ -17,6 +17,7 @@ export default class Toolbar {
             descriptionId: "",
             disabledReason: ""
         };
+        this.mobileLayout = false;
 
     }
 
@@ -77,9 +78,31 @@ export default class Toolbar {
     setSidebarOpen(open) {
 
         this.sidebarToggleButton.setAttribute("aria-pressed", String(open));
-        this.sidebarToggleButton.title = open
-            ? "サイドバーを閉じます"
-            : "サイドバーを開きます";
+        this.sidebarToggleButton.title = this.mobileLayout
+            ? "ライブラリ"
+            : open
+                ? "サイドバーを閉じます"
+                : "サイドバーを開きます";
+    }
+
+    setMobileLayout(mobile) {
+
+        this.mobileLayout = Boolean(mobile);
+
+        if (!this.mobileLayout) {
+            this.sidebarToggleButton.textContent = "サイドバー";
+            this.sidebarToggleButton.setAttribute("aria-label", "サイドバー");
+            return;
+        }
+
+        this.sidebarToggleButton.innerHTML = `
+            <svg class="mobile-library-icon" viewBox="0 0 24 24"
+                aria-hidden="true" focusable="false">
+                <path d="M3 6.5h7l2 2h9v10H3z"></path>
+            </svg>
+        `;
+        this.sidebarToggleButton.setAttribute("aria-label", "ライブラリ");
+        this.sidebarToggleButton.title = "ライブラリ";
     }
 
     #applyFolderPickerState({ disabled, descriptionId, disabledReason }) {

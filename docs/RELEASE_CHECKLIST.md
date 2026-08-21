@@ -3251,3 +3251,48 @@ Static validation:
 - Missing import / circular dependency: 0 / 0
 - App.js / TreeView.js: 954 / 995 lines
 - `git diff --check`: Pass
+
+### Unit 2 Android PWA Previous Library Restore Diagnostic
+
+- Implementation Status: Completed
+- Static Test Status: Completed
+- Android Browser Re-test Status: Pending
+
+Confirmed path and diagnostics:
+
+- 「端末からライブラリを開く」は`showDirectoryPicker({ mode: "read" })`だけを使用し、`webkitdirectory` / input files fallbackは実装していない
+- AndroidでLibrary scanが成功した場合、処理対象は`FileSystemDirectoryHandle`であり、Library apply後に既存IndexedDB Storeへ保存を試みる
+- Library panelへ`Previous Library: saved / granted|prompt|denied`、`no persistent handle`、`invalid`、`unsupported`だけを表示し、Handle名 / pathを表示しない
+- Store save failureはViewerを停止せず、IndexedDB unavailableなら`unsupported`、永続Handleなしなら`no persistent handle`を表示する
+- startup Coordinatorは既存App initializeから実行し、保存Handleのpermissionが`granted`なら自動open、`prompt`なら明示button、`denied`なら通常openへfallbackする
+- BuildInfoはfeature coordinator初期化より先にsidebarへ追加し、Mobile sidebarの通常flow最下部へ縮小されないfooterとして表示する
+
+Static validation:
+
+- View State / Previous Library: 332 assertions Pass
+- Mobile Viewer: 46 assertions Pass（portrait / landscape）、Desktop layout: 39 assertions Pass
+- PWA: 59 assertions Pass
+- GPS regression: 23 assertions Pass
+- Driving Mode regression: 20 assertions Pass
+- Google Drive regression: 106 assertions Pass
+- Production modules: 98 / 98 reachable
+- Missing import / circular dependency: 0 / 0
+- App.js / TreeView.js: 954 / 995 lines
+- `git diff --check`: Pass
+
+### Unit 2 Mobile Library UX Cleanup
+
+- Mobile Map上のLibrary controlはinline SVGのicon-only buttonとし、48px touch target、`aria-label` / `title`「ライブラリ」、Leaflet zoom controlとの余白を維持する
+- Previous Handleが`prompt`なら「前回のライブラリを開く」を主操作とし、Handleがない、invalid、deniedの場合は「端末からライブラリを開く」を主操作とする
+- 「ライブラリを変更」は初期状態で閉じたcompact disclosureとし、展開時だけ端末 / Files / Google Drive経由とGoogle Drive API直接接続を表示する
+- BuildInfoはsidebarのTree scroll領域外に置き、sidebar全体をscrollすると最下部で`TrailBook v1.7.0 · <build>`を確認できる。短いlandscapeでもTreeと重ねない
+- Previous Library restore、DirectoryHandle persistence、Drive Reader、Geometry Cache、PWA、GPS / Driving Modeのlifecycleは変更しない
+
+Static validation:
+
+- Mobile Viewer: 46 assertions Pass（portrait / landscape）、Desktop layout: 39 assertions Pass
+- View State / Previous Library: 332 assertions Pass
+- PWA: 59 assertions Pass
+- GPS regression: 23 assertions Pass
+- Driving Mode regression: 20 assertions Pass
+- Google Drive regression: 106 assertions Pass

@@ -977,7 +977,7 @@ HandleのIndexedDB保存とpermission lifecycleは[Chrome File System Access doc
 - `selection:changed`はreason `view-state-restore`で既存Tree / Search / Map projectionへ接続する。Treeはancestorだけを展開し、focus / scrollを移動せず、Map refocus / pan / zoom / fitを行わない。highlight / outline / `aria-current`は通常selectionと同じ経路を使う。
 - visible Trackが通常parseまたはGeometry Cacheのどちらでloadedになったかを区別せず、同じterminal state条件を使用する。Reset、Library generation、Previous Library lifecycle、GPX / `trailbook.json`非書き込み契約を変更しない。
 - `PreviousLibraryCoordinator`はsupport判定、manual picker、Folder scan、Library generation、read permission、last Handle更新を担当する。Appから既存picker / scan lifecycleを抽出し、AppはCoordinator生成と既存`handleLibraryLoaded()` callbackだけを提供する。
-- startupは保存Handleへ`queryPermission({ mode: "read" })`だけを行う。`granted`なら既存Library lifecycleへ自動接続し、`prompt` / `denied`では`前回のLibraryを開く`を表示する。`requestPermission({ mode: "read" })`はそのnative buttonの明示操作時だけ行う。
+- startupは保存Handleへ`queryPermission({ mode: "read" })`だけを行う。`granted`なら既存Library lifecycleへ自動接続し、`prompt`では`前回のライブラリを開く`を表示する。`requestPermission({ mode: "read" })`はそのnative buttonの明示操作時だけ行い、`denied`は通常Library openへfallbackする。Library panelはHandle保存可否とpermissionを値やpathを含まない補助statusで表示する。
 - manual picker成功後、scan、shared settings、Tree / Search、DisplayState登録までcurrent generationで正常完了した場合だけlast Handleを更新する。Map / Sidebar / visible Trackは同じ`ViewStateCoordinator.restoreLibrary()`を通る。
 - `NotFoundError`のstale Handleはrecordを破棄する。IndexedDB failure、permission deny、その他read failureではViewerを停止せず、通常pickerを維持する。一時的provider failureをstaleと推測して自動削除しない。
 - HandleをlocalStorage / `trailbook.json` / Consoleへ保存または出力せず、GPXとshared JSONへ書き込まない。Appは914行、TreeViewは997行である。

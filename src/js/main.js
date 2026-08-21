@@ -16,6 +16,9 @@ window.addEventListener("DOMContentLoaded", () => {
     const app = new App();
 
     app.initialize();
+    app.trackDiscoveryCoordinator.sidebarShell?.append(
+        createBuildInfoElement()
+    );
 
     const currentPosition = new CurrentPositionController({
         mapView: app.mapView,
@@ -145,13 +148,7 @@ window.addEventListener("DOMContentLoaded", () => {
         }
     });
     driveLibrary.attach(
-        app.trackDiscoveryCoordinator.sidebarShell
-            ?.querySelector(".sidebar-fixed-controls") ||
-        app.trackDiscoveryCoordinator.sidebarShell
-    );
-
-    app.trackDiscoveryCoordinator.sidebarShell?.append(
-        createBuildInfoElement()
+        app.libraryAccessPanel.libraryChangeContainer
     );
 
     registerTrailBookServiceWorker();

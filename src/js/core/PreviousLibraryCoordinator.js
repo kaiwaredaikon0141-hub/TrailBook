@@ -51,6 +51,9 @@ export default class PreviousLibraryCoordinator {
         this.accessPanel.setPreviousLibraryAction(
             () => void this.openPrevious()
         );
+        this.accessPanel.setManualLibraryAction?.(
+            () => void this.openManual()
+        );
     }
 
     async initialize() {
@@ -58,18 +61,28 @@ export default class PreviousLibraryCoordinator {
         const support = this.#configureAccess();
 
         if (!support.available) {
+            this.#setPersistenceStatus("unsupported");
             return false;
         }
 
         const handle = await this.store.load();
 
         if (!handle) {
+            const storeStatus = this.store.getStatus?.();
+            this.#setPersistenceStatus(
+                storeStatus === "invalid"
+                    ? "invalid"
+                    : storeStatus === "unavailable"
+                        ? "unsupported"
+                        : "no persistent handle"
+            );
             return false;
         }
 
         this.previousHandle = handle;
         const permission = await this.#queryReadPermission(handle);
         this.previousPermission = permission;
+        this.#setPersistenceStatus(`saved / ${permission}`);
 
         if (permission === "granted") {
             return this.#openHandle(handle, { remember: false });
@@ -82,6 +95,7 @@ export default class PreviousLibraryCoordinator {
 
         this.previousHandle = null;
         this.#configureAccess();
+        this.#setPersistenceStatus("saved / denied");
         return false;
     }
 
@@ -131,6 +145,7 @@ export default class PreviousLibraryCoordinator {
             permission = await this.#requestReadPermission(handle);
         }
         this.previousPermission = permission;
+        this.#setPersistenceStatus(`saved / ${permission}`);
 
         if (permission !== "granted") {
             this.accessPanel.showPreviousLibrary(handle.name, "denied");
@@ -163,6 +178,11 @@ export default class PreviousLibraryCoordinator {
         }
 
         this.toolbar.setFolderPickerState({
+            disabled: !support.available,
+            descriptionId: this.accessPanel.descriptionId,
+            disabledReason
+        });
+        this.accessPanel.setFolderPickerState?.({
             disabled: !support.available,
             descriptionId: this.accessPanel.descriptionId,
             disabledReason
@@ -206,7 +226,20 @@ export default class PreviousLibraryCoordinator {
 
             this.previousHandle = handle;
             if (remember) {
-                await this.store.save(handle, { cacheNamespace });
+                const saved = await this.store.save(handle, { cacheNamespace });
+
+                if (!saved) {
+                    this.#setPersistenceStatus(
+                        this.store.getStatus?.() === "unavailable"
+                            ? "unsupported"
+                            : "no persistent handle"
+                    );
+                    return true;
+                }
+                const permission = await this.#queryReadPermission(handle);
+
+                this.previousPermission = permission;
+                this.#setPersistenceStatus(`saved / ${permission}`);
             }
             return true;
         } catch (error) {
@@ -214,6 +247,7 @@ export default class PreviousLibraryCoordinator {
                 this.previousHandle = null;
                 this.previousPermission = "prompt";
                 await this.store.clear();
+                this.#setPersistenceStatus("invalid");
             }
             this.#showLoadFailure(error);
             return false;
@@ -249,6 +283,11 @@ export default class PreviousLibraryCoordinator {
         } catch {
             return null;
         }
+    }
+
+    #setPersistenceStatus(status) {
+
+        this.accessPanel.setPreviousLibraryStatus?.(status);
     }
 
     #showLoadFailure(error) {
