@@ -77,7 +77,7 @@ export default class LibraryAccessPanel {
         const denied = permission === "denied";
 
         this.#show(
-            "前回のLibraryがあります",
+            "前回のライブラリがあります",
             denied
                 ? `${folderName}へのアクセスは許可されていません。` +
                     "明示的に開き直すか、通常のLibraryを選択できます。"
@@ -88,7 +88,7 @@ export default class LibraryAccessPanel {
         this.previousLibraryButton.hidden = false;
         this.previousLibraryButton.setAttribute(
             "aria-label",
-            `前回のLibrary ${folderName} を開く`
+            `前回のライブラリ ${folderName} を開く`
         );
     }
 
@@ -144,7 +144,7 @@ export default class LibraryAccessPanel {
             <h4 class="library-access-title"></h4>
             <p class="library-access-message"></p>
             <button class="previous-library-open" type="button" hidden>
-                前回のLibraryを開く
+                前回のライブラリを開く
             </button>
         `;
 

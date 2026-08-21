@@ -742,6 +742,24 @@ Out of scope:
 - Google Drive offline access
 - PWA update UI / forced reload
 
+### Unit 2 — Previous Library / Track Display Auto Restore
+
+Status: Browser Acceptance Pending
+
+- persisted DirectoryHandleのread permissionがgrantedならPickerなしで前回Libraryを自動open
+- promptでは自動permission requestを行わず、既存Handleを使う「前回のライブラリを開く」を最優先表示
+- denied、invalid Handle、provider / offline failureでは通常の端末Library openへ安全にfallback
+- Library apply、Tree / Discovery準備、DisplayState file登録の後にvisible GPXとselected Trackを既存View State / Display Queueで復元
+- visible stateがないLibraryではGPXを自動全表示しない
+- Android / PWAでも既存DirectoryHandle persistenceだけを利用し、provider固有APIを追加しない
+- MobileのLeaflet zoom controlだけを48px touch targetへ拡大
+
+Out of scope:
+
+- Google Drive API Libraryの起動時自動認証 / 再接続
+- DirectoryHandle persistence schema変更
+- Geometry Cache / Service Worker cache schema変更
+
 ## Future Design Boundaries
 
 以下は過去Releaseから保全している将来設計境界である。Release 1.4で実装済みとなった項目は、上記Release 1.4節を優先する。

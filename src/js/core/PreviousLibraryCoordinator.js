@@ -75,7 +75,13 @@ export default class PreviousLibraryCoordinator {
             return this.#openHandle(handle, { remember: false });
         }
 
-        this.accessPanel.showPreviousLibrary(handle.name, permission);
+        if (permission === "prompt") {
+            this.accessPanel.showPreviousLibrary(handle.name, permission);
+            return false;
+        }
+
+        this.previousHandle = null;
+        this.#configureAccess();
         return false;
     }
 

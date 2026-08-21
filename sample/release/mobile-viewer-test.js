@@ -215,8 +215,15 @@ async function run() {
         themeCss.includes("env(safe-area-inset-bottom)"),
     "touch, editing guard, or safe-area CSS contract missing");
     assert(themeCss.includes(
-        "left:max(52px, calc(env(safe-area-inset-left) + 44px))"
+        "left:max(68px, calc(env(safe-area-inset-left) + 60px))"
     ), "mobile Library control does not clear the Leaflet zoom control");
+    assert(
+        themeCss.includes(".leaflet-control-zoom a") &&
+        themeCss.includes("width:48px") &&
+        themeCss.includes("height:48px") &&
+        themeCss.includes("line-height:48px"),
+        "mobile Leaflet zoom targets are not 48px"
+    );
     assert(themeCss.includes("grid-column:1 / -1") &&
         themeCss.includes("flex:0 0 76px") &&
         themeCss.includes("text-overflow:ellipsis"),

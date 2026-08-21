@@ -1335,6 +1335,7 @@ function createPreviousLibraryFixture({
 
     const applied = [];
     const saved = [];
+    let pickCalls = 0;
     const panel = {
         descriptionId: "library-access-status",
         state: null,
@@ -1415,6 +1416,7 @@ function createPreviousLibraryFixture({
         getCurrentLibrary: () => null,
         getSupport: () => ({ available: true, reason: null, isMobile: false }),
         pickDirectory: async () => {
+            pickCalls += 1;
             const next = pickedHandles.shift() ?? null;
             if (next instanceof Error) throw next;
             return next;
@@ -1422,7 +1424,73 @@ function createPreviousLibraryFixture({
         reportError: () => {}
     });
 
-    return { coordinator, store, panel, toolbar, applied, saved };
+    return {
+        coordinator, store, panel, toolbar, applied, saved,
+        getPickCalls: () => pickCalls
+    };
+}
+
+async function testLibraryRestoreOrdering() {
+
+    const order = [];
+    const fileHandle = { name: "visible.gpx" };
+    const library = {
+        name: "Ready",
+        gpxFileCount: 1,
+        rootFolder: { handle: { name: "Ready" } }
+    };
+    const context = {
+        generation: 7,
+        isCurrent: () => true,
+        cacheNamespace: "cache:ready"
+    };
+    const app = Object.assign(new App(), {
+        librarySettingsCoordinator: {
+            async load() { return { source: "none" }; },
+            applyLoad() { return true; }
+        },
+        clearSelection() {},
+        displayQueue: { clear() {} },
+        searchView: { setAvailable() {} },
+        mapView: { clear() {}, resetView() {} },
+        gpxGeometryLoader: { setLibraryNamespace() {} },
+        displayState: {
+            setLibrary() {},
+            registerFile() { order.push("display-registered"); }
+        },
+        treeView: {
+            async render() { order.push("tree-ready"); },
+            getSearchSourceEntries() { return []; },
+            getFileEntries() {
+                return [{ path: "visible.gpx", fileHandle }];
+            }
+        },
+        displaySettingsStore: { setActiveLibrary() { return "root-name:Ready"; } },
+        updateFolderColorPresentation() {},
+        getColor() { return "#123456"; },
+        statusBar: { showLibraryLoaded() {} },
+        libraryAccessPanel: { hide() {}, showEmpty() {} },
+        trackDiscoveryCoordinator: {
+            setLibrary() { order.push("discovery-ready"); }
+        },
+        viewStateCoordinator: {
+            restoreLibrary() {
+                order.push("view-state-restore");
+                return Promise.resolve(true);
+            }
+        },
+        currentLibrary: null,
+        currentLibraryId: null
+    });
+
+    assert(await App.prototype.handleLibraryLoaded.call(app, library, context),
+        "Library apply failed");
+    assert(order.indexOf("tree-ready") < order.indexOf("discovery-ready"),
+        "Discovery configured before Tree ready");
+    assert(order.indexOf("display-registered") < order.indexOf("view-state-restore"),
+        "display restore started before file registration");
+    assert(order.indexOf("discovery-ready") < order.indexOf("view-state-restore"),
+        "display restore started before Discovery ready");
 }
 
 async function testPreviousLibraryCoordinator() {
@@ -1443,6 +1511,7 @@ async function testPreviousLibraryCoordinator() {
     assert(prompt.panel.state === "previous:Prompted:prompt", "previous action missing");
     assert(await prompt.coordinator.openPrevious(), "explicit previous open failed");
     assert(prompted.requestCalls === 1, "explicit action did not request permission");
+    assert(prompt.getPickCalls() === 0, "explicit previous open used Folder picker");
 
     const cancelledHandle = createDirectoryHandle("Cancelled", { query: "prompt" });
     const abortError = new DOMException("cancel", "AbortError");
@@ -1466,7 +1535,8 @@ async function testPreviousLibraryCoordinator() {
     });
 
     assert(!await fallback.coordinator.initialize(), "denied Handle auto-opened");
-    assert(!await fallback.coordinator.openPrevious(), "denied Handle opened");
+    assert(fallback.panel.state === "initial", "denied Handle did not show manual fallback");
+    assert(denied.requestCalls === 0, "denied startup requested permission");
     assert(fallback.applied.length === 0, "denied Handle reached Library load");
     assert(await fallback.coordinator.openManual(), "manual picker fallback failed");
     assert(fallback.saved[0] === manual, "manual Library not saved as last");
@@ -1556,6 +1626,7 @@ try {
     await testGeometryCache();
     testSidebarControls();
     await testPreviousLibraryStore();
+    await testLibraryRestoreOrdering();
     await testPreviousLibraryCoordinator();
     testPreviousLibraryPanel();
 

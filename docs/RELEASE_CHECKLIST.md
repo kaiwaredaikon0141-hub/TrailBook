@@ -3184,3 +3184,41 @@ Out of scope:
 - map tile offline cache
 - Google Drive offline access
 - PWA update UI、forced reload、service workerによるcredential保存
+
+### Unit 2 — Previous Library / Track Display Auto Restore
+
+- Implementation Status: Completed
+- Static Test Status: Completed
+- Browser Acceptance Status: Pending
+- Unit 2 Status: Browser Acceptance Pending
+
+Accepted implementation scope:
+
+- persisted DirectoryHandle + granted read permissionはPickerなしで既存Library load lifecycleへ接続
+- promptは起動時にpermission requestせず、「前回のライブラリを開く」の明示操作だけで既存Handleへrequest
+- denied / invalid Handle / provider failureはViewerを停止せず通常の端末Library openへfallback
+- Tree render、DisplayState file登録、Discovery準備完了後にView State restoreを開始
+- visible relative pathは既存Display Queue、selected Trackはvisible load完了後の既存SelectionState経路で復元
+- view stateなしでは全Trackを自動表示しない
+- Library identity、Geometry Cache、PWA app-shell、Google Drive直接接続の既存仕様を維持
+- Mobile Leaflet zoom controlは48px、desktop寸法は維持
+
+Static validation:
+
+- View State / Previous Library / Geometry Cache: 316 assertions Pass
+- Mobile Viewer: 35 assertions Pass
+- PWA foundation: 44 assertions Pass
+- GPS regression: 23 assertions Pass
+- Driving Mode regression: 20 assertions Pass
+- Google Drive regression: 106 assertions Pass
+- Production modules: 97 / 97 reachable
+- Missing import / circular dependency: 0 / 0
+- App.js / TreeView.js: 954 / 995 lines
+- `git diff --check`: Pass
+
+Browser Acceptance pending:
+
+- Android PWA standaloneでgranted Handleの自動Library / visible Track / selected Track復元
+- Android Files / Google Drive provider Handleのprompt、denied、offline fallback
+- 1122 visible Track時のGeometry Cache warm restore体感
+- Mobile portrait / landscapeの48px zoom controlとLibrary control非重複

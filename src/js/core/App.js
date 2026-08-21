@@ -366,16 +366,16 @@ export default class App {
             this.libraryAccessPanel.hide();
         }
 
-        void this.viewStateCoordinator.restoreLibrary({
-            libraryId: this.currentLibraryId,
-            libraryName: library.name,
-            generation,
-            isCurrent
-        });
         this.trackDiscoveryCoordinator.setLibrary({
             namespace: cacheNamespace,
             libraryId: this.currentLibraryId,
             fileEntries: this.treeView.getFileEntries(),
+            generation,
+            isCurrent
+        });
+        void this.viewStateCoordinator.restoreLibrary({
+            libraryId: this.currentLibraryId,
+            libraryName: library.name,
             generation,
             isCurrent
         });

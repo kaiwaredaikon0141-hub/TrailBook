@@ -1464,7 +1464,7 @@ body.is-track-info-resizing{
 
         top:max(8px, env(safe-area-inset-top));
 
-        left:max(52px, calc(env(safe-area-inset-left) + 44px));
+        left:max(68px, calc(env(safe-area-inset-left) + 60px));
 
         width:auto;
 
@@ -1709,6 +1709,18 @@ body.is-track-info-resizing{
         width:24px;
 
         height:24px;
+    }
+
+    .leaflet-control-zoom a,
+    .leaflet-touch .leaflet-control-zoom a{
+
+        width:48px;
+
+        height:48px;
+
+        line-height:48px;
+
+        font-size:26px;
     }
 
     .map-toolbar{
