@@ -1310,6 +1310,12 @@ body.is-track-info-resizing{
     max-width:122px;
 }
 
+.mobile-map-controls,
+.mobile-sidebar-display-controls{
+
+    display:none;
+}
+
 .map--monochrome .leaflet-tile-pane img{
 
     filter:var(--map-monochrome-filter);
@@ -1540,9 +1546,9 @@ body.is-track-info-resizing{
 
         z-index:1700;
 
-        top:max(8px, env(safe-area-inset-top));
+        top:max(76px, calc(env(safe-area-inset-top) + 68px));
 
-        left:max(68px, calc(env(safe-area-inset-left) + 60px));
+        left:max(8px, env(safe-area-inset-left));
 
         width:auto;
 
@@ -1614,6 +1620,68 @@ body.is-track-info-resizing{
         stroke-linejoin:round;
     }
 
+    .mobile-map-controls{
+
+        position:absolute;
+
+        z-index:1000;
+
+        top:max(76px, calc(env(safe-area-inset-top) + 68px));
+
+        left:max(64px, calc(env(safe-area-inset-left) + 56px));
+
+        display:flex;
+
+        gap:6px;
+    }
+
+    .mobile-map-controls button{
+
+        box-sizing:border-box;
+
+        width:48px;
+
+        height:48px;
+
+        padding:10px;
+
+        border:1px solid var(--border);
+
+        border-radius:6px;
+
+        background:rgba(255, 255, 255, 0.96);
+
+        color:#28323c;
+    }
+
+    .mobile-map-controls button[aria-pressed="true"]{
+
+        border-color:var(--accent);
+
+        background:var(--accent);
+
+        color:white;
+    }
+
+    .mobile-map-controls svg{
+
+        display:block;
+
+        width:100%;
+
+        height:100%;
+
+        fill:none;
+
+        stroke:currentColor;
+
+        stroke-width:1.8;
+
+        stroke-linecap:round;
+
+        stroke-linejoin:round;
+    }
+
     .sidebar-shell{
 
         box-sizing:border-box;
@@ -1642,6 +1710,50 @@ body.is-track-info-resizing{
         flex-direction:column;
 
         flex:0 0 auto;
+    }
+
+    .mobile-sidebar-display-controls{
+
+        display:grid;
+
+        grid-template-columns:minmax(0, 1fr) auto;
+
+        align-items:center;
+
+        gap:6px 8px;
+
+        margin-top:8px;
+
+        padding-top:8px;
+
+        border-top:1px solid var(--border);
+    }
+
+    .mobile-sidebar-display-title{
+
+        grid-column:1 / -1;
+
+        font-size:12px;
+    }
+
+    .mobile-sidebar-waypoint-toggle{
+
+        display:flex;
+
+        min-width:0;
+
+        align-items:center;
+
+        gap:6px;
+
+        font-size:12px;
+    }
+
+    .mobile-sidebar-clear{
+
+        min-height:44px;
+
+        padding:6px 10px;
     }
 
     .trailbook-build-info{
@@ -1834,29 +1946,66 @@ body.is-track-info-resizing{
         height:24px;
     }
 
+    .leaflet-top.leaflet-left{
+
+        right:0;
+    }
+
+    .leaflet-top.leaflet-left .leaflet-control-zoom{
+
+        box-sizing:border-box;
+
+        display:flex;
+
+        width:calc(
+            100vw - max(8px, env(safe-area-inset-left)) -
+            max(8px, env(safe-area-inset-right))
+        );
+
+        margin:
+            max(8px, env(safe-area-inset-top))
+            max(8px, env(safe-area-inset-right))
+            0
+            max(8px, env(safe-area-inset-left));
+    }
+
     .leaflet-control-zoom a,
     .leaflet-touch .leaflet-control-zoom a{
 
-        width:48px;
+        box-sizing:border-box;
 
-        height:48px;
+        flex:1 1 50%;
 
-        line-height:48px;
+        width:auto;
 
-        font-size:26px;
+        height:60px;
+
+        border-bottom:0;
+
+        line-height:60px;
+
+        font-size:32px;
+    }
+
+    .leaflet-control-zoom .leaflet-control-zoom-out{
+
+        order:1;
+
+        border-radius:4px 0 0 4px;
+    }
+
+    .leaflet-control-zoom .leaflet-control-zoom-in{
+
+        order:2;
+
+        border-left:1px solid #ccc;
+
+        border-radius:0 4px 4px 0;
     }
 
     .map-toolbar{
 
-        top:max(64px, calc(env(safe-area-inset-top) + 56px));
-
-        right:max(8px, env(safe-area-inset-right));
-
-        max-width:calc(100% - 16px);
-
-        flex-wrap:wrap;
-
-        justify-content:flex-end;
+        display:none;
     }
 
     .current-position-control{

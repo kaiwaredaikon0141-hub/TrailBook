@@ -752,7 +752,7 @@ Status: Browser Acceptance Pending
 - Library apply、Tree / Discovery準備、DisplayState file登録の後にvisible GPXとselected Trackを既存View State / Display Queueで復元
 - visible stateがないLibraryではGPXを自動全表示しない
 - Android / PWAでも既存DirectoryHandle persistenceだけを利用し、provider固有APIを追加しない
-- MobileのLeaflet zoom controlだけを48px touch targetへ拡大
+- MobileのLeaflet zoom controlを60px高の横並びへ拡大し、Base Map / Color modeをicon toggle化する。Waypoint / ClearはMobile sidebarへ配置する
 
 Out of scope:
 

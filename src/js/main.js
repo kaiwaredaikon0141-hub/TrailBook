@@ -16,6 +16,9 @@ window.addEventListener("DOMContentLoaded", () => {
     const app = new App();
 
     app.initialize();
+    app.trackDiscoveryCoordinator.sidebarShell
+        ?.querySelector(".sidebar-fixed-controls")
+        ?.append(app.mapView.sidebarDisplayControls);
     app.trackDiscoveryCoordinator.sidebarShell?.append(
         createBuildInfoElement()
     );

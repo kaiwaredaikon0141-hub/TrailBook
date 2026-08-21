@@ -39,17 +39,19 @@ export default class MapView {
 
         this.eventBus = eventBus;
 
+        this.mapDisplayMode = DEFAULT_MAP_DISPLAY_MODE;
+
+        this.baseMap = DEFAULT_BASE_MAP;
+
         this.element = this.create();
+
+        this.sidebarDisplayControls = this.#createSidebarDisplayControls();
 
         this.map = null;
 
         this.layerManager = null;
 
         this.trackRenderer = null;
-
-        this.mapDisplayMode = DEFAULT_MAP_DISPLAY_MODE;
-
-        this.baseMap = DEFAULT_BASE_MAP;
 
         this.baseTileLayer = null;
 
@@ -472,6 +474,7 @@ export default class MapView {
         const normalizedMode = normalizeMapDisplayMode(mode);
 
         if (this.mapDisplayMode === normalizedMode) {
+            this.#syncMobileMapControls();
             return false;
         }
 
@@ -488,6 +491,8 @@ export default class MapView {
         if (modeSelect) {
             modeSelect.value = normalizedMode;
         }
+
+        this.#syncMobileMapControls();
 
         return true;
     }
@@ -506,6 +511,7 @@ export default class MapView {
         const select = this.element.querySelector(".base-map-select");
 
         if (select) select.value = normalized;
+        this.#syncMobileMapControls();
         if (this.map && (changed || !this.baseTileLayer)) {
             this.#replaceBaseLayer();
         }
@@ -637,6 +643,24 @@ export default class MapView {
                 </label>
                 <button class="map-clear" type="button">表示をクリア</button>
             </div>
+            <div class="mobile-map-controls" aria-label="地図表示設定">
+                <button class="mobile-base-map-toggle" type="button">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"
+                        focusable="false">
+                        <path d="M3 6.5 8 4l8 3 5-2.5v13L16 20l-8-3-5 2.5z"></path>
+                        <path d="M8 4v13M16 7v13"></path>
+                    </svg>
+                </button>
+                <button class="mobile-map-mode-toggle" type="button">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"
+                        focusable="false">
+                        <circle cx="12" cy="12" r="4"></circle>
+                        <path d="M12 2v2M12 20v2M2 12h2M20 12h2
+                            M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4
+                            M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"></path>
+                    </svg>
+                </button>
+            </div>
             <div class="map-canvas" role="application" aria-label="GPX地図"></div>
             <div class="map-state" aria-live="polite"></div>
         `;
@@ -648,10 +672,18 @@ export default class MapView {
 
         section.querySelector(".waypoint-toggle input").addEventListener(
             "change",
-            event => this.eventBus.emit(
-                "map:waypoint-visibility-toggled",
-                { visible: event.target.checked }
-            )
+            event => {
+                const visible = event.target.checked;
+
+                const sidebarInput = this.sidebarDisplayControls
+                    ?.querySelector("input");
+
+                if (sidebarInput) sidebarInput.checked = visible;
+                this.eventBus.emit(
+                    "map:waypoint-visibility-toggled",
+                    { visible }
+                );
+            }
         );
 
         section.querySelector(".map-mode-select").addEventListener(
@@ -670,7 +702,97 @@ export default class MapView {
             )
         );
 
+        section.querySelector(".mobile-base-map-toggle").addEventListener(
+            "click",
+            () => this.eventBus.emit(
+                "map:base-map-changed",
+                { baseMap: this.baseMap === "osm" ? "gsiStandard" : "osm" }
+            )
+        );
+
+        section.querySelector(".mobile-map-mode-toggle").addEventListener(
+            "click",
+            () => this.eventBus.emit(
+                "map:display-mode-changed",
+                {
+                    mode: this.mapDisplayMode === "color"
+                        ? "monochrome"
+                        : "color"
+                }
+            )
+        );
+
+        this.#syncMobileMapControls(section);
+
         return section;
+    }
+
+    #createSidebarDisplayControls() {
+
+        const section = document.createElement("section");
+
+        section.className = "mobile-sidebar-display-controls";
+        section.setAttribute("aria-label", "表示");
+        section.innerHTML = `
+            <strong class="mobile-sidebar-display-title">表示</strong>
+            <label class="mobile-sidebar-waypoint-toggle">
+                <input type="checkbox" aria-label="Waypointを表示">
+                <span>Waypointを表示</span>
+            </label>
+            <button class="mobile-sidebar-clear" type="button">
+                表示をクリア
+            </button>
+        `;
+
+        section.querySelector("input").addEventListener("change", event => {
+            const visible = event.target.checked;
+
+            this.element.querySelector(".waypoint-toggle input").checked = visible;
+            this.eventBus.emit(
+                "map:waypoint-visibility-toggled",
+                { visible }
+            );
+        });
+        section.querySelector("button").addEventListener(
+            "click",
+            () => this.eventBus.emit("map:clear-requested")
+        );
+
+        return section;
+    }
+
+    #syncMobileMapControls(root = this.element) {
+
+        const baseButton = root.querySelector?.(".mobile-base-map-toggle");
+        const modeButton = root.querySelector?.(".mobile-map-mode-toggle");
+        const isGsi = this.baseMap === "gsiStandard";
+        const isMonochrome = this.mapDisplayMode === "monochrome";
+
+        if (baseButton) {
+            const next = isGsi ? "OSM" : "地理院標準";
+            const current = isGsi ? "地理院標準" : "OSM";
+
+            baseButton.dataset.state = this.baseMap;
+            baseButton.setAttribute("aria-pressed", String(isGsi));
+            baseButton.setAttribute(
+                "aria-label",
+                `背景地図: ${current}。${next}へ切り替え`
+            );
+            baseButton.title = `${next}へ切り替え`;
+        }
+
+        if (modeButton) {
+            const next = isMonochrome ? "Color" : "Monochrome";
+            const current = isMonochrome ? "Monochrome" : "Color";
+
+            modeButton.dataset.state = this.mapDisplayMode;
+            modeButton.setAttribute("aria-pressed", String(isMonochrome));
+            modeButton.setAttribute(
+                "aria-label",
+                `地図表示: ${current}。${next}へ切り替え`
+            );
+            modeButton.title = `${next}へ切り替え`;
+        }
     }
 
     /**

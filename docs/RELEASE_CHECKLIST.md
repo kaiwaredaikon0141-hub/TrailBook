@@ -3201,7 +3201,7 @@ Accepted implementation scope:
 - visible relative pathは既存Display Queue、selected Trackはvisible load完了後の既存SelectionState経路で復元
 - view stateなしでは全Trackを自動表示しない
 - Library identity、Geometry Cache、PWA app-shell、Google Drive直接接続の既存仕様を維持
-- Mobile Leaflet zoom controlは48px、desktop寸法は維持
+- Mobile Leaflet zoom controlはRelease 1.8 Mobile Map Controlsで60px高の横並びへ更新し、desktop寸法は維持
 
 Static validation:
 
@@ -3221,7 +3221,7 @@ Browser Acceptance pending:
 - Android PWA standaloneでgranted Handleの自動Library / visible Track / selected Track復元
 - Android Files / Google Drive provider Handleのprompt、denied、offline fallback
 - 1122 visible Track時のGeometry Cache warm restore体感
-- Mobile portrait / landscapeの48px zoom controlとLibrary control非重複
+- Mobile portrait / landscapeの横並びzoom rowとLibrary / Map toggle control非重複
 
 ### PWA Update Visibility Improvement
 
@@ -3236,7 +3236,7 @@ Accepted implementation scope:
 - Pages deploy時にcredential runtime configとは別の`trailbook.build.js`を生成
 - 同じbuild IDをService Workerへ埋め込み、deployごとにTrailBook app-shell cache名を更新
 - 新Service Worker activate時は旧TrailBook app-shell cacheだけを削除し、強制reloadは行わない
-- Mobile Leaflet zoom controlの48px CSSがPages artifactへ含まれることを維持
+- Mobile Leaflet zoom rowのCSSがPages artifactへ含まれることを維持
 
 Static validation:
 
@@ -3247,6 +3247,28 @@ Static validation:
 - Driving Mode regression: 20 assertions Pass
 - Google Drive regression: 106 assertions Pass
 - View State / Previous Library regression: 316 assertions Pass
+- Production modules: 98 / 98 reachable
+- Missing import / circular dependency: 0 / 0
+- App.js / TreeView.js: 954 / 995 lines
+- `git diff --check`: Pass
+
+### Unit 2 Mobile Map Controls UX Cleanup
+
+- MobileではLeaflet標準zoom controlをCSSだけで60px高の横並び`− / ＋`へ投影し、既存Leaflet zoom機能とDesktop縦型controlを維持する
+- 背景地図とColor / Monochromeは48px inline SVG toggleで既存`map:base-map-changed` / `map:display-mode-changed`へ接続し、既存view state / display settingsを維持する
+- Mobileでは従来のMap toolbarを非表示とし、Waypoint toggle / 表示Clearはsidebar固定control内のcompactな「表示」sectionへ移す
+- Driving Modeではzoom、Base Map、Color / Monochrome、GPS Follow、走行中終了を維持し、Library toolbar / sidebarは従来どおり非表示とする
+- DesktopではBackground / Map mode select、Waypoint、Clear、Leaflet縦型zoomを変更しない
+
+Static validation:
+
+- Mobile Viewer: 48 assertions Pass（portrait / landscape）、Desktop layout: 41 assertions Pass
+- Base Map / Mobile display controls: 24 assertions Pass
+- View State / Previous Library: 332 assertions Pass
+- PWA: 59 assertions Pass
+- GPS regression: 23 assertions Pass
+- Driving Mode regression: 20 assertions Pass
+- Google Drive regression: 106 assertions Pass
 - Production modules: 98 / 98 reachable
 - Missing import / circular dependency: 0 / 0
 - App.js / TreeView.js: 954 / 995 lines

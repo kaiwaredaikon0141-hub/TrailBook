@@ -84,6 +84,9 @@ function run() {
     const mapView = new MapView(Config, eventBus);
 
     createCoordinator(eventBus, mapView, store);
+    eventBus.on("map:display-mode-changed", ({ mode }) => {
+        mapView.setMapDisplayMode(mode);
+    });
     mapView.initialize();
     assert(mapView.getBaseMap() === DEFAULT_BASE_MAP,
         "default base map is not OSM");
@@ -174,6 +177,55 @@ function run() {
         "legacy view state did not default to OSM");
     assert(mapView.element.querySelector(".base-map-select").options.length === 2,
         "base map selector exposes an unsupported provider");
+
+    const mobileBaseMap = mapView.element.querySelector(
+        ".mobile-base-map-toggle"
+    );
+    const mobileMapMode = mapView.element.querySelector(
+        ".mobile-map-mode-toggle"
+    );
+
+    mapView.setBaseMap("osm");
+    mobileBaseMap.click();
+    assert(mapView.getBaseMap() === "gsiStandard" &&
+        mobileBaseMap.dataset.state === "gsiStandard" &&
+        mobileBaseMap.getAttribute("aria-pressed") === "true",
+    "mobile base map toggle did not switch to GSI");
+    mobileBaseMap.click();
+    assert(mapView.getBaseMap() === "osm" &&
+        mobileBaseMap.dataset.state === "osm" &&
+        mobileBaseMap.title.includes("地理院標準"),
+    "mobile base map toggle did not switch back to OSM");
+    mobileMapMode.click();
+    assert(mapView.getMapDisplayMode() === "monochrome" &&
+        mobileMapMode.dataset.state === "monochrome" &&
+        mobileMapMode.getAttribute("aria-pressed") === "true",
+    "mobile map mode toggle did not switch to Monochrome");
+    mobileMapMode.click();
+    assert(mapView.getMapDisplayMode() === "color" &&
+        mobileMapMode.dataset.state === "color" &&
+        mobileMapMode.title.includes("Monochrome"),
+    "mobile map mode toggle did not switch back to Color");
+    assert(mobileBaseMap.querySelector("svg") && mobileMapMode.querySelector("svg"),
+        "mobile map toggles do not use inline SVG icons");
+
+    let waypointVisible = null;
+    let clearRequests = 0;
+
+    eventBus.on("map:waypoint-visibility-toggled", ({ visible }) => {
+        waypointVisible = visible;
+    });
+    eventBus.on("map:clear-requested", () => { clearRequests += 1; });
+    const sidebarWaypoint = mapView.sidebarDisplayControls.querySelector("input");
+
+    sidebarWaypoint.checked = true;
+    sidebarWaypoint.dispatchEvent(new Event("change"));
+    mapView.sidebarDisplayControls.querySelector("button").click();
+    assert(waypointVisible === true &&
+        mapView.element.querySelector(".waypoint-toggle input").checked,
+    "mobile Sidebar Waypoint control does not use the existing event path");
+    assert(clearRequests === 1,
+        "mobile Sidebar Clear does not use the existing event path");
 
     output.textContent = `PASS: ${assertions} assertions`;
 }

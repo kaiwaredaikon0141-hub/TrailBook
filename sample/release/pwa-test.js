@@ -124,10 +124,11 @@ async function testManifestAndAssets() {
         "../../src/css/theme.css", location.href
     )).then(response => response.text());
     assert(
+        mobileCss.includes(".leaflet-top.leaflet-left .leaflet-control-zoom") &&
         mobileCss.includes(".leaflet-control-zoom a") &&
-        mobileCss.includes("width:48px") &&
-        mobileCss.includes("height:48px"),
-        "Pages source does not contain 48px mobile zoom targets"
+        mobileCss.includes("height:60px") &&
+        mobileCss.includes("line-height:60px"),
+        "Pages source does not contain the large horizontal mobile zoom row"
     );
 }
 

@@ -1112,3 +1112,10 @@ Unit 4実装ではBeforeをneutral dashed、Afterをsolid orangeとし、文字l
 - GPS buttonは未開始 / 取得中 / 取得済み / errorを表し、tracking中の操作でFollowを切り替える。manual dragはFollowだけをOFFにする
 - 走行中モードはMobileだけに表示し、ONでGPS / Follow / Wake Lockを開始してSidebar / Track Infoを閉じる。Wake Lock不可でもGPSと走行中モードを継続する
 - Mobile幅ではTrack Edit / Batch Simplificationの入口を表示せず、既存editing session自体は破棄しない
+
+# 27. Release 1.8 Mobile Map Controls UI
+
+- MobileのLeaflet zoom controlは上端で60px高の`− / ＋`横並びとし、Leaflet標準zoom actionを維持する。Desktopは既存縦型controlを維持する
+- Library、Base Map、Color / Monochromeはzoom row下の48px inline SVG icon controlとし、Base Map / modeは`aria-pressed`、現在状態、切替先を`aria-label` / `title`で表す
+- MobileではMap上のBackground / Map mode select、Waypoint、表示Clearを隠す。Waypoint / ClearはLibrary sidebarのcompactな「表示」sectionから既存event経路を操作する
+- Driving Modeでもzoom、Base Map、Color / Monochrome、GPS Follow、走行中終了を表示し、Library sidebar内の表示sectionは出さない

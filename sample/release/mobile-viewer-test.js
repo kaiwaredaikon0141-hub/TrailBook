@@ -222,16 +222,27 @@ async function run() {
         themeCss.includes(".batch-simplification") &&
         themeCss.includes("env(safe-area-inset-bottom)"),
     "touch, editing guard, or safe-area CSS contract missing");
-    assert(themeCss.includes(
-        "left:max(68px, calc(env(safe-area-inset-left) + 60px))"
-    ), "mobile Library control does not clear the Leaflet zoom control");
+    assert(themeCss.includes(".mobile-map-controls") &&
+        themeCss.includes("top:max(76px") &&
+        themeCss.includes("left:max(64px"),
+    "mobile map controls are not placed below the zoom row");
     assert(
+        themeCss.includes(".leaflet-top.leaflet-left .leaflet-control-zoom") &&
+        themeCss.includes("display:flex") &&
         themeCss.includes(".leaflet-control-zoom a") &&
-        themeCss.includes("width:48px") &&
-        themeCss.includes("height:48px") &&
-        themeCss.includes("line-height:48px"),
-        "mobile Leaflet zoom targets are not 48px"
+        themeCss.includes("height:60px") &&
+        themeCss.includes("line-height:60px") &&
+        themeCss.includes(".leaflet-control-zoom-out") &&
+        themeCss.includes("order:1"),
+        "mobile Leaflet zoom is not a 60px horizontal minus/plus row"
     );
+    assert(themeCss.includes(".map-toolbar") &&
+        themeCss.includes("display:none") &&
+        themeCss.includes(".mobile-sidebar-display-controls"),
+    "mobile selects or Map Waypoint/Clear controls remain on the Map");
+    assert(themeCss.includes("body.is-driving-mode .map-toolbar") &&
+        !themeCss.includes("body.is-driving-mode .mobile-map-controls"),
+    "driving mode hides the required mobile Map toggles");
     assert(
         themeCss.includes(".trailbook-build-info") &&
         themeCss.includes("flex:0 0 auto"),
