@@ -9,6 +9,7 @@ import EditedGPXLibraryRefreshCoordinator from "./core/EditedGPXLibraryRefreshCo
 import TrackEditingCoordinator from "./core/TrackEditingCoordinator.js";
 import { registerTrailBookServiceWorker } from "./services/PWAServiceWorker.js";
 import { folderPathFromFilePath } from "./utils/PathUtils.js";
+import { createBuildInfoElement } from "./ui/BuildInfoView.js";
 
 window.addEventListener("DOMContentLoaded", () => {
 
@@ -147,6 +148,10 @@ window.addEventListener("DOMContentLoaded", () => {
         app.trackDiscoveryCoordinator.sidebarShell
             ?.querySelector(".sidebar-fixed-controls") ||
         app.trackDiscoveryCoordinator.sidebarShell
+    );
+
+    app.trackDiscoveryCoordinator.sidebarShell?.append(
+        createBuildInfoElement()
     );
 
     registerTrailBookServiceWorker();

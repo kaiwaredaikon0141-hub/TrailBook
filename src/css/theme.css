@@ -69,6 +69,19 @@ body{
     min-width:0;
 }
 
+.trailbook-build-info{
+
+    padding-top:8px;
+
+    color:#777;
+
+    font-size:11px;
+
+    line-height:1.3;
+
+    text-align:center;
+}
+
 .sidebar-resize-handle{
 
     position:relative;

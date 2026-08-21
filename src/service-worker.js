@@ -1,9 +1,13 @@
 const APP_SHELL_CACHE_PREFIX = "trailbook-app-shell-";
-const APP_SHELL_CACHE = `${APP_SHELL_CACHE_PREFIX}v1`;
+const APP_SHELL_BUILD_ID = "__TRAILBOOK_BUILD_ID__";
+const APP_SHELL_CACHE = `${APP_SHELL_CACHE_PREFIX}${
+    /^[0-9a-f]{8}$/i.test(APP_SHELL_BUILD_ID) ? APP_SHELL_BUILD_ID : "local"
+}`;
 const CORE_ASSETS = [
     "./",
     "./index.html",
     "./manifest.webmanifest",
+    "./trailbook.build.js",
     "./favicon.svg",
     "./icons/trailbook-192.png",
     "./icons/trailbook-512.png",

@@ -61,6 +61,30 @@ jobs:
               "w", encoding="utf-8", newline="\n"
           ) as config_file:
               config_file.write(output)
+
+          short_commit = os.environ.get("GITHUB_SHA", "")[:8].lower()
+          build = {
+              "commit": short_commit,
+          }
+          build_output = "window.TRAILBOOK_BUILD = Object.freeze(" + json.dumps(
+              build,
+              ensure_ascii=False,
+              separators=(",", ":"),
+          ) + ");\n"
+          with Path("_site/trailbook.build.js").open(
+              "w", encoding="utf-8", newline="\n"
+          ) as build_file:
+              build_file.write(build_output)
+
+          service_worker = Path("_site/service-worker.js")
+          service_worker.write_text(
+              service_worker.read_text(encoding="utf-8").replace(
+                  "__TRAILBOOK_BUILD_ID__",
+                  short_commit or "local",
+              ),
+              encoding="utf-8",
+              newline="\n",
+          )
           PY
 
       - name: Upload Pages artifact

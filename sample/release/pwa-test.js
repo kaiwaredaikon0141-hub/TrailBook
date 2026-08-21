@@ -2,6 +2,11 @@ import {
     isServiceWorkerLocationAllowed,
     registerTrailBookServiceWorker
 } from "../../src/js/services/PWAServiceWorker.js";
+import Config from "../../src/js/core/Config.js";
+import {
+    createBuildInfoElement,
+    getBuildIdentifier
+} from "../../src/js/ui/BuildInfoView.js";
 
 const output = document.getElementById("result");
 let assertions = 0;
@@ -66,7 +71,64 @@ async function testManifestAndAssets() {
         .then(response => response.text());
     assert(index.includes('href="manifest.webmanifest"'), "manifest link missing");
     assert(index.includes('name="theme-color"'), "theme color missing");
+    assert(index.includes('src="trailbook.build.js"'), "build runtime missing");
+    assert(
+        index.indexOf('src="trailbook.build.js"') <
+        index.indexOf('src="js/main.js"'),
+        "build runtime loads after application"
+    );
     assert(!index.includes('href="/'), "root-absolute index asset URL");
+
+    const buildSource = await fetch(new URL(
+        "../../src/trailbook.build.js", location.href
+    )).then(response => response.text());
+    assert(buildSource.includes('commit: "local"'), "localhost build fallback");
+    assert(!buildSource.includes(Config.version), "version duplicated in build runtime");
+
+    assert(getBuildIdentifier({ commit: "431FB68Cbe81145f" }) === "431fb68c",
+        "short build identifier");
+    assert(getBuildIdentifier({ commit: "local" }) === "local",
+        "invalid build did not use local fallback");
+    const buildInfo = createBuildInfoElement({
+        config: Config,
+        runtimeBuild: { commit: "431fb68cbe81145f" }
+    });
+    assert(buildInfo.textContent === `TrailBook v${Config.version} · 431fb68c`,
+        "version / build display");
+
+    const workflow = await fetch(new URL(
+        "../../.github/workflows/pages.yml", location.href
+    )).then(response => response.text());
+    assert(workflow.includes('Path("_site/trailbook.build.js")'),
+        "Pages artifact build runtime generation missing");
+    assert(workflow.includes('os.environ.get("GITHUB_SHA"'),
+        "Pages build does not use commit SHA");
+    assert(workflow.includes('"__TRAILBOOK_BUILD_ID__"'),
+        "Pages Service Worker build replacement missing");
+
+    const workerSource = await fetch(new URL(
+        "../../src/service-worker.js", location.href
+    )).then(response => response.text());
+    const deployedWorker = workerSource.replace(
+        "__TRAILBOOK_BUILD_ID__",
+        "431fb68c"
+    );
+    assert(workerSource.includes('"./trailbook.build.js"'),
+        "build runtime not in app shell");
+    assert(deployedWorker.includes('APP_SHELL_BUILD_ID = "431fb68c"'),
+        "deploy build does not update Service Worker source");
+    assert(!deployedWorker.includes('APP_SHELL_CACHE_PREFIX}v1'),
+        "fixed app shell cache version retained");
+
+    const mobileCss = await fetch(new URL(
+        "../../src/css/theme.css", location.href
+    )).then(response => response.text());
+    assert(
+        mobileCss.includes(".leaflet-control-zoom a") &&
+        mobileCss.includes("width:48px") &&
+        mobileCss.includes("height:48px"),
+        "Pages source does not contain 48px mobile zoom targets"
+    );
 }
 
 async function testRegistrationContract() {
@@ -159,13 +221,14 @@ async function testServiceWorkerCache() {
         "old TrailBook cache not removed");
     assert(cacheNames.includes("trailbook-unrelated-test"),
         "unrelated cache was removed");
-    assert(cacheNames.includes("trailbook-app-shell-v1"),
+    assert(cacheNames.includes("trailbook-app-shell-local"),
         "versioned app shell cache missing");
 
-    const cache = await caches.open("trailbook-app-shell-v1");
+    const cache = await caches.open("trailbook-app-shell-local");
     const required = [
         "index.html",
         "manifest.webmanifest",
+        "trailbook.build.js",
         "css/base.css",
         "css/layout.css",
         "css/theme.css",
@@ -185,7 +248,7 @@ async function testServiceWorkerCache() {
         new URL(request.url).pathname.includes("/js/") &&
         new URL(request.url).pathname.endsWith(".js")
     );
-    assert(cachedModules.length === 97, "production module graph not precached");
+    assert(cachedModules.length === 98, "production module graph not precached");
     assert(!cachedRequests.some(request => request.url.endsWith(".gpx")),
         "GPX entered app shell cache");
     assert(!cachedRequests.some(request => request.url.includes("googleapis.com")),
@@ -206,7 +269,7 @@ async function testServiceWorkerCache() {
     assert(cachedLeaflet?.ok, "offline vendor asset unavailable");
 
     await registration.unregister();
-    await caches.delete("trailbook-app-shell-v1");
+    await caches.delete("trailbook-app-shell-local");
     await caches.delete("trailbook-unrelated-test");
 }
 

@@ -29,6 +29,8 @@ Release 1.8 Unit 1以降、Pages artifactにはrelative `start_url` / `scope`の
 
 Service Workerが保存するのはTrailBook本体のHTML、CSS、production JavaScript modules、Leaflet vendor assets、Manifest、iconだけです。offlineでもViewer UIと既存device-local stateは起動できますが、未取得のmap tile、Google Drive API、OAuth、GPX本文をService Workerから利用することはできません。Service Workerはこれらをcacheしません。
 
+Pages deploy時はartifact内の`trailbook.build.js`とService Workerへdeploy commitの先頭8文字を埋め込みます。Library sidebar最下部の`TrailBook v... · ...`で実行中buildを確認できます。app-shell cache名もbuildごとに変わり、新Service Worker activate時は旧TrailBook app-shell cacheだけを削除します。更新中の画面を強制reloadせず、次回起動または通常reloadで新buildへ切り替えます。
+
 localhostでもService Workerを利用できます。開発中にapp-shell cacheが不要な場合はbrowser DevToolsのApplication / StorageからTrailBookのService Workerと`trailbook-app-shell-*` cacheを解除してください。
 
 ## Browser acceptance

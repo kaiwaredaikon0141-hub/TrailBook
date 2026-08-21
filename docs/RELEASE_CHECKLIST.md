@@ -3222,3 +3222,32 @@ Browser Acceptance pending:
 - Android Files / Google Drive provider Handleのprompt、denied、offline fallback
 - 1122 visible Track時のGeometry Cache warm restore体感
 - Mobile portrait / landscapeの48px zoom controlとLibrary control非重複
+
+### PWA Update Visibility Improvement
+
+- Implementation Status: Completed
+- Static Test Status: Completed
+- Browser Acceptance Status: Pending
+
+Accepted implementation scope:
+
+- Library sidebar最下部へ`Config.version`とruntime build IDを補助表示
+- localhostは`local`、Pages artifactはdeploy commit SHA先頭8文字を表示
+- Pages deploy時にcredential runtime configとは別の`trailbook.build.js`を生成
+- 同じbuild IDをService Workerへ埋め込み、deployごとにTrailBook app-shell cache名を更新
+- 新Service Worker activate時は旧TrailBook app-shell cacheだけを削除し、強制reloadは行わない
+- Mobile Leaflet zoom controlの48px CSSがPages artifactへ含まれることを維持
+
+Static validation:
+
+- PWA foundation / build visibility: 59 assertions Pass
+- Pages artifact build / cache / mobile zoom simulation: Pass
+- Mobile Viewer: 35 assertions Pass
+- GPS regression: 23 assertions Pass
+- Driving Mode regression: 20 assertions Pass
+- Google Drive regression: 106 assertions Pass
+- View State / Previous Library regression: 316 assertions Pass
+- Production modules: 98 / 98 reachable
+- Missing import / circular dependency: 0 / 0
+- App.js / TreeView.js: 954 / 995 lines
+- `git diff --check`: Pass
