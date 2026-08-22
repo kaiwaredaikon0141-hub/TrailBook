@@ -1,11 +1,16 @@
 import {
+    cleanupLocalTrailBookServiceWorker,
+    isLocalDevelopmentLocation,
     isServiceWorkerLocationAllowed,
     registerTrailBookServiceWorker
 } from "../../src/js/services/PWAServiceWorker.js";
 import Config from "../../src/js/core/Config.js";
 import {
     createBuildInfoElement,
-    getBuildIdentifier
+    getBuildIdentifier,
+    getDevelopmentBuildIdentifier,
+    resolveBuildInfoElements,
+    updateBuildInfoElement
 } from "../../src/js/ui/BuildInfoView.js";
 
 const output = document.getElementById("result");
@@ -78,11 +83,18 @@ async function testManifestAndAssets() {
         "build runtime loads after application"
     );
     assert(!index.includes('href="/'), "root-absolute index asset URL");
+    assert(index.includes('id = "trailbook-development-build-info"') &&
+        index.includes("getDevelopmentBuildIdentifier") &&
+        index.includes("dev-checking...") &&
+        index.includes("SW: disabled"),
+    "localhost bootstrap build diagnostic missing");
 
     const buildSource = await fetch(new URL(
         "../../src/trailbook.build.js", location.href
     )).then(response => response.text());
     assert(buildSource.includes('commit: "local"'), "localhost build fallback");
+    assert(!buildSource.includes("development:"),
+        "fixed localhost development build stamp retained");
     assert(!buildSource.includes(Config.version), "version duplicated in build runtime");
 
     assert(getBuildIdentifier({ commit: "431FB68Cbe81145f" }) === "431fb68c",
@@ -91,10 +103,105 @@ async function testManifestAndAssets() {
         "invalid build did not use local fallback");
     const buildInfo = createBuildInfoElement({
         config: Config,
-        runtimeBuild: { commit: "431fb68cbe81145f" }
+        runtimeBuild: { commit: "431fb68cbe81145f" },
+        locationObject: { hostname: "example.github.io" }
     });
-    assert(buildInfo.textContent === `TrailBook v${Config.version} · 431fb68c`,
+    assert(buildInfo.textContent ===
+        `TrailBook v${Config.version} · 431fb68c · SW: checking`,
         "version / build display");
+    updateBuildInfoElement(buildInfo, {
+        config: Config,
+        runtimeBuild: { commit: "431fb68cbe81145f" },
+        locationObject: { hostname: "example.github.io" },
+        serviceWorkerStatus: "active"
+    });
+    assert(buildInfo.textContent.endsWith("SW: active"),
+        "Pages Service Worker status display");
+
+    const localBuildInfo = createBuildInfoElement({
+        config: Config,
+        runtimeBuild: { commit: "local" },
+        locationObject: { hostname: "localhost" }
+    });
+    assert(localBuildInfo.textContent ===
+        `TrailBook v${Config.version} · local · dev-checking... · SW: disabled`,
+        "localhost checking build display");
+
+    const sourceBodies = new Map([
+        ["http://localhost/src/js/main.js", 'import "./feature.js";'],
+        ["http://localhost/src/js/feature.js", "export const value = 1;"],
+        ["http://localhost/src/index.html", "<html>TrailBook</html>"]
+    ]);
+    const fetchOptions = [];
+    const fetchFunction = async (url, options) => {
+        fetchOptions.push(options);
+        return {
+            ok: sourceBodies.has(url),
+            text: async () => sourceBodies.get(url)
+        };
+    };
+    const fingerprintOptions = {
+        locationObject: { hostname: "localhost" },
+        fetchFunction,
+        cryptoObject: globalThis.crypto,
+        moduleEntryUrl: "http://localhost/src/js/main.js",
+        sourceUrls: ["http://localhost/src/index.html"]
+    };
+    const firstFingerprint = await getDevelopmentBuildIdentifier(
+        fingerprintOptions
+    );
+    const repeatedFingerprint = await getDevelopmentBuildIdentifier(
+        fingerprintOptions
+    );
+
+    assert(/^dev-[0-9a-f]{8}$/.test(firstFingerprint),
+        "localhost source fingerprint format");
+    assert(firstFingerprint === repeatedFingerprint,
+        "same source bytes changed fingerprint");
+    sourceBodies.set(
+        "http://localhost/src/js/feature.js",
+        "export const value = 2;"
+    );
+    const changedFingerprint = await getDevelopmentBuildIdentifier(
+        fingerprintOptions
+    );
+    assert(changedFingerprint !== firstFingerprint,
+        "changed imported module did not change fingerprint");
+    assert(fetchOptions.every(options => options.cache === "no-store"),
+        "development fingerprint fetch used browser cache");
+
+    const compactBuildInfo = createBuildInfoElement({
+        config: Config,
+        runtimeBuild: { commit: "local" },
+        locationObject: { hostname: "localhost" },
+        compact: true
+    });
+    await resolveBuildInfoElements([localBuildInfo, compactBuildInfo], {
+        config: Config,
+        runtimeBuild: { commit: "local" },
+        locationObject: { hostname: "localhost" },
+        serviceWorkerRegistration: null,
+        developmentBuildIdentifier: changedFingerprint
+    });
+    assert(localBuildInfo.textContent.includes(changedFingerprint) &&
+        localBuildInfo.textContent.endsWith("SW: disabled"),
+        "resolved localhost build diagnostics");
+    assert(compactBuildInfo.textContent.startsWith(`v${Config.version}`) &&
+        compactBuildInfo.textContent.includes(changedFingerprint),
+        "compact localhost build diagnostics");
+
+    const mainSource = await fetch(new URL(
+        "../../src/js/main.js", location.href
+    )).then(response => response.text());
+    assert(mainSource.includes("trailbook-development-build-info"),
+        "localhost fixed build diagnostic is not attached");
+
+    const themeSource = await fetch(new URL(
+        "../../src/css/theme.css", location.href
+    )).then(response => response.text());
+    assert(themeSource.includes(".trailbook-development-build-info") &&
+        themeSource.includes("position:fixed"),
+    "localhost fixed build diagnostic CSS missing");
 
     const workflow = await fetch(new URL(
         "../../.github/workflows/pages.yml", location.href
@@ -119,12 +226,11 @@ async function testManifestAndAssets() {
         "deploy build does not update Service Worker source");
     assert(!deployedWorker.includes('APP_SHELL_CACHE_PREFIX}v1'),
         "fixed app shell cache version retained");
-    assert(workerSource.includes(
-        '["localhost", "127.0.0.1", "[::1]"]'
-    ), "localhost development cache bypass missing");
-    assert(workerSource.indexOf("return await fetch(request)") <
-        workerSource.indexOf("const cached = await cache.match(request)"),
-    "localhost does not prefer the current network source");
+    assert(!workerSource.includes("self.location.hostname"),
+        "localhost-only fetch branch remains in production worker");
+    assert(workerSource.indexOf("const cached = await cache.match(request)") <
+        workerSource.indexOf("return await fetch(request)"),
+    "production app shell is no longer cache-first");
 
     const mobileCss = await fetch(new URL(
         "../../src/css/theme.css", location.href
@@ -140,12 +246,20 @@ async function testManifestAndAssets() {
 
 async function testRegistrationContract() {
 
+    assert(isLocalDevelopmentLocation({ hostname: "localhost" }),
+        "localhost not detected as development");
+    assert(isLocalDevelopmentLocation({ hostname: "127.0.0.1" }),
+        "127.0.0.1 not detected as development");
+    assert(isLocalDevelopmentLocation({ hostname: "[::1]" }),
+        "IPv6 localhost not detected as development");
+    assert(!isLocalDevelopmentLocation({ hostname: "example.github.io" }),
+        "Pages origin detected as local development");
     assert(isServiceWorkerLocationAllowed(
         { hostname: "example.github.io" }, true
     ), "HTTPS secure context rejected");
-    assert(isServiceWorkerLocationAllowed(
-        { hostname: "localhost" }, false
-    ), "localhost rejected");
+    assert(!isServiceWorkerLocationAllowed(
+        { hostname: "localhost" }, true
+    ), "localhost Service Worker registration accepted");
     assert(!isServiceWorkerLocationAllowed(
         { hostname: "192.168.1.10" }, false
     ), "insecure LAN origin accepted");
@@ -161,7 +275,10 @@ async function testRegistrationContract() {
                 }
             }
         },
-        locationObject: { hostname: "localhost" },
+        locationObject: {
+            hostname: "example.github.io",
+            href: "https://example.github.io/TrailBook/index.html"
+        },
         secureContext: true
     });
 
@@ -177,7 +294,10 @@ async function testRegistrationContract() {
                 register() { return Promise.reject(new Error("blocked")); }
             }
         },
-        locationObject: { hostname: "localhost" },
+        locationObject: {
+            hostname: "example.github.io",
+            href: "https://example.github.io/TrailBook/index.html"
+        },
         secureContext: true,
         consoleObject: { warn(...args) { warnings.push(args); } }
     });
@@ -186,9 +306,99 @@ async function testRegistrationContract() {
     assert(warnings.length === 1, "registration failure not reported once");
     assert(await registerTrailBookServiceWorker({
         navigatorObject: {},
-        locationObject: { hostname: "localhost" },
+        locationObject: { hostname: "example.github.io" },
         secureContext: true
     }) === null, "unsupported browser rejected Viewer startup");
+
+    let localRegisterCalls = 0;
+    let targetUnregisterCalls = 0;
+    let unrelatedUnregisterCalls = 0;
+    const deletedCaches = [];
+    const localNavigator = {
+        serviceWorker: {
+            register() {
+                localRegisterCalls += 1;
+                return Promise.resolve({});
+            },
+            getRegistrations() {
+                return Promise.resolve([
+                    {
+                        scope: "http://localhost:8000/src/",
+                        unregister() {
+                            targetUnregisterCalls += 1;
+                            return Promise.resolve(true);
+                        }
+                    },
+                    {
+                        scope: "http://localhost:8000/other/",
+                        unregister() {
+                            unrelatedUnregisterCalls += 1;
+                            return Promise.resolve(true);
+                        }
+                    }
+                ]);
+            }
+        }
+    };
+    const localCaches = {
+        keys() {
+            return Promise.resolve([
+                "trailbook-app-shell-old",
+                "trailbook-app-shell-local",
+                "unrelated-cache"
+            ]);
+        },
+        delete(name) {
+            deletedCaches.push(name);
+            return Promise.resolve(true);
+        }
+    };
+    const localLocation = {
+        hostname: "localhost",
+        href: "http://localhost:8000/src/index.html"
+    };
+    const localResult = await registerTrailBookServiceWorker({
+        navigatorObject: localNavigator,
+        locationObject: localLocation,
+        secureContext: true,
+        cacheStorage: localCaches
+    });
+
+    assert(localResult === null, "localhost registration did not stop");
+    assert(localRegisterCalls === 0, "localhost registered a new worker");
+    assert(targetUnregisterCalls === 1,
+        "current TrailBook scope worker not unregistered");
+    assert(unrelatedUnregisterCalls === 0,
+        "unrelated Service Worker was unregistered");
+    assert(deletedCaches.length === 2 &&
+        deletedCaches.every(name => name.startsWith("trailbook-app-shell-")),
+    "TrailBook cache cleanup scope changed");
+    assert(!deletedCaches.includes("unrelated-cache"),
+        "unrelated cache was deleted");
+
+    let nonLocalTouched = false;
+    const nonLocalCleanup = await cleanupLocalTrailBookServiceWorker({
+        navigatorObject: {
+            serviceWorker: {
+                getRegistrations() {
+                    nonLocalTouched = true;
+                    return Promise.resolve([]);
+                }
+            }
+        },
+        locationObject: {
+            hostname: "example.github.io",
+            href: "https://example.github.io/TrailBook/"
+        },
+        cacheStorage: {
+            keys() {
+                nonLocalTouched = true;
+                return Promise.resolve([]);
+            }
+        }
+    });
+    assert(nonLocalCleanup === false && !nonLocalTouched,
+        "production origin entered local cleanup");
 }
 
 async function testServiceWorkerCache() {
@@ -255,7 +465,7 @@ async function testServiceWorkerCache() {
         new URL(request.url).pathname.includes("/js/") &&
         new URL(request.url).pathname.endsWith(".js")
     );
-    assert(cachedModules.length === 99, "production module graph not precached");
+    assert(cachedModules.length === 101, "production module graph not precached");
     assert(!cachedRequests.some(request => request.url.endsWith(".gpx")),
         "GPX entered app shell cache");
     assert(!cachedRequests.some(request => request.url.includes("googleapis.com")),

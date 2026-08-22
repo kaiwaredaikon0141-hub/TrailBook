@@ -3,6 +3,7 @@ import TrackTranslationService, {
     ZERO_TRACK_TRANSLATION
 } from "../services/TrackTranslationService.js";
 import TrackPointEditingService from "../services/TrackPointEditingService.js";
+import TrackPointMutationService from "../services/TrackPointMutationService.js";
 
 /**
  * Owns one GPX editing working copy without mutating its source.
@@ -21,6 +22,10 @@ export default class GPXEditingSession {
     #translationService;
     #pointEdits = [];
     #pointEditingService;
+    #deletedPoints = [];
+    #addedPoints = [];
+    #nextAddedPointNumber = 1;
+    #pointMutationService;
 
     constructor(source, {
         history = new EditingCommandHistory(),
@@ -28,6 +33,10 @@ export default class GPXEditingSession {
         translationService = new TrackTranslationService(),
         pointEditingService = new TrackPointEditingService({
             translationService
+        }),
+        pointMutationService = new TrackPointMutationService({
+            pointEditing: pointEditingService,
+            translation: translationService
         })
     } = {}) {
 
@@ -39,6 +48,7 @@ export default class GPXEditingSession {
         this.#history = history;
         this.#translationService = translationService;
         this.#pointEditingService = pointEditingService;
+        this.#pointMutationService = pointMutationService;
         this.#retainedPointMasks = this.#createSourceMasks();
         this.#sourceFileName = typeof source.sourceFileName === "string"
             ? source.sourceFileName
@@ -60,6 +70,8 @@ export default class GPXEditingSession {
             this.#desiredFileName !== this.#sourceFileName ||
             !this.#translationService.isZero(this.#translation) ||
             this.#pointEdits.length > 0 ||
+            this.#deletedPoints.length > 0 ||
+            this.#addedPoints.length > 0 ||
             !this.#masksEqual(
             this.#retainedPointMasks,
             this.#createSourceMasks()
@@ -117,6 +129,20 @@ export default class GPXEditingSession {
     getPointEdits() {
 
         return this.#pointEditingService.normalizeEdits(this.#pointEdits);
+    }
+
+    getDeletedPoints() {
+
+        return this.#pointMutationService.normalizeDeletedPoints(
+            this.#deletedPoints
+        );
+    }
+
+    getAddedPoints() {
+
+        return this.#pointMutationService.normalizeAddedPoints(
+            this.#addedPoints
+        );
     }
 
     getPreview() {
@@ -184,6 +210,14 @@ export default class GPXEditingSession {
         );
 
         if (!masksChanged && !translationChanged) {
+            this.clearPreview();
+            return false;
+        }
+
+        if (
+            this.#deletedPoints.length > 0 &&
+            !this.#segmentsRemainValid(nextMasks)
+        ) {
             this.clearPreview();
             return false;
         }
@@ -283,6 +317,9 @@ export default class GPXEditingSession {
     applyPointEdit(identity, coordinate) {
 
         this.#assertActive();
+        if (this.#pointMutationService.isAddedIdentity(identity)) {
+            return this.#moveAddedPoint(identity, coordinate);
+        }
         const normalizedIdentity = this.#pointEditingService
             .normalizeIdentity(identity);
         const nextCoordinate = this.#pointEditingService
@@ -339,6 +376,114 @@ export default class GPXEditingSession {
         return true;
     }
 
+    addPoint(candidate) {
+
+        this.#assertActive();
+        const segment = this.source?.tracks?.[candidate?.trackIndex]
+            ?.segments?.[candidate?.segmentIndex];
+
+        if (!segment || segment.points.length < 2) {
+            throw new TypeError("Added Track Point segment is invalid");
+        }
+
+        const addedPointId = `added-${this.#nextAddedPointNumber++}`;
+        const nextPoint = this.#pointMutationService.normalizeAddedPoints([{
+            ...candidate,
+            addedPointId
+        }])[0];
+
+        if (
+            nextPoint.insertionPosition <= 0 ||
+            nextPoint.insertionPosition >= segment.points.length - 1
+        ) {
+            throw new TypeError("Added Track Point must be inserted between source points");
+        }
+        const nextAddedPoints = this.#pointMutationService.normalizeAddedPoints([
+            ...this.#addedPoints,
+            nextPoint
+        ]);
+
+        this.#history.record({
+            type: "point-add",
+            before: this.#snapshot(),
+            after: this.#snapshot(
+                this.#retainedPointMasks,
+                this.#timeOffsetMs,
+                this.#desiredFileName,
+                this.#translation,
+                this.#pointEdits,
+                this.#deletedPoints,
+                nextAddedPoints
+            )
+        });
+        this.#addedPoints = nextAddedPoints;
+        this.clearPreview();
+        return nextPoint;
+    }
+
+    canDeletePoint(identity) {
+
+        this.#assertActive();
+
+        return this.#pointMutationService.canDelete(
+            this.source,
+            this.#retainedPointMasks,
+            this.#deletedPoints,
+            this.#addedPoints,
+            identity
+        );
+    }
+
+    deletePoint(identity) {
+
+        this.#assertActive();
+        const normalized = this.#pointMutationService.normalizeIdentity(identity);
+
+        if (!this.canDeletePoint(normalized)) return false;
+
+        let nextAddedPoints = this.#addedPoints;
+        let nextDeletedPoints = this.#deletedPoints;
+
+        if (this.#pointMutationService.isAddedIdentity(normalized)) {
+            const key = this.#pointMutationService.key(normalized);
+
+            nextAddedPoints = this.#pointMutationService.normalizeAddedPoints(
+                this.#addedPoints.filter(point =>
+                    this.#pointMutationService.key(point) !== key
+                )
+            );
+            if (nextAddedPoints.length === this.#addedPoints.length) return false;
+        } else {
+            const key = this.#pointEditingService.key(normalized);
+
+            if (this.#deletedPoints.some(point =>
+                this.#pointEditingService.key(point) === key
+            )) return false;
+            nextDeletedPoints = this.#pointMutationService.normalizeDeletedPoints([
+                ...this.#deletedPoints,
+                normalized
+            ]);
+        }
+
+        this.#history.record({
+            type: "point-delete",
+            before: this.#snapshot(),
+            after: this.#snapshot(
+                this.#retainedPointMasks,
+                this.#timeOffsetMs,
+                this.#desiredFileName,
+                this.#translation,
+                this.#pointEdits,
+                nextDeletedPoints,
+                nextAddedPoints
+            )
+        });
+        this.#deletedPoints = nextDeletedPoints;
+        this.#addedPoints = nextAddedPoints;
+        this.clearPreview();
+        return true;
+    }
+
     undo() {
 
         this.#assertActive();
@@ -372,6 +517,8 @@ export default class GPXEditingSession {
         this.#translation = ZERO_TRACK_TRANSLATION;
         this.#translationPreview = null;
         this.#pointEdits = [];
+        this.#deletedPoints = [];
+        this.#addedPoints = [];
         this.#history.clear();
         this.#isActive = false;
     }
@@ -388,7 +535,9 @@ export default class GPXEditingSession {
         timeOffsetMs = this.#timeOffsetMs,
         desiredFileName = this.#desiredFileName,
         translation = this.#translation,
-        pointEdits = this.#pointEdits
+        pointEdits = this.#pointEdits,
+        deletedPoints = this.#deletedPoints,
+        addedPoints = this.#addedPoints
     ) {
 
         return {
@@ -396,7 +545,13 @@ export default class GPXEditingSession {
             timeOffsetMs,
             desiredFileName,
             translation: this.#translationService.normalize(translation),
-            pointEdits: this.#pointEditingService.normalizeEdits(pointEdits)
+            pointEdits: this.#pointEditingService.normalizeEdits(pointEdits),
+            deletedPoints: this.#pointMutationService.normalizeDeletedPoints(
+                deletedPoints
+            ),
+            addedPoints: this.#pointMutationService.normalizeAddedPoints(
+                addedPoints
+            )
         };
     }
 
@@ -409,7 +564,74 @@ export default class GPXEditingSession {
         this.#pointEdits = this.#pointEditingService.normalizeEdits(
             state.pointEdits
         );
+        this.#deletedPoints = this.#pointMutationService.normalizeDeletedPoints(
+            state.deletedPoints
+        );
+        this.#addedPoints = this.#pointMutationService.normalizeAddedPoints(
+            state.addedPoints
+        );
         this.#translationPreview = null;
+    }
+
+    #moveAddedPoint(identity, coordinate) {
+
+        const normalized = this.#pointMutationService.normalizeIdentity(identity);
+        const current = this.#pointMutationService.getAddedPoint(
+            this.#addedPoints,
+            normalized
+        );
+
+        if (!current) throw new TypeError("Added Track Point is unavailable");
+
+        const nextCoordinate = this.#pointEditingService.normalizeCoordinate(
+            coordinate
+        );
+
+        if (this.#pointEditingService.coordinatesEqual(current, nextCoordinate)) {
+            return false;
+        }
+
+        const key = this.#pointMutationService.key(normalized);
+        const nextAddedPoints = this.#pointMutationService.normalizeAddedPoints(
+            this.#addedPoints.map(point =>
+                this.#pointMutationService.key(point) === key
+                    ? { ...point, ...nextCoordinate }
+                    : point
+            )
+        );
+
+        this.#history.record({
+            type: "point-move",
+            before: this.#snapshot(),
+            after: this.#snapshot(
+                this.#retainedPointMasks,
+                this.#timeOffsetMs,
+                this.#desiredFileName,
+                this.#translation,
+                this.#pointEdits,
+                this.#deletedPoints,
+                nextAddedPoints
+            )
+        });
+        this.#addedPoints = nextAddedPoints;
+        this.clearPreview();
+        return true;
+    }
+
+    #segmentsRemainValid(masks) {
+
+        return this.source.tracks.every((track, trackIndex) =>
+            track.segments.every((segment, segmentIndex) =>
+                segment.points.length < 2 ||
+                this.#pointMutationService.expectedPointCount(
+                    masks,
+                    this.#deletedPoints,
+                    this.#addedPoints,
+                    trackIndex,
+                    segmentIndex
+                ) >= 2
+            )
+        );
     }
 
     #translationEqual(left, right) {

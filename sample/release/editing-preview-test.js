@@ -66,10 +66,15 @@ class PanelFake {
     setSelectedTrack(path) { this.selectedPath = path; }
     getTolerance() { return this.tolerance; }
     getMode() { return this.mode; }
+    setMode(value) { this.mode = value; }
+    setModeDisabled(value) { this.modeDisabled = value; }
+    isModeDisabled() { return Boolean(this.modeDisabled); }
     getPointMode() { return this.pointMode; }
     getTranslationMode() { return false; }
     getPointEditingMode() { return false; }
+    getPointAddMode() { return false; }
     setTranslationMode(value) { this.translationMode = value; }
+    setPointAddMode(value) { this.pointAddMode = value; }
     showLoading(path) { this.calls.push(["loading", path]); }
     showReady(value) { this.calls.push(["ready", value]); }
     showPreviewing(value) { this.calls.push(["previewing", value]); }
@@ -103,19 +108,27 @@ class PreviewLayersFake {
     }
 
     setSource(source) { this.calls.push(["source", source]); }
-    setCandidate(source, masks, translation, pointEdits) {
-        this.calls.push(["candidate", source, masks, translation, pointEdits]);
+    setCandidate(source, masks, translation, pointEdits, deleted, added) {
+        this.calls.push([
+            "candidate", source, masks, translation, pointEdits, deleted, added
+        ]);
     }
     setTranslationPreviewHandler(handler) { this.translationHandler = handler; }
     setPointSelectionHandler(handler) { this.pointSelectionHandler = handler; }
     setPointEditHandler(handler) { this.pointEditHandler = handler; }
+    setPointAddHandler(handler) { this.pointAddHandler = handler; }
+    setPointDeleteHandler(handler) { this.pointDeleteHandler = handler; }
     setTranslationMode(value) { this.calls.push(["translation-mode", value]); }
     setPointEditingMode(value) {
         this.pointEditingMode = value;
         this.calls.push(["point-editing-mode", value]);
     }
-    clearPointSelection() { this.pointSelectionHandler?.(null); }
-    setMode(mode) { this.calls.push(["mode", mode]); }
+    setPointAddMode(value) { this.pointAddMode = value; }
+    clearPointSelection() {
+        this.pointSelection = null;
+        this.pointSelectionHandler?.(null);
+    }
+    setMode(mode) { this.mode = mode; this.calls.push(["mode", mode]); }
     setPointMode(mode) { this.calls.push(["point-mode", mode]); }
     clear() { this.calls.push(["clear"]); }
 }
@@ -229,6 +242,24 @@ async function testCoordinatorLifecycle() {
     assert(panel.calls.some(([name]) => name === "previewing"),
         "preview progress was not shown");
 
+    const simplificationPreview = coordinator.session.getPreview();
+    const candidateCountBeforePointEditing = previewLayers.calls.filter(
+        ([name]) => name === "candidate"
+    ).length;
+
+    panel.emit("point-editing-mode", true);
+    assert(coordinator.session.getPreview() === simplificationPreview,
+        "Point Editing cleared the simplification preview");
+    assert(previewLayers.calls.filter(([name]) => name === "candidate").length ===
+        candidateCountBeforePointEditing,
+    "Point Editing ON regenerated the Before/After candidate geometry");
+    panel.emit("point-editing-mode", false);
+    assert(coordinator.session.getPreview() === simplificationPreview,
+        "Point Editing OFF replaced the simplification preview");
+    assert(previewLayers.calls.filter(([name]) => name === "candidate").length ===
+        candidateCountBeforePointEditing,
+    "Point Editing OFF regenerated the Before/After candidate geometry");
+
     assert(coordinator.apply(), "Apply did not update working mask");
     assert(coordinator.session.historyLength === 1,
         "Apply did not create exactly one command");
@@ -254,6 +285,14 @@ async function testCoordinatorLifecycle() {
     assert(coordinator.session.getTimeOffsetMs() === 33 * 24 * 60 * 60 * 1000,
         "date correction offset was not stored in the Session");
     panel.emit("point-editing-mode", true);
+    assert(panel.mode === "after" && panel.modeDisabled === true &&
+        previewLayers.mode === "after",
+    "Point Editing did not force and lock the After Map preview");
+    assert(panel.pointMode === "off",
+        "Point Editing changed the simplification point preview");
+    panel.emit("point-add-mode", true);
+    assert(previewLayers.pointAddMode === true,
+        "point add mode did not propagate from Panel to Preview Layer");
     previewLayers.pointSelectionHandler({
         trackIndex: 0,
         segmentIndex: 0,
@@ -268,10 +307,51 @@ async function testCoordinatorLifecycle() {
     assert(coordinator.session.getPointEdits()[0].latitude === 35.3 &&
         coordinator.session.getPointEdits()[0].longitude === 135.4,
     "displayed point coordinate was not converted before translation");
+    const addedPoint = previewLayers.pointAddHandler({
+        trackIndex: 0,
+        segmentIndex: 0,
+        insertionPosition: 0.5,
+        latitude: 35.25,
+        longitude: 135.35
+    });
+    assert(addedPoint?.addedPointId &&
+        coordinator.session.getAddedPoints().length === 1,
+    "point add was not committed through the Coordinator");
+    assert(previewLayers.pointAddMode === true &&
+        panel.pointEditing?.addMode === true,
+    "preview refresh cleared the Coordinator-owned point add mode");
+    assert(previewLayers.pointDeleteHandler(addedPoint) &&
+        coordinator.session.getAddedPoints().length === 0,
+    "context-menu Delete did not use the Coordinator Delete command");
+    assert(coordinator.undo() && coordinator.session.getAddedPoints().length === 1,
+        "context-menu Delete Undo failed");
+    panel.emit("point-add-mode", false);
+    assert(previewLayers.pointAddMode === false,
+        "point add mode OFF did not propagate to Preview Layer");
+    panel.emit("point-editing-mode", false);
+    assert(panel.mode === "both" && panel.modeDisabled === false &&
+        previewLayers.mode === "both",
+    "Point Editing OFF did not restore the prior Map preview");
+    assert(panel.pointMode === "off",
+        "Map preview restoration changed Point preview state");
+    panel.emit("point-editing-mode", true);
     assert(coordinator.done(), "Done rejected point-edit draft");
+    assert(panel.mode === "both" && panel.modeDisabled === false,
+        "Done did not restore the pre-edit Map preview controls");
     assert(await coordinator.start(), "point-edit draft could not resume");
     assert(coordinator.session.getPointEdits().length === 1,
         "Done/resume lost point edit state");
+    assert(coordinator.session.getAddedPoints().length === 1,
+        "Done/resume lost added point state");
+    previewLayers.pointSelection = {
+        trackIndex: 0,
+        segmentIndex: 0,
+        pointIndex: 0
+    };
+    previewLayers.pointSelectionHandler(previewLayers.pointSelection);
+    panel.emit("point-delete");
+    assert(coordinator.session.getDeletedPoints()[0]?.pointIndex === 0,
+        "point delete was not committed through the Coordinator");
 
     const saveResult = await coordinator.save();
     assert(saveResult?.refreshSucceeded,
@@ -286,6 +366,9 @@ async function testCoordinatorLifecycle() {
     assert(saved[0].pointEdits.length === 1 &&
         saved[0].pointEdits[0].pointIndex === 1,
     "Save did not receive source-indexed point edits");
+    assert(saved[0].addedPoints.length === 1 &&
+        saved[0].deletedPoints[0].pointIndex === 0,
+    "Save did not receive point add/delete state");
     assert(saveBusy.join() === "true,false",
         "Save busy state was not bounded to the operation");
     assert(coordinator.session && !coordinator.session.isDirty,
@@ -627,6 +710,8 @@ function testPanelAccessibility() {
     let translationMode = null;
     let pointEditingMode = null;
     let pointSelectionCleared = 0;
+    let pointAddMode = null;
+    let pointDeleteCount = 0;
 
     panel.on("edit", () => { editCount += 1; });
     panel.on("save", () => { saveCount += 1; });
@@ -634,6 +719,8 @@ function testPanelAccessibility() {
     panel.on("translation-mode", value => { translationMode = value; });
     panel.on("point-editing-mode", value => { pointEditingMode = value; });
     panel.on("point-selection-clear", () => { pointSelectionCleared += 1; });
+    panel.on("point-add-mode", value => { pointAddMode = value; });
+    panel.on("point-delete", () => { pointDeleteCount += 1; });
     panel.attach(host);
     const simplificationGroup = panel.element.querySelector(
         ".editor-simplification"
@@ -707,16 +794,39 @@ function testPanelAccessibility() {
     panel.pointEditingMode.dispatchEvent(new Event("change", { bubbles: true }));
     assert(pointEditingMode === true,
         "point editing mode checkbox did not emit its state");
+    panel.setMode("after");
+    panel.setModeDisabled(true);
+    assert(panel.getMode() === "after" && panel.isModeDisabled(),
+        "actual preview radio DOM did not reflect Point Editing After mode");
+    panel.setModeDisabled(false);
     panel.configurePointEditing({
         enabled: true,
-        selected: { trackIndex: 0, segmentIndex: 1, pointIndex: 2 }
+        selected: { trackIndex: 0, segmentIndex: 1, pointIndex: 2 },
+        canDelete: true
     });
     assert(panel.pointEditingStatus.textContent.includes("Point 3") &&
-        !panel.actionButtons.get("point-selection-clear").disabled,
+        !panel.actionButtons.get("point-selection-clear").disabled &&
+        !panel.actionButtons.get("point-delete").disabled,
     "selected point identity was not presented");
+    panel.actionButtons.get("point-add-mode").click();
+    assert(pointAddMode === true && panel.getPointAddMode(),
+        "point add mode did not toggle");
     panel.actionButtons.get("point-selection-clear").click();
     assert(pointSelectionCleared === 1,
         "point selection clear action was not emitted");
+    panel.actionButtons.get("point-delete").click();
+    assert(pointDeleteCount === 1, "point delete action was not emitted");
+    panel.configurePointEditing({
+        enabled: true,
+        selected: {
+            addedPointId: "added-1",
+            trackIndex: 0,
+            segmentIndex: 0
+        },
+        canDelete: true
+    });
+    assert(panel.pointEditingStatus.textContent.includes("追加point選択中"),
+        "added point selection state was not presented");
     panel.configureTranslation({
         northMeters: -12.3,
         eastMeters: 45.6,

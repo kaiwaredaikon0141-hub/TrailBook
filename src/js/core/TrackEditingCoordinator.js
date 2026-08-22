@@ -70,6 +70,8 @@ export default class TrackEditingCoordinator {
         this.draft = null;
         this.fileNameCandidate = null;
         this.fileNameCandidateOffsetMs = null;
+        this.pointEditingPreviousPreviewMode = null;
+        this.pointAddMode = false;
         this.previewLayers.setTranslationPreviewHandler?.(
             translation => this.#handleTranslationPreview(translation)
         );
@@ -78,6 +80,12 @@ export default class TrackEditingCoordinator {
         );
         this.previewLayers.setPointEditHandler?.(
             (identity, coordinate) => this.#handlePointEdit(identity, coordinate)
+        );
+        this.previewLayers.setPointAddHandler?.(
+            candidate => this.#handlePointAdd(candidate)
+        );
+        this.previewLayers.setPointDeleteHandler?.(
+            identity => this.#deletePoint(identity)
         );
     }
 
@@ -150,12 +158,15 @@ export default class TrackEditingCoordinator {
             this.fileNameCandidate = resolvedCandidate;
             this.fileNameCandidateOffsetMs = 0;
             this.mapView.setEditingTargetSuppressed(path, true);
+            this.previewLayers.setMap?.(this.mapView.map);
             this.previewLayers.setSource(source);
             this.previewLayers.setCandidate(
                 source,
                 this.session.getRetainedPointMasks(),
                 this.session.getTranslation(),
-                this.session.getPointEdits()
+                this.session.getPointEdits(),
+                this.session.getDeletedPoints(),
+                this.session.getAddedPoints()
             );
             this.previewLayers.setMode(this.panel.getMode());
             this.previewLayers.setPointMode(this.panel.getPointMode());
@@ -183,6 +194,7 @@ export default class TrackEditingCoordinator {
             this.panel.showReady({ canSerialize: source.canSerialize });
             this.#configureDateCorrection();
             this.#configureFileName();
+            this.#configurePointEditing();
             this.#updateHistory();
             this.loading = false;
             await this.requestPreview(this.panel.getTolerance());
@@ -255,7 +267,9 @@ export default class TrackEditingCoordinator {
                 session.source,
                 preview.retainedPointMasks,
                 session.getTranslationPreview() || session.getTranslation(),
-                session.getPointEdits()
+                session.getPointEdits(),
+                session.getDeletedPoints(),
+                session.getAddedPoints()
             );
             this.panel.showPreview(preview.metrics);
             this.panel.setSaveEnabled(
@@ -439,6 +453,8 @@ export default class TrackEditingCoordinator {
                 timeOffsetMs: session.getTimeOffsetMs(),
                 translation: session.getTranslation(),
                 pointEdits: session.getPointEdits(),
+                deletedPoints: session.getDeletedPoints(),
+                addedPoints: session.getAddedPoints(),
                 desiredFileName: session.getDesiredFileName(),
                 directoryHandle: entry.parentFolderHandle,
                 relativePath: sourcePath
@@ -471,7 +487,9 @@ export default class TrackEditingCoordinator {
                     saved.source,
                     this.lastSavedMasks,
                     this.session.getTranslation(),
-                    this.session.getPointEdits()
+                    this.session.getPointEdits(),
+                    this.session.getDeletedPoints(),
+                    this.session.getAddedPoints()
                 );
                 this.#showWorkingState();
                 this.panel.showSaveSuccess(saved.fileName, {
@@ -503,7 +521,9 @@ export default class TrackEditingCoordinator {
         const path = this.sourcePath;
 
         this.mapView.setEditingTargetSuppressed(path, false);
+        this.pointAddMode = false;
         this.previewLayers.clear();
+        this.#restorePointEditingPreviewMode();
         this.panel.configurePointEditing?.({ enabled: false });
         this.interactionGuard.setLocked(false);
         this.draft = {
@@ -540,7 +560,9 @@ export default class TrackEditingCoordinator {
         this.loading = false;
         this.lastSavedMasks = null;
         if (path) this.mapView.setEditingTargetSuppressed(path, false);
+        this.pointAddMode = false;
         this.previewLayers.clear();
+        this.#restorePointEditingPreviewMode();
         this.panel.configurePointEditing?.({ enabled: false });
         this.interactionGuard.setLocked(false);
         this.panel.clearDraft();
@@ -556,11 +578,14 @@ export default class TrackEditingCoordinator {
         const masks = this.session.getRetainedPointMasks();
         const calculated = this.metrics.calculate(this.session.source, masks);
 
+        this.previewLayers.setMap?.(this.mapView.map);
         this.previewLayers.setCandidate(
             this.session.source,
             masks,
             this.session.getTranslation(),
-            this.session.getPointEdits()
+            this.session.getPointEdits(),
+            this.session.getDeletedPoints(),
+            this.session.getAddedPoints()
         );
         this.panel.showApplied(calculated.total, {
             canUndo: this.session.canUndo,
@@ -586,7 +611,7 @@ export default class TrackEditingCoordinator {
         );
         this.panel.on("translation-mode", enabled => {
             if (enabled) {
-                this.previewLayers.setPointEditingMode?.(false);
+                this.#setPointEditingMode(false);
                 this.panel.configurePointEditing?.({ enabled: false });
             }
             this.previewLayers.setTranslationMode?.(enabled);
@@ -597,6 +622,13 @@ export default class TrackEditingCoordinator {
         this.panel.on("point-selection-clear", () => {
             this.previewLayers.clearPointSelection?.();
         });
+        this.panel.on("point-add-mode", enabled => {
+            this.pointAddMode = Boolean(enabled) &&
+                Boolean(this.previewLayers.pointEditingMode);
+            this.previewLayers.setPointAddMode?.(this.pointAddMode);
+            this.#configurePointEditing();
+        });
+        this.panel.on("point-delete", () => this.#deleteSelectedPoint());
         this.panel.on("apply", () => this.apply());
         this.panel.on("undo", () => this.undo());
         this.panel.on("redo", () => this.redo());
@@ -704,12 +736,15 @@ export default class TrackEditingCoordinator {
         this.mapView.setEditingTargetSuppressed(path, true);
         const masks = this.session.getRetainedPointMasks();
 
+        this.previewLayers.setMap?.(this.mapView.map);
         this.previewLayers.setSource(this.session.source);
         this.previewLayers.setCandidate(
             this.session.source,
             masks,
             this.session.getTranslation(),
-            this.session.getPointEdits()
+            this.session.getPointEdits(),
+            this.session.getDeletedPoints(),
+            this.session.getAddedPoints()
         );
         this.previewLayers.setMode(this.panel.getMode());
         this.previewLayers.setPointMode(this.panel.getPointMode());
@@ -742,7 +777,9 @@ export default class TrackEditingCoordinator {
             session.getDesiredFileName() !== session.source.sourceFileName ||
             Math.abs(session.getTranslation().latitudeDelta) >= 1e-12 ||
             Math.abs(session.getTranslation().longitudeDelta) >= 1e-12 ||
-            session.getPointEdits().length > 0
+            session.getPointEdits().length > 0 ||
+            session.getDeletedPoints().length > 0 ||
+            session.getAddedPoints().length > 0
         ) return false;
 
         const current = session.getRetainedPointMasks();
@@ -874,16 +911,37 @@ export default class TrackEditingCoordinator {
 
         const next = Boolean(enabled);
 
+        if (!next) this.pointAddMode = false;
+
         if (next) {
+            if (this.pointEditingPreviousPreviewMode === null) {
+                this.pointEditingPreviousPreviewMode = this.panel.getMode();
+            }
             this.#invalidatePendingPreview();
-            this.session.clearPreview();
             this.previewLayers.setTranslationMode?.(false);
             this.panel.setTranslationMode?.(false);
+            this.panel.setMode?.("after");
+            this.panel.setModeDisabled?.(true);
+            this.previewLayers.setMode("after");
         }
 
         this.previewLayers.setPointEditingMode?.(next);
-        this.#showWorkingState();
+        this.previewLayers.setPointAddMode?.(next && this.pointAddMode);
+        if (!next) this.#restorePointEditingPreviewMode();
+        this.#configurePointEditing();
         return true;
+    }
+
+    #restorePointEditingPreviewMode() {
+
+        const mode = this.pointEditingPreviousPreviewMode;
+
+        this.panel.setModeDisabled?.(false);
+        if (mode === null) return;
+
+        this.panel.setMode?.(mode);
+        this.previewLayers.setMode(mode);
+        this.pointEditingPreviousPreviewMode = null;
     }
 
     #handlePointEdit(identity, displayedCoordinate) {
@@ -910,13 +968,67 @@ export default class TrackEditingCoordinator {
         }
     }
 
+    #handlePointAdd(candidate) {
+
+        if (!this.session?.isActive || this.saving) return null;
+
+        try {
+            const coordinate = this.pointEditing.toSourceCoordinate(
+                candidate,
+                this.session.getTranslation()
+            );
+            const added = this.session.addPoint({ ...candidate, ...coordinate });
+
+            this.#invalidatePendingPreview();
+            this.#showWorkingState();
+            return added;
+        } catch {
+            this.#showWorkingState();
+            return null;
+        }
+    }
+
+    #deleteSelectedPoint() {
+
+        const selected = this.previewLayers.pointSelection;
+
+        return this.#deletePoint(selected);
+    }
+
+    #deletePoint(identity) {
+
+        if (!this.session?.isActive || !identity || this.saving) return false;
+        if (!this.session.deletePoint(identity)) {
+            this.#configurePointEditing(identity);
+            return false;
+        }
+
+        this.previewLayers.clearPointSelection?.();
+        this.#invalidatePendingPreview();
+        this.#showWorkingState();
+        return true;
+    }
+
     #configurePointEditing(identity = this.previewLayers.pointSelection) {
 
         const enabled = Boolean(this.previewLayers.pointEditingMode);
+        const addMode = enabled && this.pointAddMode;
+        let canDelete = false;
 
+        if (enabled && identity && this.session?.isActive) {
+            try {
+                canDelete = this.session.canDeletePoint(identity);
+            } catch {
+                canDelete = false;
+            }
+        }
+
+        this.previewLayers.setPointAddMode?.(addMode);
         this.panel.configurePointEditing?.({
             enabled,
-            selected: enabled ? identity : null
+            selected: enabled ? identity : null,
+            canDelete,
+            addMode
         });
     }
 

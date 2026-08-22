@@ -82,6 +82,29 @@ body{
     text-align:center;
 }
 
+.trailbook-development-build-info{
+
+    position:fixed;
+
+    right:8px;
+
+    bottom:6px;
+
+    z-index:2000;
+
+    margin:0;
+
+    padding:3px 6px;
+
+    border-radius:3px;
+
+    background:rgba(255, 255, 255, 0.82);
+
+    pointer-events:none;
+
+    white-space:nowrap;
+}
+
 .previous-library-status{
 
     display:block;
@@ -328,6 +351,64 @@ body.is-track-info-resizing{
     min-height:1.3em;
 
     margin:4px 0;
+}
+
+.editor-point-editing button[aria-pressed="true"]{
+
+    border-color:var(--accent);
+
+    background:#dbeafe;
+}
+
+.track-point-context-menu{
+
+    position:fixed;
+
+    z-index:2000;
+
+    display:grid;
+
+    min-width:170px;
+
+    padding:4px;
+
+    border:1px solid var(--border);
+
+    border-radius:6px;
+
+    background:var(--panel);
+
+    box-shadow:0 6px 20px rgba(0, 0, 0, 0.24);
+}
+
+.track-point-context-menu[hidden]{
+
+    display:none;
+}
+
+.track-point-context-menu button{
+
+    padding:8px 10px;
+
+    border:0;
+
+    background:transparent;
+
+    text-align:left;
+}
+
+.track-point-context-menu button:hover,
+.track-point-context-menu button:focus-visible{
+
+    background:#f2f4f7;
+}
+
+@media (max-width:768px){
+
+    .track-point-context-menu{
+
+        display:none !important;
+    }
 }
 
 .editor-draft-status:not(:empty){

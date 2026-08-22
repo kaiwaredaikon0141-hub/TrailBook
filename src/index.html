@@ -30,6 +30,50 @@
     <script src="vendor/leaflet/leaflet.js"></script>
     <script src="trailbook.build.js"></script>
     <script src="trailbook.local-config.js" onerror="this.remove()"></script>
+    <script>
+        if (["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)) {
+            const developmentBuildInfo = document.createElement("footer");
+            developmentBuildInfo.id = "trailbook-development-build-info";
+            developmentBuildInfo.className =
+                "trailbook-build-info trailbook-development-build-info";
+            developmentBuildInfo.dataset.compact = "true";
+            developmentBuildInfo.textContent =
+                "TrailBook · local · dev-checking... · SW: disabled";
+            document.body.append(developmentBuildInfo);
+            import(`./js/ui/BuildInfoView.js?diagnostics=${Date.now()}`)
+                .then(async module => {
+                    const fingerprintPromise =
+                        module.getDevelopmentBuildIdentifier();
+
+                    window.TRAILBOOK_DEVELOPMENT_FINGERPRINT =
+                        fingerprintPromise;
+                    const developmentBuildIdentifier =
+                        await fingerprintPromise;
+
+                    window.TRAILBOOK_DEVELOPMENT_FINGERPRINT =
+                        developmentBuildIdentifier;
+                    await module.resolveBuildInfoElements(
+                        [developmentBuildInfo],
+                        {
+                            developmentBuildIdentifier,
+                            serviceWorkerRegistration: null
+                        }
+                    );
+                    document.querySelectorAll(".trailbook-build-info")
+                        .forEach(element => module.updateBuildInfoElement(
+                            element,
+                            {
+                                developmentBuildIdentifier,
+                                serviceWorkerStatus: "disabled"
+                            }
+                        ));
+                })
+                .catch(() => {
+                    developmentBuildInfo.textContent =
+                        "TrailBook · local · dev-unavailable · SW: disabled";
+                });
+        }
+    </script>
     <script type="module" src="js/main.js"></script>
 
 </body>

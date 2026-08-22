@@ -9,7 +9,10 @@ import EditedGPXLibraryRefreshCoordinator from "./core/EditedGPXLibraryRefreshCo
 import TrackEditingCoordinator from "./core/TrackEditingCoordinator.js";
 import { registerTrailBookServiceWorker } from "./services/PWAServiceWorker.js";
 import { folderPathFromFilePath } from "./utils/PathUtils.js";
-import { createBuildInfoElement } from "./ui/BuildInfoView.js";
+import {
+    createBuildInfoElement,
+    resolveBuildInfoElements
+} from "./ui/BuildInfoView.js";
 
 window.addEventListener("DOMContentLoaded", () => {
 
@@ -19,9 +22,20 @@ window.addEventListener("DOMContentLoaded", () => {
     app.trackDiscoveryCoordinator.sidebarShell
         ?.querySelector(".sidebar-fixed-controls")
         ?.append(app.mapView.sidebarDisplayControls);
-    app.trackDiscoveryCoordinator.sidebarShell?.append(
-        createBuildInfoElement()
-    );
+    const buildInfo = createBuildInfoElement();
+    app.trackDiscoveryCoordinator.sidebarShell?.append(buildInfo);
+    const localDevelopment = location.hostname === "localhost" ||
+        location.hostname === "127.0.0.1" || location.hostname === "[::1]";
+    const developmentBuildInfo = localDevelopment
+        ? document.getElementById("trailbook-development-build-info") ||
+            createBuildInfoElement({ compact: true })
+        : null;
+
+    if (developmentBuildInfo && !developmentBuildInfo.isConnected) {
+        developmentBuildInfo.id = "trailbook-development-build-info";
+        developmentBuildInfo.classList.add("trailbook-development-build-info");
+        document.body.append(developmentBuildInfo);
+    }
 
     const currentPosition = new CurrentPositionController({
         mapView: app.mapView,
@@ -154,6 +168,9 @@ window.addEventListener("DOMContentLoaded", () => {
         app.libraryAccessPanel.libraryChangeContainer
     );
 
-    registerTrailBookServiceWorker();
+    const serviceWorkerRegistration = registerTrailBookServiceWorker();
+    resolveBuildInfoElements([buildInfo, developmentBuildInfo], {
+        serviceWorkerRegistration
+    });
 
 });

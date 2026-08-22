@@ -3208,6 +3208,29 @@ Static validation:
 - App.js / TreeView.js: 954 / 995 lines
 - `git diff --check`: Pass
 - Browser Acceptance: Pending
+
+### Unit 4 Track Point Add / Delete
+
+- Implementation Status: Completed
+- Static Test Status: Pending browser runner
+- Browser Acceptance Status: Pending
+- Unit 4 Status: Browser Acceptance Pending
+
+Implemented scope:
+
+- source point deletionをsource identityのdraft setとして保持し、effective Segmentが2点未満になる操作を拒否
+- added pointはsession unique `addedPointId`、Track / Segment identity、明示`insertionPosition`、source座標系lat / lonとして保持
+- edgeから15px以内の単一点追加、追加point自動選択、existing / added point drag、source / added point削除
+- move / delete / add / simplification / translationを同一history、After preview、Serializerへ合成。added pointはsimplification対象外で常にretain
+- clone-original-DOMへlat / lonだけの`trkpt`をnamespace維持で挿入し、masked / deleted source pointを除外して既存Backup + in-place save / verificationを利用
+- point add hit targetはSegmentごとのwide Polyline、point overlayは共有Canvas rendererを使用し、DOM markerを生成しない
+
+Static validation:
+
+- Track Point Mutation test定義: add / delete / ordering / history / serializer / preview / 3,050 pointを収録
+- Browser test runner: Pending（実行失敗扱いにしない）
+- Production module graph、missing import、cycle、line count、`git diff --check`は最終検証で確定する
+
 - Production modules: 97 / 97 reachable
 - Missing import / circular dependency: 0 / 0
 - App.js / TreeView.js: 954 / 995 lines

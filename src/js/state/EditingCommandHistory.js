@@ -78,7 +78,9 @@ export default class EditingCommandHistory {
             timeOffsetMs: state.timeOffsetMs,
             desiredFileName: state.desiredFileName,
             translation: Object.freeze({ ...state.translation }),
-            pointEdits: this.#freezePointEdits(state.pointEdits)
+            pointEdits: this.#freezePointEdits(state.pointEdits),
+            deletedPoints: this.#freezePointEdits(state.deletedPoints),
+            addedPoints: this.#freezePointEdits(state.addedPoints)
         });
     }
 
@@ -98,7 +100,9 @@ export default class EditingCommandHistory {
             timeOffsetMs: state.timeOffsetMs,
             desiredFileName: state.desiredFileName,
             translation: { ...state.translation },
-            pointEdits: this.#clonePointEdits(state.pointEdits)
+            pointEdits: this.#clonePointEdits(state.pointEdits),
+            deletedPoints: this.#clonePointEdits(state.deletedPoints),
+            addedPoints: this.#clonePointEdits(state.addedPoints)
         };
     }
 

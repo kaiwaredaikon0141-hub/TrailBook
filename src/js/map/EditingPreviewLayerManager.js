@@ -1,4 +1,8 @@
 import TrackPointEditingService from "../services/TrackPointEditingService.js";
+import TrackPointMutationService, {
+    DEFAULT_ADD_HIT_TOLERANCE_PX
+} from "../services/TrackPointMutationService.js";
+import PointEditingContextMenu from "../ui/PointEditingContextMenu.js";
 import TrackTranslationService, {
     ZERO_TRACK_TRANSLATION
 } from "../services/TrackTranslationService.js";
@@ -67,6 +71,18 @@ const SELECTED_POINT_STYLE = Object.freeze({
     bubblingMouseEvents: false
 });
 
+const ADDED_POINT_STYLE = Object.freeze({
+    ...POINT_EDIT_TARGET_STYLE,
+    fillColor: "#16a34a"
+});
+
+const POINT_ADD_LINE_STYLE = Object.freeze({
+    weight: 24,
+    opacity: 0,
+    interactive: false,
+    bubblingMouseEvents: false
+});
+
 /**
  * Owns Editor-only line and point layers outside the normal LayerManager.
  */
@@ -76,17 +92,25 @@ export default class EditingPreviewLayerManager {
         translationService = new TrackTranslationService(),
         pointEditingService = new TrackPointEditingService({
             translationService
+        }),
+        pointMutationService = new TrackPointMutationService({
+            pointEditing: pointEditingService,
+            translation: translationService
         })
     } = {}) {
 
         this.map = map;
         this.source = null;
         this.retainedPointMasks = null;
+        this.beforeGeometry = [];
+        this.afterGeometry = [];
+        this.editingGeometry = [];
         this.beforeLayerGroup = null;
         this.afterLayerGroup = null;
         this.beforePointLayerGroup = null;
         this.afterPointLayerGroup = null;
         this.pointEditLayerGroup = null;
+        this.pointAddLayerGroup = null;
         this.selectedPointLayer = null;
         this.afterSegmentLayers = new Map();
         this.afterPointLines = new Map();
@@ -98,11 +122,22 @@ export default class EditingPreviewLayerManager {
         this.dragState = null;
         this.translationService = translationService;
         this.pointEditingService = pointEditingService;
+        this.pointMutationService = pointMutationService;
         this.pointEdits = [];
+        this.deletedPoints = [];
+        this.addedPoints = [];
         this.pointEditingMode = false;
+        this.pointAddMode = false;
         this.pointSelection = null;
         this.pointSelectionHandler = null;
         this.pointEditHandler = null;
+        this.pointAddHandler = null;
+        this.pointDeleteHandler = null;
+        this.contextMenu = null;
+        this.interactionContainer = null;
+        this.interactionMap = null;
+        this.pointAddCursorActive = false;
+        this.pointAddPreviousCursor = "";
         this.pointDragState = null;
         this.wasDraggingEnabled = false;
         this.pointRenderer = L.canvas({
@@ -114,19 +149,78 @@ export default class EditingPreviewLayerManager {
             pane: "trailbook-edit-point-targets"
         });
         this.#ensurePanes();
+        this.map?.on?.("movestart zoomstart", this.#handleMapMovementStart);
+    }
+
+    setMap(map) {
+
+        if (!map || map === this.map) return true;
+
+        this.#unbindPointInteractions();
+        ["beforeLayerGroup", "afterLayerGroup", "beforePointLayerGroup",
+            "afterPointLayerGroup", "pointEditLayerGroup", "pointAddLayerGroup"]
+            .forEach(property => this.#removeGroup(property));
+        this.#removeSelectedPointLayer();
+        this.map?.off?.("movestart zoomstart", this.#handleMapMovementStart);
+        this.map = map;
+        this.pointRenderer = L.canvas({
+            padding: 0.5,
+            pane: "trailbook-edit-after-points"
+        });
+        this.pointEditRenderer = L.canvas({
+            padding: 0.5,
+            pane: "trailbook-edit-point-targets"
+        });
+        this.#ensurePanes();
+        this.map.on?.("movestart zoomstart", this.#handleMapMovementStart);
+        this.afterSegmentLayers.clear();
+        this.afterPointLines.clear();
+        if (this.source) {
+            this.beforeLayerGroup = this.#createLineGroup(
+                this.source,
+                null,
+                BEFORE_STYLE,
+                "trailbook-edit-before",
+                null,
+                this.beforeGeometry
+            );
+            this.afterLayerGroup = this.#createLineGroup(
+                this.source,
+                this.retainedPointMasks,
+                AFTER_STYLE,
+                "trailbook-edit-after",
+                this.translation,
+                this.afterGeometry
+            );
+        }
+        this.#applyMode();
+        this.#applyPointMode();
+        this.#applyPointEditingMode();
+        return true;
     }
 
     setSource(source) {
 
         this.source = source;
+        this.beforeGeometry = this.#segments(source, null, null);
+        this.afterGeometry = [];
+        this.editingGeometry = [];
         this.clearPointSelection();
         this.#removeGroup("beforeLayerGroup");
         this.#removeGroup("beforePointLayerGroup");
+        this.#removeGroup("afterLayerGroup");
+        this.#removeGroup("afterPointLayerGroup");
+        this.#removeGroup("pointEditLayerGroup");
+        this.#removeGroup("pointAddLayerGroup");
+        this.afterSegmentLayers.clear();
+        this.afterPointLines.clear();
         this.beforeLayerGroup = this.#createLineGroup(
             source,
             null,
             BEFORE_STYLE,
-            "trailbook-edit-before"
+            "trailbook-edit-before",
+            null,
+            this.beforeGeometry
         );
         this.#applyMode();
         this.#applyPointMode();
@@ -136,16 +230,37 @@ export default class EditingPreviewLayerManager {
         source,
         retainedPointMasks,
         translation = this.translation,
-        pointEdits = this.pointEdits
+        pointEdits = this.pointEdits,
+        deletedPoints = this.deletedPoints,
+        addedPoints = this.addedPoints
     ) {
 
-        this.source = source;
+        // Candidates may complete asynchronously. Only the source explicitly
+        // established by setSource() owns this preview generation.
+        if (!source || source !== this.source) return false;
+
         this.retainedPointMasks = retainedPointMasks;
         this.translation = this.translationService.normalize(translation);
         this.pointEdits = this.pointEditingService.normalizeEdits(pointEdits);
+        this.deletedPoints = this.pointMutationService.normalizeDeletedPoints(
+            deletedPoints
+        );
+        this.addedPoints = this.pointMutationService.normalizeAddedPoints(
+            addedPoints
+        );
+        const afterGeometry = this.#segments(
+            source,
+            retainedPointMasks,
+            this.translation
+        );
+        const editingGeometry = this.#cloneGeometry(afterGeometry);
+
+        this.afterGeometry = afterGeometry;
+        this.editingGeometry = editingGeometry;
         this.#removeGroup("afterLayerGroup");
         this.#removeGroup("afterPointLayerGroup");
         this.#removeGroup("pointEditLayerGroup");
+        this.#removeGroup("pointAddLayerGroup");
         this.#removeSelectedPointLayer();
         this.afterSegmentLayers.clear();
         this.afterPointLines.clear();
@@ -154,11 +269,13 @@ export default class EditingPreviewLayerManager {
             retainedPointMasks,
             AFTER_STYLE,
             "trailbook-edit-after",
-            this.translation
+            this.translation,
+            this.afterGeometry
         );
         this.#applyMode();
         this.#applyPointMode();
         this.#applyPointEditingMode();
+        return true;
     }
 
     setMode(mode) {
@@ -200,16 +317,54 @@ export default class EditingPreviewLayerManager {
             : null;
     }
 
+    setPointAddHandler(handler) {
+
+        this.pointAddHandler = typeof handler === "function" ? handler : null;
+    }
+
+    setPointDeleteHandler(handler) {
+
+        this.pointDeleteHandler = typeof handler === "function" ? handler : null;
+    }
+
     setPointEditingMode(enabled) {
 
         const next = Boolean(enabled);
 
         if (next === this.pointEditingMode) return true;
         if (next) this.setTranslationMode(false);
+        if (!next) {
+            this.setPointAddMode(false);
+            this.#closeContextMenu();
+            this.#unbindPointInteractions();
+        }
         this.#finishPointDrag();
         this.pointEditingMode = next;
         this.#applyPointEditingMode();
         return true;
+    }
+
+    setPointAddMode(enabled) {
+
+        const next = Boolean(enabled) && this.pointEditingMode;
+
+        if (next === this.pointAddMode) return true;
+        this.pointAddMode = next;
+        if (!next) {
+            this.#setPointAddCursor(false);
+        }
+        this.#applyPointAddMode();
+        return true;
+    }
+
+    selectPoint(identity) {
+
+        this.pointSelection = identity
+            ? this.pointMutationService.normalizeIdentity(identity)
+            : null;
+        this.pointSelectionHandler?.(this.pointSelection);
+        this.#renderSelectedPoint();
+        return this.pointSelection;
     }
 
     clearPointSelection() {
@@ -228,7 +383,9 @@ export default class EditingPreviewLayerManager {
             this.source,
             this.retainedPointMasks,
             this.translation,
-            this.pointEdits
+            this.pointEdits,
+            this.deletedPoints,
+            this.addedPoints
         );
     }
 
@@ -257,7 +414,9 @@ export default class EditingPreviewLayerManager {
                 this.source,
                 this.retainedPointMasks,
                 this.translation,
-                this.pointEdits
+                this.pointEdits,
+                this.deletedPoints,
+                this.addedPoints
             );
         }
         return true;
@@ -273,21 +432,41 @@ export default class EditingPreviewLayerManager {
         this.#removeGroup("beforePointLayerGroup");
         this.#removeGroup("afterPointLayerGroup");
         this.#removeGroup("pointEditLayerGroup");
+        this.#removeGroup("pointAddLayerGroup");
         this.#removeSelectedPointLayer();
+        this.contextMenu?.destroy();
+        this.contextMenu = null;
         this.source = null;
         this.retainedPointMasks = null;
         this.translation = ZERO_TRACK_TRANSLATION;
         this.pointEdits = [];
+        this.deletedPoints = [];
+        this.addedPoints = [];
+        this.beforeGeometry = [];
+        this.afterGeometry = [];
+        this.editingGeometry = [];
         this.pointSelection = null;
         this.afterSegmentLayers.clear();
         this.afterPointLines.clear();
     }
 
-    #createLineGroup(source, masks, style, pane, translation = null) {
+    #createLineGroup(
+        source,
+        masks,
+        style,
+        pane,
+        translation = null,
+        geometry = null
+    ) {
 
         const group = L.layerGroup();
+        const lineGeometry = geometry || this.#segments(
+            source,
+            masks,
+            translation
+        );
 
-        this.#segments(source, masks, translation).forEach(segment => {
+        lineGeometry.forEach(segment => {
             const line = L.polyline(segment.latLngs, {
                 ...style,
                 pane,
@@ -299,10 +478,10 @@ export default class EditingPreviewLayerManager {
                     `${segment.trackIndex}/${segment.segmentIndex}`,
                     line
                 );
-                segment.pointIndices.forEach(pointIndex => {
+                segment.vertices.forEach(vertex => {
                     this.afterPointLines.set(
-                        `${segment.trackIndex}/${segment.segmentIndex}/${pointIndex}`,
-                        { line, pointIndices: segment.pointIndices }
+                        this.pointMutationService.key(vertex.identity),
+                        { line, vertices: segment.vertices }
                     );
                 });
             }
@@ -315,36 +494,48 @@ export default class EditingPreviewLayerManager {
         return group;
     }
 
-    #createPointGroup(source, masks, style, pane) {
+    #createPointGroup(geometry, style, pane) {
 
         const group = L.layerGroup();
 
-        source.tracks.forEach((track, trackIndex) => {
-            track.segments.forEach((segment, segmentIndex) => {
-                const mask = masks?.[trackIndex]?.[segmentIndex] || null;
+        geometry
+            .flatMap(segment => segment.vertices)
+            .forEach(vertex => {
+                const coordinate = vertex.coordinate;
 
-                segment.points.forEach((point, pointIndex) => {
-                    if (mask && !mask[pointIndex]) return;
-                    if (!this.#isValidPoint(point)) return;
-
-                    const coordinate = pane === "trailbook-edit-after-points"
-                        ? this.#displayCoordinate({
-                            trackIndex,
-                            segmentIndex,
-                            pointIndex
-                        })
-                        : { latitude: point.latitude, longitude: point.longitude };
-
-                    L.circleMarker([coordinate.latitude, coordinate.longitude], {
+                if (!coordinate) return;
+                L.circleMarker([coordinate.latitude, coordinate.longitude], {
                         ...style,
                         pane,
                         renderer: this.pointRenderer
                     }).addTo(group);
-                });
             });
-        });
 
         return group;
+    }
+
+    #cloneGeometry(geometry) {
+
+        return Object.freeze(geometry.map(segment => {
+            const vertices = Object.freeze(segment.vertices.map(vertex =>
+                Object.freeze({
+                    identity: Object.freeze({ ...vertex.identity }),
+                    insertionPosition: vertex.insertionPosition,
+                    coordinate: vertex.coordinate
+                        ? Object.freeze({ ...vertex.coordinate })
+                        : null
+                })));
+
+            return Object.freeze({
+                trackIndex: segment.trackIndex,
+                segmentIndex: segment.segmentIndex,
+                vertices,
+                latLngs: Object.freeze(vertices.map(vertex => Object.freeze([
+                    vertex.coordinate.latitude,
+                    vertex.coordinate.longitude
+                ])))
+            });
+        }));
     }
 
     #segments(source, masks, translation = null) {
@@ -353,51 +544,73 @@ export default class EditingPreviewLayerManager {
 
         source.tracks.forEach((track, trackIndex) => {
             track.segments.forEach((segment, segmentIndex) => {
-                const mask = masks?.[trackIndex]?.[segmentIndex] || null;
-                let current = [];
-                let pointIndices = [];
-
-                segment.points.forEach((point, pointIndex) => {
-                    if (mask && !mask[pointIndex]) return;
-
-                    if (!this.#isValidPoint(point)) {
-                        if (current.length > 0) {
-                            segments.push({
-                                trackIndex,
-                                segmentIndex,
-                                latLngs: current,
-                                pointIndices
-                            });
-                        }
-                        current = [];
-                        pointIndices = [];
-                        return;
-                    }
-
-                    const coordinate = translation
-                        ? this.#displayCoordinate({
+                const vertices = translation
+                    ? this.pointMutationService.getSegmentVertices({
+                        source,
+                        retainedPointMasks: masks,
+                        pointEdits: this.pointEdits,
+                        deletedPoints: this.deletedPoints,
+                        addedPoints: this.addedPoints,
+                        trackIndex,
+                        segmentIndex,
+                        translation
+                    })
+                    : segment.points.map((point, pointIndex) => Object.freeze({
+                        identity: Object.freeze({
                             trackIndex,
                             segmentIndex,
                             pointIndex
-                        }, translation)
-                        : { latitude: point.latitude, longitude: point.longitude };
+                        }),
+                        insertionPosition: pointIndex,
+                        coordinate: this.#isValidPoint(point)
+                            ? Object.freeze({
+                                latitude: point.latitude,
+                                longitude: point.longitude
+                            })
+                            : null
+                    }));
+                let current = [];
 
-                    current.push([coordinate.latitude, coordinate.longitude]);
-                    pointIndices.push(pointIndex);
+                vertices.forEach(vertex => {
+                    if (!vertex.coordinate) {
+                        this.#pushSegment(
+                            segments,
+                            trackIndex,
+                            segmentIndex,
+                            current
+                        );
+                        current = [];
+                        return;
+                    }
+                    current.push(vertex);
                 });
-
-                if (current.length > 0) {
-                    segments.push({
-                        trackIndex,
-                        segmentIndex,
-                        latLngs: current,
-                        pointIndices
-                    });
-                }
+                this.#pushSegment(
+                    segments,
+                    trackIndex,
+                    segmentIndex,
+                    current
+                );
             });
         });
 
-        return segments;
+        return Object.freeze(segments);
+    }
+
+    #pushSegment(segments, trackIndex, segmentIndex, vertices) {
+
+        if (vertices.length === 0) return;
+
+        const snapshotVertices = Object.freeze([...vertices]);
+
+        segments.push(Object.freeze({
+            trackIndex,
+            segmentIndex,
+            vertices: snapshotVertices,
+            latLngs: Object.freeze(snapshotVertices.map(vertex => Object.freeze([
+                vertex.coordinate.latitude,
+                vertex.coordinate.longitude
+            ])))
+        }));
     }
 
     #applyMode() {
@@ -414,21 +627,21 @@ export default class EditingPreviewLayerManager {
 
     #applyPointMode() {
 
-        const before = this.pointMode === "before" || this.pointMode === "both";
-        const after = this.pointMode === "after" || this.pointMode === "both";
+        const before = !this.pointEditingMode &&
+            (this.pointMode === "before" || this.pointMode === "both");
+        const after = !this.pointEditingMode &&
+            (this.pointMode === "after" || this.pointMode === "both");
 
         if (before && !this.beforePointLayerGroup && this.source) {
             this.beforePointLayerGroup = this.#createPointGroup(
-                this.source,
-                null,
+                this.beforeGeometry,
                 BEFORE_POINT_STYLE,
                 "trailbook-edit-before-points"
             );
         }
         if (after && !this.afterPointLayerGroup && this.source) {
             this.afterPointLayerGroup = this.#createPointGroup(
-                this.source,
-                this.retainedPointMasks,
+                this.afterGeometry,
                 AFTER_POINT_STYLE,
                 "trailbook-edit-after-points"
             );
@@ -451,6 +664,9 @@ export default class EditingPreviewLayerManager {
         }
 
         this.#setVisible(this.pointEditLayerGroup, this.pointEditingMode);
+        this.#applyPointMode();
+        this.#applyPointAddMode();
+        if (this.pointEditingMode) this.#bindPointInteractions();
         this.#renderSelectedPoint();
     }
 
@@ -458,21 +674,16 @@ export default class EditingPreviewLayerManager {
 
         const group = L.layerGroup();
 
-        this.source.tracks.forEach((track, trackIndex) => {
-            track.segments.forEach((segment, segmentIndex) => {
-                const mask = this.retainedPointMasks?.[trackIndex]
-                    ?.[segmentIndex] || null;
-
-                segment.points.forEach((point, pointIndex) => {
-                    if (mask && !mask[pointIndex]) return;
-                    if (!this.#isValidPoint(point)) return;
-
-                    const identity = { trackIndex, segmentIndex, pointIndex };
-                    const coordinate = this.#displayCoordinate(identity);
+        this.editingGeometry
+            .flatMap(segment => segment.vertices)
+            .forEach(vertex => {
+                    const identity = vertex.identity;
                     const marker = L.circleMarker(
-                        [coordinate.latitude, coordinate.longitude],
+                        this.#editingLatLng(vertex),
                         {
-                            ...POINT_EDIT_TARGET_STYLE,
+                            ...(this.pointMutationService.isAddedIdentity(identity)
+                                ? ADDED_POINT_STYLE
+                                : POINT_EDIT_TARGET_STYLE),
                             pane: "trailbook-edit-point-targets",
                             renderer: this.pointEditRenderer
                         }
@@ -481,14 +692,363 @@ export default class EditingPreviewLayerManager {
                     marker.on("mousedown", event => {
                         this.#startPointDrag(identity, event);
                     });
-                });
             });
-        });
 
         return group;
     }
 
+    #applyPointAddMode() {
+
+        const pane = this.map?.getPane?.("trailbook-edit-point-add");
+
+        if (pane?.style) {
+            pane.style.pointerEvents = "none";
+        }
+        if (this.pointAddMode && !this.pointAddLayerGroup && this.source) {
+            this.pointAddLayerGroup = this.#createPointAddGroup();
+        }
+        this.#setVisible(this.pointAddLayerGroup, this.pointAddMode);
+    }
+
+    #createPointAddGroup() {
+
+        const group = L.layerGroup();
+
+        this.editingGeometry
+            .filter(segment => segment.vertices.length >= 2)
+            .forEach(segment => {
+                const line = L.polyline(segment.latLngs, {
+                    ...POINT_ADD_LINE_STYLE,
+                    pane: "trailbook-edit-point-add"
+                }).addTo(group);
+            });
+
+        return group;
+    }
+
+    #commitPointAdd(candidate) {
+
+        if (!candidate) return false;
+        const added = this.pointAddHandler?.(candidate);
+
+        if (added) this.selectPoint(added);
+        return Boolean(added);
+    }
+
+    #bindPointInteractions() {
+
+        const map = this.#activeMap();
+        const container = map?.getContainer?.() || null;
+
+        if (
+            !container ||
+            (container === this.interactionContainer && map === this.interactionMap)
+        ) return;
+
+        this.#unbindPointInteractions();
+        this.interactionMap = map;
+        this.interactionContainer = container;
+        container.addEventListener("click", this.#handleMapClick, true);
+        container.addEventListener("pointermove", this.#handlePointerMove, true);
+        container.addEventListener(
+            "contextmenu",
+            this.#handleContextMenu,
+            true
+        );
+    }
+
+    #unbindPointInteractions() {
+
+        this.interactionContainer?.removeEventListener(
+            "click",
+            this.#handleMapClick,
+            true
+        );
+        this.interactionContainer?.removeEventListener(
+            "pointermove",
+            this.#handlePointerMove,
+            true
+        );
+        this.interactionContainer?.removeEventListener(
+            "contextmenu",
+            this.#handleContextMenu,
+            true
+        );
+        this.#setPointAddCursor(false);
+        this.interactionMap = null;
+        this.interactionContainer = null;
+    }
+
+    #handlePointerMove = event => {
+
+        if (!this.pointEditingMode) return;
+
+        const map = this.#activeMap();
+        const point = map.mouseEventToContainerPoint(event);
+        const interaction = this.#hitTestEditingGeometry(point, map);
+        const hoverEdge = this.pointAddMode && !interaction.pointIdentity &&
+            interaction.edgeHit && this.#afterIsVisible();
+
+        this.#setPointAddCursor(hoverEdge);
+    };
+
+    #handleMapClick = event => {
+
+        if (!this.pointEditingMode) return;
+
+        const map = this.#activeMap();
+        const point = map.mouseEventToContainerPoint(event);
+        const hit = this.#hitTestEditingGeometry(point, map);
+        const identity = hit.pointIdentity;
+        let action = "no-op";
+
+        if (identity) action = "point-priority";
+        else if (!this.pointAddMode) action = "add-mode-off";
+        else if (!this.#afterIsVisible()) action = "after-hidden";
+        else if (!hit.edgeHit) action = "edge-miss";
+        else if (this.#commitPointAdd(hit.candidate)) action = "add-point";
+        else action = "add-command-rejected";
+
+        if (action !== "add-point") return;
+
+        event.preventDefault?.();
+        event.stopPropagation?.();
+        this.#closeContextMenu();
+    };
+
+    #handleContextMenu = event => {
+
+        if (!this.pointEditingMode || !this.#isDesktop()) return;
+
+        const map = this.#activeMap();
+        const containerPoint = map.mouseEventToContainerPoint(event);
+        const hit = this.#hitTestEditingGeometry(containerPoint, map);
+        const identity = hit.pointIdentity;
+
+        if (identity) {
+            event.preventDefault();
+            event.stopPropagation();
+            this.selectPoint(identity);
+            this.#showPointContextMenu(event, identity);
+            return;
+        }
+
+        if (!this.#afterIsVisible() || !hit.edgeHit) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+        this.#showAddContextMenu(event, hit.candidate);
+    };
+
+    #hitTestEditingGeometry(containerPoint, projectionMap = this.#activeMap()) {
+
+        const screenGeometry = this.#projectEditingGeometryForHitTest(
+            projectionMap
+        );
+        const pointIdentity = this.#findPointIdentity(
+            containerPoint,
+            screenGeometry
+        );
+
+        return Object.freeze({
+            pointIdentity,
+            ...this.#measureAddHit(containerPoint, screenGeometry)
+        });
+    }
+
+    #measureAddHit(containerPoint, screenGeometry) {
+
+        let nearest = null;
+
+        screenGeometry
+            .filter(segment => segment.vertices.length >= 2)
+            .forEach(segment => {
+                const candidate = this.pointMutationService.findInsertion(
+                    containerPoint,
+                    segment.vertices,
+                    { maxDistancePixels: Number.POSITIVE_INFINITY }
+                );
+
+                if (
+                    candidate &&
+                    (!nearest || candidate.hitDistancePixels < nearest.hitDistancePixels)
+                ) nearest = candidate;
+            });
+
+        return Object.freeze({
+            nearest,
+            candidate: nearest?.hitDistancePixels <= DEFAULT_ADD_HIT_TOLERANCE_PX
+                ? nearest
+                : null,
+            edgeHit: Boolean(
+                nearest?.hitDistancePixels <= DEFAULT_ADD_HIT_TOLERANCE_PX
+            )
+        });
+    }
+
+    #editingLatLng(vertex) {
+
+        const { latitude, longitude } = vertex.coordinate;
+
+        return L.latLng
+            ? L.latLng(latitude, longitude)
+            : { lat: latitude, lng: longitude };
+    }
+
+    #projectEditingGeometryForHitTest(projectionMap = this.#activeMap()) {
+
+        // Container points belong to the current viewport. Project once for
+        // this event and never retain them as editing geometry state.
+        return this.editingGeometry.map(segment => ({
+            trackIndex: segment.trackIndex,
+            segmentIndex: segment.segmentIndex,
+            vertices: segment.vertices.map(vertex => {
+                const latLng = this.#editingLatLng(vertex);
+
+                return {
+                    identity: vertex.identity,
+                    insertionPosition: vertex.insertionPosition,
+                    rawCoordinate: vertex.coordinate,
+                    latLng,
+                    containerPoint: projectionMap.latLngToContainerPoint(latLng)
+                };
+            })
+        }));
+    }
+
+    #groupMap(group) {
+
+        if (group?._map) return group._map;
+        const layers = group?.getLayers?.() || group?.layers || [];
+        return layers.find(layer => layer?._map)?._map || null;
+    }
+
+    #activeMap() {
+
+        return this.#groupMap(this.afterLayerGroup) ||
+            this.#groupMap(this.pointEditLayerGroup) ||
+            this.map;
+    }
+
+    #findPointIdentity(
+        containerPoint,
+        screenGeometry,
+        maximumDistance = 12
+    ) {
+
+        let nearest = null;
+
+        screenGeometry
+            .flatMap(segment => segment.vertices)
+            .forEach(vertex => {
+                const point = vertex.containerPoint;
+
+                if (!point) return;
+
+                const distance = Math.hypot(
+                    containerPoint.x - point.x,
+                    containerPoint.y - point.y
+                );
+
+                if (
+                    distance <= maximumDistance &&
+                    (!nearest || distance < nearest.distance)
+                ) nearest = { distance, identity: vertex.identity };
+            });
+
+        return nearest?.identity || null;
+    }
+
+    #showPointContextMenu(event, identity) {
+
+        this.#getContextMenu()?.show({
+            clientX: event.clientX,
+            clientY: event.clientY,
+            actions: [
+                {
+                    label: "ポイントを削除",
+                    run: () => this.pointDeleteHandler?.(identity)
+                },
+                { label: "選択解除", run: () => this.clearPointSelection() }
+            ]
+        });
+    }
+
+    #showAddContextMenu(event, candidate) {
+
+        this.#getContextMenu()?.show({
+            clientX: event.clientX,
+            clientY: event.clientY,
+            actions: [{
+                label: "ここにポイントを追加",
+                run: () => this.#commitPointAdd(candidate)
+            }]
+        });
+    }
+
+    #getContextMenu() {
+
+        this.contextMenu ||= new PointEditingContextMenu();
+        return this.contextMenu;
+    }
+
+    #closeContextMenu = () => {
+
+        this.contextMenu?.close();
+    };
+
+    #handleMapMovementStart = () => {
+
+        this.#closeContextMenu();
+        this.#setPointAddCursor(false);
+    };
+
+    #setPointAddCursor(enabled) {
+
+        const container = this.interactionContainer ||
+            this.map?.getContainer?.() || null;
+        const next = Boolean(enabled);
+
+        if (!container || next === this.pointAddCursorActive) return;
+
+        if (next) {
+            this.pointAddPreviousCursor = container.style.cursor;
+            container.style.cursor = "crosshair";
+            this.pointAddCursorActive = true;
+            return;
+        }
+
+        container.style.cursor = this.pointAddPreviousCursor;
+        this.pointAddPreviousCursor = "";
+        this.pointAddCursorActive = false;
+    }
+
+    #afterIsVisible() {
+
+        return this.mode === "after" || this.mode === "both";
+    }
+
+    #isDesktop() {
+
+        return !globalThis.matchMedia ||
+            globalThis.matchMedia("(min-width: 769px)").matches;
+    }
+
     #displayCoordinate(identity, translation = this.translation) {
+
+        if (this.pointMutationService.isAddedIdentity(identity)) {
+            const added = this.pointMutationService.getAddedPoint(
+                this.addedPoints,
+                identity
+            );
+
+            if (!added) throw new TypeError("Added Track Point is unavailable");
+            return this.translationService.translateCoordinate(
+                added.latitude,
+                added.longitude,
+                translation
+            );
+        }
 
         return this.pointEditingService.getDisplayedCoordinate(
             this.source,
@@ -503,9 +1063,32 @@ export default class EditingPreviewLayerManager {
         this.#removeSelectedPointLayer();
         if (!this.pointEditingMode || !this.pointSelection || !this.source) return;
 
-        const displayed = coordinate || this.#displayCoordinate(
-            this.pointSelection
+        const selectedKey = this.pointMutationService.key(this.pointSelection);
+        const visible = this.editingGeometry.some(segment =>
+            segment.trackIndex === this.pointSelection.trackIndex &&
+            segment.segmentIndex === this.pointSelection.segmentIndex &&
+            segment.vertices.some(vertex =>
+                this.pointMutationService.key(vertex.identity) === selectedKey
+            )
         );
+
+        if (!visible) {
+            this.pointSelection = null;
+            this.pointSelectionHandler?.(null);
+            return;
+        }
+
+        let displayed;
+
+        try {
+            displayed = coordinate || this.#displayCoordinate(
+                this.pointSelection
+            );
+        } catch {
+            this.pointSelection = null;
+            this.pointSelectionHandler?.(null);
+            return;
+        }
 
         this.selectedPointLayer = L.circleMarker(
             [displayed.latitude, displayed.longitude],
@@ -545,6 +1128,7 @@ export default class EditingPreviewLayerManager {
         this.#ensurePane("trailbook-edit-before-points", 640);
         this.#ensurePane("trailbook-edit-after-points", 650);
         this.#ensurePane("trailbook-edit-point-targets", 660);
+        this.#ensurePane("trailbook-edit-point-add", 665);
         this.#ensurePane("trailbook-edit-point-selected", 670);
     }
 
@@ -609,7 +1193,7 @@ export default class EditingPreviewLayerManager {
         if (!this.pointEditingMode || !event?.originalEvent) return;
 
         const originalEvent = event.originalEvent;
-        const normalizedIdentity = this.pointEditingService.normalizeIdentity(
+        const normalizedIdentity = this.pointMutationService.normalizeIdentity(
             identity
         );
         const initialCoordinate = this.#displayCoordinate(normalizedIdentity);
@@ -696,18 +1280,14 @@ export default class EditingPreviewLayerManager {
 
     #updateDraggedSegment(identity, coordinate) {
 
-        const key = this.pointEditingService.key(identity);
+        const key = this.pointMutationService.key(identity);
         const target = this.afterPointLines.get(key);
 
         if (!target?.line?.setLatLngs) return;
 
-        const latLngs = target.pointIndices.map(pointIndex => {
-            const candidateIdentity = {
-                trackIndex: identity.trackIndex,
-                segmentIndex: identity.segmentIndex,
-                pointIndex
-            };
-            const displayed = pointIndex === identity.pointIndex
+        const latLngs = target.vertices.map(vertex => {
+            const candidateIdentity = vertex.identity;
+            const displayed = this.pointMutationService.key(candidateIdentity) === key
                 ? coordinate
                 : this.#displayCoordinate(candidateIdentity);
 

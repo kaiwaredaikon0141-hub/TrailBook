@@ -97,6 +97,29 @@ export default class TrackEditingPanel {
             ?.value || "both";
     }
 
+    setMode(mode) {
+
+        const input = this.element.querySelector(
+            `[name='editor-preview-mode'][value='${mode}']`
+        );
+
+        if (!input) return false;
+        input.checked = true;
+        return true;
+    }
+
+    setModeDisabled(disabled) {
+
+        this.element.querySelectorAll("[name='editor-preview-mode']")
+            .forEach(input => { input.disabled = Boolean(disabled); });
+    }
+
+    isModeDisabled() {
+
+        return [...this.element.querySelectorAll("[name='editor-preview-mode']")]
+            .every(input => input.disabled);
+    }
+
     getPointMode() {
 
         return this.element.querySelector("[name='editor-point-mode']:checked")
@@ -113,9 +136,22 @@ export default class TrackEditingPanel {
         return Boolean(this.pointEditingMode.checked);
     }
 
+    getPointAddMode() {
+
+        return this.actionButtons.get("point-add-mode")
+            ?.getAttribute("aria-pressed") === "true";
+    }
+
     setPointEditingMode(enabled) {
 
         this.pointEditingMode.checked = Boolean(enabled);
+    }
+
+    setPointAddMode(enabled) {
+
+        const button = this.actionButtons.get("point-add-mode");
+
+        button?.setAttribute("aria-pressed", String(Boolean(enabled)));
     }
 
     setTranslationMode(enabled) {
@@ -123,13 +159,23 @@ export default class TrackEditingPanel {
         this.translationMode.checked = Boolean(enabled);
     }
 
-    configurePointEditing({ enabled = false, selected = null } = {}) {
+    configurePointEditing({
+        enabled = false,
+        selected = null,
+        canDelete = false,
+        addMode = this.getPointAddMode()
+    } = {}) {
 
         this.pointEditingMode.checked = Boolean(enabled);
         this.pointEditingStatus.textContent = selected
-            ? `Track ${selected.trackIndex + 1}, Segment ${selected.segmentIndex + 1}, Point ${selected.pointIndex + 1}`
+            ? selected.addedPointId
+                ? `追加point選択中 (${selected.addedPointId})`
+                : `既存point選択中: Track ${selected.trackIndex + 1}, Segment ${selected.segmentIndex + 1}, Point ${selected.pointIndex + 1}`
             : enabled ? "ポイント未選択" : "";
         this.actionButtons.get("point-selection-clear").disabled = !selected;
+        this.actionButtons.get("point-delete").disabled = !selected || !canDelete;
+        this.actionButtons.get("point-add-mode").disabled = !enabled;
+        this.setPointAddMode(enabled && addMode);
     }
 
     configureTranslation({
@@ -482,6 +528,13 @@ export default class TrackEditingPanel {
                     <button type="button" data-editor-action="point-selection-clear">
                         選択解除
                     </button>
+                    <button type="button" data-editor-action="point-add-mode"
+                        aria-pressed="false">
+                        ポイント追加
+                    </button>
+                    <button type="button" data-editor-action="point-delete">
+                        選択ポイントを削除
+                    </button>
                 </fieldset>
                 <fieldset class="editor-translation">
                     <legend>トラック移動</legend>
@@ -525,6 +578,13 @@ export default class TrackEditingPanel {
                 ?.dataset.editorAction;
 
             if (action) {
+                if (action === "point-add-mode") {
+                    const enabled = !this.getPointAddMode();
+
+                    this.setPointAddMode(enabled);
+                    this.#emit(action, enabled);
+                    return;
+                }
                 this.#emit(
                     action,
                     action === "date-apply" ? this.dateInput.value : undefined

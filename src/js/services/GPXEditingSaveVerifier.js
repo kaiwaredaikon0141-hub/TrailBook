@@ -1,4 +1,5 @@
 import GPXEditingSourceLoader from "./GPXEditingSourceLoader.js";
+import TrackPointMutationService from "./TrackPointMutationService.js";
 
 /**
  * Verifies closed edited and Backup GPX files through the editing loader.
@@ -7,14 +8,22 @@ export default class GPXEditingSaveVerifier {
 
     constructor({
         sourceLoader = new GPXEditingSourceLoader(),
-        TextDecoderClass = globalThis.TextDecoder
+        TextDecoderClass = globalThis.TextDecoder,
+        pointMutation = new TrackPointMutationService()
     } = {}) {
 
         this.sourceLoader = sourceLoader;
         this.TextDecoderClass = TextDecoderClass;
+        this.pointMutation = pointMutation;
     }
 
-    async verify(fileHandle, source, retainedPointMasks, relativePath) {
+    async verify(
+        fileHandle,
+        source,
+        retainedPointMasks,
+        relativePath,
+        { deletedPoints = [], addedPoints = [] } = {}
+    ) {
 
         const file = await fileHandle.getFile();
         const bytes = new Uint8Array(await file.arrayBuffer());
@@ -27,7 +36,13 @@ export default class GPXEditingSaveVerifier {
             throw this.#error("VERIFICATION_FAILED", "Saved GPX is not safely parseable");
         }
 
-        this.#verifyStructure(restored, source, retainedPointMasks);
+        this.#verifyStructure(
+            restored,
+            source,
+            retainedPointMasks,
+            deletedPoints,
+            addedPoints
+        );
 
         return Object.freeze({ file, source: restored });
     }
@@ -88,7 +103,7 @@ export default class GPXEditingSaveVerifier {
         }
     }
 
-    #verifyStructure(restored, source, masks) {
+    #verifyStructure(restored, source, masks, deletedPoints, addedPoints) {
 
         if (
             restored.rootVersion !== source.rootVersion ||
@@ -108,8 +123,13 @@ export default class GPXEditingSaveVerifier {
             }
 
             track.segments.forEach((segment, segmentIndex) => {
-                const expected = masks[trackIndex][segmentIndex]
-                    .filter(Boolean).length;
+                const expected = this.pointMutation.expectedPointCount(
+                    masks,
+                    deletedPoints,
+                    addedPoints,
+                    trackIndex,
+                    segmentIndex
+                );
                 const actual = restoredTrack.segments[segmentIndex]?.points.length;
 
                 if (actual !== expected) {

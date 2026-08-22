@@ -107,23 +107,6 @@ self.addEventListener("fetch", event => {
     event.respondWith((async () => {
         const cache = await caches.open(APP_SHELL_CACHE);
 
-        if (["localhost", "127.0.0.1", "[::1]"].includes(
-            self.location.hostname
-        )) {
-            try {
-                return await fetch(request);
-            } catch (error) {
-                const cached = await cache.match(request);
-
-                if (cached) return cached;
-                if (request.mode === "navigate") {
-                    const fallback = await cache.match("./index.html");
-                    if (fallback) return fallback;
-                }
-                throw error;
-            }
-        }
-
         const cached = await cache.match(request);
 
         if (cached) return cached;

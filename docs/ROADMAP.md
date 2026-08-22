@@ -773,8 +773,24 @@ Status: Static Test Completed / Browser Acceptance Pending
 
 Out of scope:
 
-- Track Point追加 / 削除 / 複数選択
+- Track Point複数選択
 - interval edit、Segment / Track split / merge、route / Waypoint edit
+- Mobile / Drive editing
+
+### Unit 4 — Track Point Add / Delete
+
+Status: Static Test In Progress / Browser Acceptance Pending
+
+- Desktop Point Editingで選択source pointを1 commandとして削除し、segment出力が2点未満になる操作を拒否する
+- Track edgeの15px以内だけで単一点を追加し、source indexを持たないsession unique `addedPointId`と明示`insertionPosition`でsegment内順序を保持する
+- added pointはlat / lonだけを持ち、simplification maskへ混ぜず常にretainする。source deleteはretained maskより優先する
+- After previewはmove / delete / add / translation / simplificationを合成し、Beforeはimmutable sourceを維持する
+- Serializerはsource DOM cloneへsource point除外とlat / lonだけの新規`trkpt`挿入を行い、既存Backup + in-place save / verificationを再利用する
+
+Out of scope:
+
+- 複数選択、範囲削除、連続描画、point属性補間
+- Segment / Track split / merge、route / Waypoint edit
 - Mobile / Drive editing
 
 ## Future Design Boundaries

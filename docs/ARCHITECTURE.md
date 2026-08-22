@@ -1363,3 +1363,13 @@ Status: Completed
 - `TrackEditingCoordinator`はpoint selection / drag endをSessionへ投影し、Done draft / resume、Undo / Redo、Cancel、Saveを既存Editor lifecycleのまま調停する。App / TreeViewへ責務を追加しない
 - `GPXEditingSerializer`はsource DOM cloneのretained対象`trkpt`へpoint overrideを適用した後にtranslationを適用し、除外pointをremoveする。座標以外のpoint属性 / child、Waypoint、route、metadata、Backup bytesは変更しない
 - Point editing UIはDesktop Track Editorに限定し、Mobileは既存のEditor入口非表示を維持する
+
+## Release 1.8 Unit 4 Architecture — Track Point Add / Delete
+
+- `TrackPointMutationService`はsource-indexed deletion、session unique `addedPointId`、segment内`insertionPosition`、15px edge hit test、effective point count、DOM mutationを担当する。新規pointはsource point indexを偽装しない
+- `GPXEditingSession`はdeleted source identitiesとadded point draftsを既存snapshot / command historyへ含める。add / delete / added-point moveは各1 commandで、Undo / Redo / Cancel / Done draftを既存lifecycleのまま利用する
+- After geometryはsource retained maskとdeleteを適用し、source move overrideとadded pointをinsertion orderで合成してからwhole-Track translationを適用する。Before geometryはimmutable sourceだけを表示する
+- added pointはUnit 4ではsimplification対象外で常にretainする。source deleteはmaskより優先し、effective segmentが2点未満になるdeleteまたは後続simplification Applyを拒否する
+- `EditingPreviewLayerManager`はexisting / added pointを共有Canvas overlayで表示し、added pointをgreen、existing pointをblueとして区別する。追加modeはsegmentごとに1本のtransparent wide Polylineだけをhit targetとし、point数に比例するDOM markerを作らない
+- `GPXEditingSerializer`はclone DOMへsource moveを適用後、added `trkpt`をnamespace維持で挿入してmasked / deleted source pointを除外し、最後に既存translationを全出力`trkpt`へ適用する。added pointにはlat / lon以外を生成しない
+- Save / Backup / verification / targeted Library refresh、Date correction、filename rename、Mobile / Drive editing境界は変更しない

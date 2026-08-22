@@ -116,6 +116,8 @@ export default class GPXEditingSaveService {
         timeOffsetMs = 0,
         translation = null,
         pointEdits = [],
+        deletedPoints = [],
+        addedPoints = [],
         desiredFileName = source?.sourceFileName,
         directoryHandle,
         relativePath
@@ -142,6 +144,8 @@ export default class GPXEditingSaveService {
             timeOffsetMs,
             translation,
             pointEdits,
+            deletedPoints,
+            addedPoints,
             trackNameFileName: renamed ? targetFileName : null
         });
         const editedBytes = new this.TextEncoderClass().encode(editedXml);
@@ -150,6 +154,8 @@ export default class GPXEditingSaveService {
             return this.#saveInPlace({
                 source,
                 retainedPointMasks,
+                deletedPoints,
+                addedPoints,
                 relativePath,
                 editedBytes,
                 backup
@@ -159,6 +165,8 @@ export default class GPXEditingSaveService {
         return this.#saveRenamed({
             source,
             retainedPointMasks,
+            deletedPoints,
+            addedPoints,
             relativePath,
             directoryHandle,
             targetFileName,
@@ -168,7 +176,8 @@ export default class GPXEditingSaveService {
     }
 
     async #saveInPlace({
-        source, retainedPointMasks, relativePath, editedBytes, backup
+        source, retainedPointMasks, deletedPoints, addedPoints,
+        relativePath, editedBytes, backup
     }) {
 
         try {
@@ -187,6 +196,8 @@ export default class GPXEditingSaveService {
             source.fileHandle,
             source,
             retainedPointMasks,
+            deletedPoints,
+            addedPoints,
             relativePath
         );
 
@@ -207,6 +218,8 @@ export default class GPXEditingSaveService {
     async #saveRenamed({
         source,
         retainedPointMasks,
+        deletedPoints,
+        addedPoints,
         relativePath,
         directoryHandle,
         targetFileName,
@@ -237,6 +250,8 @@ export default class GPXEditingSaveService {
             targetHandle,
             source,
             retainedPointMasks,
+            deletedPoints,
+            addedPoints,
             targetPath
         );
         const index = await this.backupIndex.read(backup.backupDirectory);
@@ -340,14 +355,22 @@ export default class GPXEditingSaveService {
         });
     }
 
-    async #verifyEdited(fileHandle, source, retainedPointMasks, relativePath) {
+    async #verifyEdited(
+        fileHandle,
+        source,
+        retainedPointMasks,
+        deletedPoints,
+        addedPoints,
+        relativePath
+    ) {
 
         try {
             return await this.verifier.verify(
                 fileHandle,
                 source,
                 retainedPointMasks,
-                relativePath
+                relativePath,
+                { deletedPoints, addedPoints }
             );
         } catch (error) {
             const failure = this.#wrap(

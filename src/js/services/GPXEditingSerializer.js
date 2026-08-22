@@ -1,6 +1,7 @@
 import TrackDateCorrectionService from "./TrackDateCorrectionService.js";
 import TrackTranslationService from "./TrackTranslationService.js";
 import TrackPointEditingService from "./TrackPointEditingService.js";
+import TrackPointMutationService from "./TrackPointMutationService.js";
 
 /**
  * Serializes a GPX working mask by cloning the immutable source XML.
@@ -14,6 +15,10 @@ export default class GPXEditingSerializer {
         translation = new TrackTranslationService(),
         pointEditing = new TrackPointEditingService({
             translationService: translation
+        }),
+        pointMutation = new TrackPointMutationService({
+            pointEditing,
+            translation
         })
     } = {}) {
 
@@ -22,13 +27,16 @@ export default class GPXEditingSerializer {
         this.dateCorrection = dateCorrection;
         this.translation = translation;
         this.pointEditing = pointEditing;
+        this.pointMutation = pointMutation;
     }
 
     serialize(source, retainedPointMasks, {
         timeOffsetMs = 0,
         trackNameFileName = null,
         translation = null,
-        pointEdits = []
+        pointEdits = [],
+        deletedPoints = [],
+        addedPoints = []
     } = {}) {
 
         if (!source?.canSerialize) {
@@ -57,20 +65,13 @@ export default class GPXEditingSerializer {
             trackNameFileName
         );
         this.pointEditing.apply(document, pointEdits, retainedPointMasks);
+        this.pointMutation.apply(
+            document,
+            retainedPointMasks,
+            deletedPoints,
+            addedPoints
+        );
         this.translation.apply(document, translation);
-
-        trackElements.forEach((trackElement, trackIndex) => {
-            const segmentElements = this.#children(trackElement, "trkseg");
-
-            segmentElements.forEach((segmentElement, segmentIndex) => {
-                const pointElements = this.#children(segmentElement, "trkpt");
-                const pointMask = retainedPointMasks[trackIndex][segmentIndex];
-
-                pointElements.forEach((pointElement, pointIndex) => {
-                    if (!pointMask[pointIndex]) pointElement.remove();
-                });
-            });
-        });
 
         const serialized = new this.XMLSerializerClass()
             .serializeToString(document)
@@ -80,12 +81,18 @@ export default class GPXEditingSerializer {
             .trim();
         const output = `<?xml version="1.0" encoding="UTF-8"?>\n${serialized}\n`;
 
-        this.#verify(source, retainedPointMasks, output);
+        this.#verify(
+            source,
+            retainedPointMasks,
+            deletedPoints,
+            addedPoints,
+            output
+        );
 
         return output;
     }
 
-    #verify(source, masks, output) {
+    #verify(source, masks, deletedPoints, addedPoints, output) {
 
         const document = this.#parse(output);
         const root = document.documentElement;
@@ -115,8 +122,13 @@ export default class GPXEditingSerializer {
             }
 
             segmentElements.forEach((segmentElement, segmentIndex) => {
-                const expected = masks[trackIndex][segmentIndex]
-                    .filter(Boolean).length;
+                const expected = this.pointMutation.expectedPointCount(
+                    masks,
+                    deletedPoints,
+                    addedPoints,
+                    trackIndex,
+                    segmentIndex
+                );
 
                 if (this.#children(segmentElement, "trkpt").length !== expected) {
                     throw this.#error(
