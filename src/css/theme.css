@@ -262,6 +262,7 @@ body.is-track-info-resizing{
 .editor-actions,
 .editor-preview-modes,
 .editor-point-modes,
+.editor-point-editing,
 .editor-legend{
 
     display:flex;
@@ -283,6 +284,15 @@ body.is-track-info-resizing{
     margin-top:8px;
 }
 
+.track-editor-body > fieldset{
+
+    min-width:0;
+
+    margin:8px 0;
+
+    padding:6px;
+}
+
 .editor-target{
 
     overflow-wrap:anywhere;
@@ -294,16 +304,30 @@ body.is-track-info-resizing{
 
 .editor-preview-modes{
 
-    margin:8px 0;
+    margin:6px 0;
 
-    padding:6px;
+    padding:0;
 }
 
 .editor-point-modes{
 
-    margin:8px 0;
+    margin:6px 0;
 
-    padding:6px;
+    padding:0;
+}
+
+.editor-point-editing{
+
+    align-items:flex-start;
+}
+
+.editor-point-editing-status{
+
+    display:block;
+
+    min-height:1.3em;
+
+    margin:4px 0;
 }
 
 .editor-draft-status:not(:empty){
@@ -317,7 +341,7 @@ body.is-track-info-resizing{
 
 .editor-legend{
 
-    margin-bottom:8px;
+    margin:6px 0;
 }
 
 .editor-legend-before{

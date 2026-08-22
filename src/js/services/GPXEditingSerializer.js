@@ -1,5 +1,6 @@
 import TrackDateCorrectionService from "./TrackDateCorrectionService.js";
 import TrackTranslationService from "./TrackTranslationService.js";
+import TrackPointEditingService from "./TrackPointEditingService.js";
 
 /**
  * Serializes a GPX working mask by cloning the immutable source XML.
@@ -10,19 +11,24 @@ export default class GPXEditingSerializer {
         DOMParserClass = globalThis.DOMParser,
         XMLSerializerClass = globalThis.XMLSerializer,
         dateCorrection = new TrackDateCorrectionService(),
-        translation = new TrackTranslationService()
+        translation = new TrackTranslationService(),
+        pointEditing = new TrackPointEditingService({
+            translationService: translation
+        })
     } = {}) {
 
         this.DOMParserClass = DOMParserClass;
         this.XMLSerializerClass = XMLSerializerClass;
         this.dateCorrection = dateCorrection;
         this.translation = translation;
+        this.pointEditing = pointEditing;
     }
 
     serialize(source, retainedPointMasks, {
         timeOffsetMs = 0,
         trackNameFileName = null,
-        translation = null
+        translation = null,
+        pointEdits = []
     } = {}) {
 
         if (!source?.canSerialize) {
@@ -50,6 +56,7 @@ export default class GPXEditingSerializer {
             trackElements,
             trackNameFileName
         );
+        this.pointEditing.apply(document, pointEdits, retainedPointMasks);
         this.translation.apply(document, translation);
 
         trackElements.forEach((trackElement, trackIndex) => {

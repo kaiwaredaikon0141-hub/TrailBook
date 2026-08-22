@@ -5,6 +5,7 @@ import GPXEditingSaveService from "../services/GPXEditingSaveService.js";
 import TrackDateCorrectionService from "../services/TrackDateCorrectionService.js";
 import TrackSimplificationMetrics from "../services/TrackSimplificationMetrics.js";
 import TrackSimplificationService from "../services/TrackSimplificationService.js";
+import TrackPointEditingService from "../services/TrackPointEditingService.js";
 import TrackEditingInteractionGuard from "../ui/TrackEditingInteractionGuard.js";
 import TrackEditingPanel from "../ui/TrackEditingPanel.js";
 import GPXEditingSaveDialog from "../ui/GPXEditingSaveDialog.js";
@@ -26,6 +27,7 @@ export default class TrackEditingCoordinator {
         saveService = new GPXEditingSaveService(),
         saveDialog = new GPXEditingSaveDialog(),
         dateCorrection = new TrackDateCorrectionService(),
+        pointEditing = new TrackPointEditingService(),
         simplification = new TrackSimplificationService(),
         metrics = new TrackSimplificationMetrics(),
         panel = new TrackEditingPanel(),
@@ -50,6 +52,7 @@ export default class TrackEditingCoordinator {
         this.saveService = saveService;
         this.saveDialog = saveDialog;
         this.dateCorrection = dateCorrection;
+        this.pointEditing = pointEditing;
         this.simplification = simplification;
         this.metrics = metrics;
         this.panel = panel;
@@ -69,6 +72,12 @@ export default class TrackEditingCoordinator {
         this.fileNameCandidateOffsetMs = null;
         this.previewLayers.setTranslationPreviewHandler?.(
             translation => this.#handleTranslationPreview(translation)
+        );
+        this.previewLayers.setPointSelectionHandler?.(
+            identity => this.#configurePointEditing(identity)
+        );
+        this.previewLayers.setPointEditHandler?.(
+            (identity, coordinate) => this.#handlePointEdit(identity, coordinate)
         );
     }
 
@@ -145,12 +154,16 @@ export default class TrackEditingCoordinator {
             this.previewLayers.setCandidate(
                 source,
                 this.session.getRetainedPointMasks(),
-                this.session.getTranslation()
+                this.session.getTranslation(),
+                this.session.getPointEdits()
             );
             this.previewLayers.setMode(this.panel.getMode());
             this.previewLayers.setPointMode(this.panel.getPointMode());
             this.previewLayers.setTranslationMode?.(
                 this.panel.getTranslationMode?.()
+            );
+            this.previewLayers.setPointEditingMode?.(
+                this.panel.getPointEditingMode?.()
             );
             this.#configureTranslation();
             let backupExists = null;
@@ -241,7 +254,8 @@ export default class TrackEditingCoordinator {
             this.previewLayers.setCandidate(
                 session.source,
                 preview.retainedPointMasks,
-                session.getTranslationPreview() || session.getTranslation()
+                session.getTranslationPreview() || session.getTranslation(),
+                session.getPointEdits()
             );
             this.panel.showPreview(preview.metrics);
             this.panel.setSaveEnabled(
@@ -424,6 +438,7 @@ export default class TrackEditingCoordinator {
                 retainedPointMasks: savedMasks,
                 timeOffsetMs: session.getTimeOffsetMs(),
                 translation: session.getTranslation(),
+                pointEdits: session.getPointEdits(),
                 desiredFileName: session.getDesiredFileName(),
                 directoryHandle: entry.parentFolderHandle,
                 relativePath: sourcePath
@@ -455,7 +470,8 @@ export default class TrackEditingCoordinator {
                 this.previewLayers.setCandidate(
                     saved.source,
                     this.lastSavedMasks,
-                    this.session.getTranslation()
+                    this.session.getTranslation(),
+                    this.session.getPointEdits()
                 );
                 this.#showWorkingState();
                 this.panel.showSaveSuccess(saved.fileName, {
@@ -488,6 +504,7 @@ export default class TrackEditingCoordinator {
 
         this.mapView.setEditingTargetSuppressed(path, false);
         this.previewLayers.clear();
+        this.panel.configurePointEditing?.({ enabled: false });
         this.interactionGuard.setLocked(false);
         this.draft = {
             path,
@@ -524,6 +541,7 @@ export default class TrackEditingCoordinator {
         this.lastSavedMasks = null;
         if (path) this.mapView.setEditingTargetSuppressed(path, false);
         this.previewLayers.clear();
+        this.panel.configurePointEditing?.({ enabled: false });
         this.interactionGuard.setLocked(false);
         this.panel.clearDraft();
         this.panel.showInactive();
@@ -541,7 +559,8 @@ export default class TrackEditingCoordinator {
         this.previewLayers.setCandidate(
             this.session.source,
             masks,
-            this.session.getTranslation()
+            this.session.getTranslation(),
+            this.session.getPointEdits()
         );
         this.panel.showApplied(calculated.total, {
             canUndo: this.session.canUndo,
@@ -553,6 +572,7 @@ export default class TrackEditingCoordinator {
         this.#configureDateCorrection();
         this.#configureFileName();
         this.#configureTranslation();
+        this.#configurePointEditing();
     }
 
     #bindPanel() {
@@ -565,7 +585,17 @@ export default class TrackEditingCoordinator {
             mode => this.previewLayers.setPointMode(mode)
         );
         this.panel.on("translation-mode", enabled => {
+            if (enabled) {
+                this.previewLayers.setPointEditingMode?.(false);
+                this.panel.configurePointEditing?.({ enabled: false });
+            }
             this.previewLayers.setTranslationMode?.(enabled);
+        });
+        this.panel.on("point-editing-mode", enabled => {
+            this.#setPointEditingMode(enabled);
+        });
+        this.panel.on("point-selection-clear", () => {
+            this.previewLayers.clearPointSelection?.();
         });
         this.panel.on("apply", () => this.apply());
         this.panel.on("undo", () => this.undo());
@@ -678,12 +708,16 @@ export default class TrackEditingCoordinator {
         this.previewLayers.setCandidate(
             this.session.source,
             masks,
-            this.session.getTranslation()
+            this.session.getTranslation(),
+            this.session.getPointEdits()
         );
         this.previewLayers.setMode(this.panel.getMode());
         this.previewLayers.setPointMode(this.panel.getPointMode());
         this.previewLayers.setTranslationMode?.(
             this.panel.getTranslationMode?.()
+        );
+        this.previewLayers.setPointEditingMode?.(
+            this.panel.getPointEditingMode?.()
         );
         this.panel.showReady({
             canSerialize: this.session.source.canSerialize
@@ -707,7 +741,8 @@ export default class TrackEditingCoordinator {
             session.getTimeOffsetMs() !== 0 ||
             session.getDesiredFileName() !== session.source.sourceFileName ||
             Math.abs(session.getTranslation().latitudeDelta) >= 1e-12 ||
-            Math.abs(session.getTranslation().longitudeDelta) >= 1e-12
+            Math.abs(session.getTranslation().longitudeDelta) >= 1e-12 ||
+            session.getPointEdits().length > 0
         ) return false;
 
         const current = session.getRetainedPointMasks();
@@ -831,6 +866,58 @@ export default class TrackEditingCoordinator {
         this.panel.setSaveEnabled(
             this.session.isDirty && this.session.source.canSerialize
         );
+    }
+
+    #setPointEditingMode(enabled) {
+
+        if (!this.session?.isActive || this.saving) return false;
+
+        const next = Boolean(enabled);
+
+        if (next) {
+            this.#invalidatePendingPreview();
+            this.session.clearPreview();
+            this.previewLayers.setTranslationMode?.(false);
+            this.panel.setTranslationMode?.(false);
+        }
+
+        this.previewLayers.setPointEditingMode?.(next);
+        this.#showWorkingState();
+        return true;
+    }
+
+    #handlePointEdit(identity, displayedCoordinate) {
+
+        if (!this.session?.isActive || this.saving) return false;
+
+        try {
+            const sourceCoordinate = this.pointEditing.toSourceCoordinate(
+                displayedCoordinate,
+                this.session.getTranslation()
+            );
+
+            if (!this.session.applyPointEdit(identity, sourceCoordinate)) {
+                this.#showWorkingState();
+                return false;
+            }
+
+            this.#invalidatePendingPreview();
+            this.#showWorkingState();
+            return true;
+        } catch {
+            this.#showWorkingState();
+            return false;
+        }
+    }
+
+    #configurePointEditing(identity = this.previewLayers.pointSelection) {
+
+        const enabled = Boolean(this.previewLayers.pointEditingMode);
+
+        this.panel.configurePointEditing?.({
+            enabled,
+            selected: enabled ? identity : null
+        });
     }
 
     #configureTranslation() {

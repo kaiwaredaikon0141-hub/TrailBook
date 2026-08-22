@@ -77,7 +77,8 @@ export default class EditingCommandHistory {
             retainedPointMasks: this.#freezeMasks(state.retainedPointMasks),
             timeOffsetMs: state.timeOffsetMs,
             desiredFileName: state.desiredFileName,
-            translation: Object.freeze({ ...state.translation })
+            translation: Object.freeze({ ...state.translation }),
+            pointEdits: this.#freezePointEdits(state.pointEdits)
         });
     }
 
@@ -96,12 +97,23 @@ export default class EditingCommandHistory {
             retainedPointMasks: this.#cloneMasks(state.retainedPointMasks),
             timeOffsetMs: state.timeOffsetMs,
             desiredFileName: state.desiredFileName,
-            translation: { ...state.translation }
+            translation: { ...state.translation },
+            pointEdits: this.#clonePointEdits(state.pointEdits)
         };
     }
 
     #cloneMasks(masks) {
 
         return masks.map(track => track.map(segment => [...segment]));
+    }
+
+    #freezePointEdits(edits = []) {
+
+        return Object.freeze(edits.map(edit => Object.freeze({ ...edit })));
+    }
+
+    #clonePointEdits(edits = []) {
+
+        return edits.map(edit => ({ ...edit }));
     }
 }

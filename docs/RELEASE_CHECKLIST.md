@@ -3173,6 +3173,41 @@ Static validation:
 - GPS regression: 23 assertions Pass
 - Driving Mode regression: 20 assertions Pass
 - Google Drive regression: 106 assertions Pass
+
+### Unit 3 Track Point Editing — Single Point Move
+
+- Implementation Status: Completed
+- Static Test Status: Completed
+- Browser Acceptance Status: Pending
+- Unit 3 Status: Browser Acceptance Pending
+
+Implemented scope:
+
+- source document-order Track / Segment / Point indexをpoint identityとして保持
+- source座標系のpoint overrideとwhole-Track translationを同一Session / history / preview / serializerで合成
+- After pointのCanvas hit target、選択marker、project / unproject drag、1 drag = 1 command
+- Undo / Redo / Cancel / Done draft / resumeと既存simplification / date / filename / translation historyの共存
+- immutable source DOM cloneの対象`trkpt` lat / lonだけを明示Saveで更新
+- drag frameでは選択pointと対応Segment lineだけを更新し、3,050 point testでrendererを共有
+
+Static validation:
+
+- Track Point Editing: 52 assertions Pass
+- Editor Preview / lifecycle: 148 assertions Pass
+- Editing Core: 68 assertions Pass
+- Track Simplification: 58 assertions Pass
+- Track Date Correction: 20 assertions Pass
+- Filename Rename: 30 assertions Pass
+- Track Translation: 23 assertions Pass
+- Save / Backup: 49 assertions Pass
+- Mobile Viewer: 49 assertions Pass (portrait / landscape)
+- Desktop layout: 42 assertions Pass
+- PWA: 59 assertions Pass (99 production modules precached)
+- Production modules: 99 / 99 reachable
+- Missing import / circular dependency: 0 / 0
+- App.js / TreeView.js: 954 / 995 lines
+- `git diff --check`: Pass
+- Browser Acceptance: Pending
 - Production modules: 97 / 97 reachable
 - Missing import / circular dependency: 0 / 0
 - App.js / TreeView.js: 954 / 995 lines

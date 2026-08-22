@@ -115,6 +115,7 @@ export default class GPXEditingSaveService {
         retainedPointMasks,
         timeOffsetMs = 0,
         translation = null,
+        pointEdits = [],
         desiredFileName = source?.sourceFileName,
         directoryHandle,
         relativePath
@@ -140,6 +141,7 @@ export default class GPXEditingSaveService {
         const editedXml = this.serializer.serialize(source, retainedPointMasks, {
             timeOffsetMs,
             translation,
+            pointEdits,
             trackNameFileName: renamed ? targetFileName : null
         });
         const editedBytes = new this.TextEncoderClass().encode(editedXml);

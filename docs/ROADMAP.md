@@ -760,6 +760,23 @@ Out of scope:
 - DirectoryHandle persistence schema変更
 - Geometry Cache / Service Worker cache schema変更
 
+### Unit 3 — Track Point Editing: Single Point Move
+
+Status: Static Test Completed / Browser Acceptance Pending
+
+- Desktop Track Editorの「ポイント編集」でAfter Trackの既存`trkpt`を1点ずつ選択し、drag完了時に1 commandとしてUndo / Redo historyへ確定する
+- point identityはsource document orderのTrack / Segment / Point indexを維持し、immutable sourceを変更せずsource座標系のlat / lon overrideとしてSessionへ保持する
+- After geometryはpoint overrideを先に解決し、whole-Track translationを合成し、retained maskがfalseのpointを表示 / serialize対象外とする。Before geometryはsource位置を維持する
+- drag中は選択markerと対象Segment Polylineだけを更新し、point hit targetは共有Canvas rendererを使用する。point外のMap panは維持する
+- Serializerはimmutable source DOM cloneの対象`trkpt` lat / lonだけを変更し、ele / time / extensions / namespace / attributes / orderを維持する
+- Original Backup + In-place Edited GPX、explicit save、Done draft、Cancel、date correction、filename rename、simplification、translationの既存semanticsを維持する
+
+Out of scope:
+
+- Track Point追加 / 削除 / 複数選択
+- interval edit、Segment / Track split / merge、route / Waypoint edit
+- Mobile / Drive editing
+
 ## Future Design Boundaries
 
 以下は過去Releaseから保全している将来設計境界である。Release 1.4で実装済みとなった項目は、上記Release 1.4節を優先する。

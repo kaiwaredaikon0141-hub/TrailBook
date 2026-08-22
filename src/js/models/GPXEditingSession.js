@@ -2,6 +2,7 @@ import EditingCommandHistory from "../state/EditingCommandHistory.js";
 import TrackTranslationService, {
     ZERO_TRACK_TRANSLATION
 } from "../services/TrackTranslationService.js";
+import TrackPointEditingService from "../services/TrackPointEditingService.js";
 
 /**
  * Owns one GPX editing working copy without mutating its source.
@@ -18,11 +19,16 @@ export default class GPXEditingSession {
     #translation = ZERO_TRACK_TRANSLATION;
     #translationPreview = null;
     #translationService;
+    #pointEdits = [];
+    #pointEditingService;
 
     constructor(source, {
         history = new EditingCommandHistory(),
         desiredFileName = source?.sourceFileName,
-        translationService = new TrackTranslationService()
+        translationService = new TrackTranslationService(),
+        pointEditingService = new TrackPointEditingService({
+            translationService
+        })
     } = {}) {
 
         if (!source?.tracks) {
@@ -32,6 +38,7 @@ export default class GPXEditingSession {
         this.source = source;
         this.#history = history;
         this.#translationService = translationService;
+        this.#pointEditingService = pointEditingService;
         this.#retainedPointMasks = this.#createSourceMasks();
         this.#sourceFileName = typeof source.sourceFileName === "string"
             ? source.sourceFileName
@@ -52,6 +59,7 @@ export default class GPXEditingSession {
         return this.#timeOffsetMs !== 0 ||
             this.#desiredFileName !== this.#sourceFileName ||
             !this.#translationService.isZero(this.#translation) ||
+            this.#pointEdits.length > 0 ||
             !this.#masksEqual(
             this.#retainedPointMasks,
             this.#createSourceMasks()
@@ -104,6 +112,11 @@ export default class GPXEditingSession {
         return this.#translationPreview
             ? this.#translationService.normalize(this.#translationPreview)
             : null;
+    }
+
+    getPointEdits() {
+
+        return this.#pointEditingService.normalizeEdits(this.#pointEdits);
     }
 
     getPreview() {
@@ -267,6 +280,65 @@ export default class GPXEditingSession {
         return true;
     }
 
+    applyPointEdit(identity, coordinate) {
+
+        this.#assertActive();
+        const normalizedIdentity = this.#pointEditingService
+            .normalizeIdentity(identity);
+        const nextCoordinate = this.#pointEditingService
+            .normalizeCoordinate(coordinate);
+        const currentCoordinate = this.#pointEditingService.getEditedCoordinate(
+            this.source,
+            this.#pointEdits,
+            normalizedIdentity
+        );
+
+        if (this.#pointEditingService.coordinatesEqual(
+            currentCoordinate,
+            nextCoordinate
+        )) return false;
+
+        const sourceCoordinate = this.#pointEditingService.getSourcePoint(
+            this.source,
+            normalizedIdentity
+        );
+        const key = this.#pointEditingService.key(normalizedIdentity);
+        const byKey = new Map(this.#pointEdits.map(
+            edit => [this.#pointEditingService.key(edit), edit]
+        ));
+
+        if (this.#pointEditingService.coordinatesEqual(
+            sourceCoordinate,
+            nextCoordinate
+        )) {
+            byKey.delete(key);
+        } else {
+            byKey.set(key, Object.freeze({
+                ...normalizedIdentity,
+                ...nextCoordinate
+            }));
+        }
+
+        const nextEdits = this.#pointEditingService.normalizeEdits(
+            [...byKey.values()]
+        );
+
+        this.#history.record({
+            type: "point-move",
+            before: this.#snapshot(),
+            after: this.#snapshot(
+                this.#retainedPointMasks,
+                this.#timeOffsetMs,
+                this.#desiredFileName,
+                this.#translation,
+                nextEdits
+            )
+        });
+        this.#pointEdits = nextEdits;
+        this.clearPreview();
+        return true;
+    }
+
     undo() {
 
         this.#assertActive();
@@ -299,6 +371,7 @@ export default class GPXEditingSession {
         this.#desiredFileName = this.#sourceFileName;
         this.#translation = ZERO_TRACK_TRANSLATION;
         this.#translationPreview = null;
+        this.#pointEdits = [];
         this.#history.clear();
         this.#isActive = false;
     }
@@ -314,14 +387,16 @@ export default class GPXEditingSession {
         retainedPointMasks = this.#retainedPointMasks,
         timeOffsetMs = this.#timeOffsetMs,
         desiredFileName = this.#desiredFileName,
-        translation = this.#translation
+        translation = this.#translation,
+        pointEdits = this.#pointEdits
     ) {
 
         return {
             retainedPointMasks: this.#cloneMasks(retainedPointMasks),
             timeOffsetMs,
             desiredFileName,
-            translation: this.#translationService.normalize(translation)
+            translation: this.#translationService.normalize(translation),
+            pointEdits: this.#pointEditingService.normalizeEdits(pointEdits)
         };
     }
 
@@ -331,6 +406,9 @@ export default class GPXEditingSession {
         this.#timeOffsetMs = state.timeOffsetMs;
         this.#desiredFileName = state.desiredFileName;
         this.#translation = this.#translationService.normalize(state.translation);
+        this.#pointEdits = this.#pointEditingService.normalizeEdits(
+            state.pointEdits
+        );
         this.#translationPreview = null;
     }
 

@@ -34,6 +34,12 @@ export default class TrackEditingPanel {
         this.translationEast = this.element.querySelector(
             ".editor-translation-east"
         );
+        this.pointEditingMode = this.element.querySelector(
+            ".editor-point-editing-mode"
+        );
+        this.pointEditingStatus = this.element.querySelector(
+            ".editor-point-editing-status"
+        );
         this.backupStatus = this.element.querySelector(".editor-backup-status");
         this.progress = this.element.querySelector(".editor-progress");
         this.status = this.element.querySelector(".editor-status");
@@ -100,6 +106,30 @@ export default class TrackEditingPanel {
     getTranslationMode() {
 
         return Boolean(this.translationMode.checked);
+    }
+
+    getPointEditingMode() {
+
+        return Boolean(this.pointEditingMode.checked);
+    }
+
+    setPointEditingMode(enabled) {
+
+        this.pointEditingMode.checked = Boolean(enabled);
+    }
+
+    setTranslationMode(enabled) {
+
+        this.translationMode.checked = Boolean(enabled);
+    }
+
+    configurePointEditing({ enabled = false, selected = null } = {}) {
+
+        this.pointEditingMode.checked = Boolean(enabled);
+        this.pointEditingStatus.textContent = selected
+            ? `Track ${selected.trackIndex + 1}, Segment ${selected.segmentIndex + 1}, Point ${selected.pointIndex + 1}`
+            : enabled ? "ポイント未選択" : "";
+        this.actionButtons.get("point-selection-clear").disabled = !selected;
     }
 
     configureTranslation({
@@ -373,13 +403,6 @@ export default class TrackEditingPanel {
                 aria-live="polite"></span>
             <div class="track-editor-body" hidden>
                 <p class="editor-target"></p>
-                <label>
-                    Tolerance
-                    <input class="editor-tolerance" type="number"
-                        min="0.1" max="100000" step="0.1"
-                        value="${defaultToleranceMeters}" inputmode="decimal">
-                    m
-                </label>
                 <fieldset class="editor-date-correction">
                     <legend>日付修正</legend>
                     <p>現在の開始日時: <span class="editor-current-start">—</span></p>
@@ -404,25 +427,61 @@ export default class TrackEditingPanel {
                     <span class="editor-rename-status" role="status"
                         aria-live="polite"></span>
                 </fieldset>
-                <fieldset class="editor-preview-modes">
-                    <legend>Map preview</legend>
-                    <label><input type="radio" name="editor-preview-mode"
-                        value="before"> Before</label>
-                    <label><input type="radio" name="editor-preview-mode"
-                        value="after"> After</label>
-                    <label><input type="radio" name="editor-preview-mode"
-                        value="both" checked> Both</label>
+                <fieldset class="editor-simplification">
+                    <legend>トラック簡略化</legend>
+                    <label>
+                        Tolerance
+                        <input class="editor-tolerance" type="number"
+                            min="0.1" max="100000" step="0.1"
+                            value="${defaultToleranceMeters}" inputmode="decimal">
+                        m
+                    </label>
+                    <div class="editor-preview-modes" role="group"
+                        aria-label="Map preview">
+                        <strong>Map preview</strong>
+                        <label><input type="radio" name="editor-preview-mode"
+                            value="before"> Before</label>
+                        <label><input type="radio" name="editor-preview-mode"
+                            value="after"> After</label>
+                        <label><input type="radio" name="editor-preview-mode"
+                            value="both" checked> Both</label>
+                    </div>
+                    <div class="editor-point-modes" role="group"
+                        aria-label="簡略化ポイント表示">
+                        <strong>簡略化ポイント表示</strong>
+                        <label><input type="radio" name="editor-point-mode"
+                            value="off" checked> Off</label>
+                        <label><input type="radio" name="editor-point-mode"
+                            value="before"> Before</label>
+                        <label><input type="radio" name="editor-point-mode"
+                            value="after"> After</label>
+                        <label><input type="radio" name="editor-point-mode"
+                            value="both"> Both</label>
+                    </div>
+                    <div class="editor-legend" aria-label="Preview layer legend">
+                        <span class="editor-legend-before">Before: dashed</span>
+                        <span class="editor-legend-after">After: solid</span>
+                    </div>
+                    <dl class="editor-metrics">
+                        <dt>Point</dt><dd data-editor-metric="points"></dd>
+                        <dt>削減率</dt><dd data-editor-metric="reduction"></dd>
+                        <dt>Source距離</dt><dd data-editor-metric="sourceDistance"></dd>
+                        <dt>Simplified距離</dt><dd data-editor-metric="simplifiedDistance"></dd>
+                        <dt>距離差</dt><dd data-editor-metric="distanceDifference"></dd>
+                        <dt>最大形状差</dt><dd data-editor-metric="maxDeviation"></dd>
+                    </dl>
                 </fieldset>
-                <fieldset class="editor-point-modes">
-                    <legend>Point preview</legend>
-                    <label><input type="radio" name="editor-point-mode"
-                        value="off" checked> Off</label>
-                    <label><input type="radio" name="editor-point-mode"
-                        value="before"> Before</label>
-                    <label><input type="radio" name="editor-point-mode"
-                        value="after"> After</label>
-                    <label><input type="radio" name="editor-point-mode"
-                        value="both"> Both</label>
+                <fieldset class="editor-point-editing">
+                    <legend>ポイント編集</legend>
+                    <label>
+                        <input class="editor-point-editing-mode" type="checkbox">
+                        After Trackのポイントを選択・移動
+                    </label>
+                    <span class="editor-point-editing-status" role="status"
+                        aria-live="polite"></span>
+                    <button type="button" data-editor-action="point-selection-clear">
+                        選択解除
+                    </button>
                 </fieldset>
                 <fieldset class="editor-translation">
                     <legend>トラック移動</legend>
@@ -435,21 +494,9 @@ export default class TrackEditingPanel {
                         東/西: <span class="editor-translation-east">0.0 m</span>
                     </p>
                 </fieldset>
-                <div class="editor-legend" aria-label="Preview layer legend">
-                    <span class="editor-legend-before">Before: dashed</span>
-                    <span class="editor-legend-after">After: solid</span>
-                </div>
                 <progress class="editor-progress" aria-label="Preview progress"
                     hidden></progress>
                 <p class="editor-status" role="status" aria-live="polite"></p>
-                <dl class="editor-metrics">
-                    <dt>Point</dt><dd data-editor-metric="points"></dd>
-                    <dt>削減率</dt><dd data-editor-metric="reduction"></dd>
-                    <dt>Source距離</dt><dd data-editor-metric="sourceDistance"></dd>
-                    <dt>Simplified距離</dt><dd data-editor-metric="simplifiedDistance"></dd>
-                    <dt>距離差</dt><dd data-editor-metric="distanceDifference"></dd>
-                    <dt>最大形状差</dt><dd data-editor-metric="maxDeviation"></dd>
-                </dl>
                 <p class="editor-backup-status"></p>
                 <div class="editor-actions">
                     <button type="button" data-editor-action="apply">Apply</button>
@@ -496,6 +543,8 @@ export default class TrackEditingPanel {
                 this.#emit("filename-toggle", event.target.checked);
             } else if (event.target.classList.contains("editor-translation-mode")) {
                 this.#emit("translation-mode", event.target.checked);
+            } else if (event.target.classList.contains("editor-point-editing-mode")) {
+                this.#emit("point-editing-mode", event.target.checked);
             }
         });
         this.element.addEventListener("keydown", event => {

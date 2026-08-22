@@ -68,6 +68,8 @@ class PanelFake {
     getMode() { return this.mode; }
     getPointMode() { return this.pointMode; }
     getTranslationMode() { return false; }
+    getPointEditingMode() { return false; }
+    setTranslationMode(value) { this.translationMode = value; }
     showLoading(path) { this.calls.push(["loading", path]); }
     showReady(value) { this.calls.push(["ready", value]); }
     showPreviewing(value) { this.calls.push(["previewing", value]); }
@@ -77,6 +79,7 @@ class PanelFake {
     configureSave(value) { this.saveConfig = value; }
     configureDateCorrection(value) { this.dateConfig = value; }
     configureTranslation(value) { this.translation = value; }
+    configurePointEditing(value) { this.pointEditing = value; }
     showDateError(value) { this.calls.push(["date-error", value]); }
     showDateMessage(value) { this.calls.push(["date-message", value]); }
     setSaveEnabled(value) { this.saveEnabled = value; }
@@ -100,11 +103,18 @@ class PreviewLayersFake {
     }
 
     setSource(source) { this.calls.push(["source", source]); }
-    setCandidate(source, masks) {
-        this.calls.push(["candidate", source, masks]);
+    setCandidate(source, masks, translation, pointEdits) {
+        this.calls.push(["candidate", source, masks, translation, pointEdits]);
     }
     setTranslationPreviewHandler(handler) { this.translationHandler = handler; }
+    setPointSelectionHandler(handler) { this.pointSelectionHandler = handler; }
+    setPointEditHandler(handler) { this.pointEditHandler = handler; }
     setTranslationMode(value) { this.calls.push(["translation-mode", value]); }
+    setPointEditingMode(value) {
+        this.pointEditingMode = value;
+        this.calls.push(["point-editing-mode", value]);
+    }
+    clearPointSelection() { this.pointSelectionHandler?.(null); }
     setMode(mode) { this.calls.push(["mode", mode]); }
     setPointMode(mode) { this.calls.push(["point-mode", mode]); }
     clear() { this.calls.push(["clear"]); }
@@ -243,6 +253,25 @@ async function testCoordinatorLifecycle() {
         "date correction did not enter the editing history");
     assert(coordinator.session.getTimeOffsetMs() === 33 * 24 * 60 * 60 * 1000,
         "date correction offset was not stored in the Session");
+    panel.emit("point-editing-mode", true);
+    previewLayers.pointSelectionHandler({
+        trackIndex: 0,
+        segmentIndex: 0,
+        pointIndex: 1
+    });
+    assert(panel.pointEditing?.selected?.pointIndex === 1,
+        "point selection was not projected to the Editor panel");
+    assert(previewLayers.pointEditHandler(
+        { trackIndex: 0, segmentIndex: 0, pointIndex: 1 },
+        { latitude: 35.4, longitude: 135.6 }
+    ), "point drag was not committed through the Coordinator");
+    assert(coordinator.session.getPointEdits()[0].latitude === 35.3 &&
+        coordinator.session.getPointEdits()[0].longitude === 135.4,
+    "displayed point coordinate was not converted before translation");
+    assert(coordinator.done(), "Done rejected point-edit draft");
+    assert(await coordinator.start(), "point-edit draft could not resume");
+    assert(coordinator.session.getPointEdits().length === 1,
+        "Done/resume lost point edit state");
 
     const saveResult = await coordinator.save();
     assert(saveResult?.refreshSucceeded,
@@ -254,6 +283,9 @@ async function testCoordinatorLifecycle() {
     assert(saved[0].translation.latitudeDelta === 0.1 &&
         saved[0].translation.longitudeDelta === 0.2,
     "Save did not receive the Session Track translation");
+    assert(saved[0].pointEdits.length === 1 &&
+        saved[0].pointEdits[0].pointIndex === 1,
+    "Save did not receive source-indexed point edits");
     assert(saveBusy.join() === "true,false",
         "Save busy state was not bounded to the operation");
     assert(coordinator.session && !coordinator.session.isDirty,
@@ -284,7 +316,7 @@ async function testCoordinatorLifecycle() {
     assert(coordinator.session === null, "Cancel retained session");
     assert(coordinator.draft === null, "Cancel retained the Done draft");
     assert(interactionGuard.states.join() ===
-        "true,false,true,false,true,false",
+        "true,false,true,false,true,false,true,false",
         "Done / resume / Cancel interaction lock lifecycle is incorrect");
     assert(previewLayers.calls.at(-1)[0] === "clear",
         "Cancel did not remove preview layers");
@@ -593,12 +625,39 @@ function testPanelAccessibility() {
     let saveCount = 0;
     let appliedDate = null;
     let translationMode = null;
+    let pointEditingMode = null;
+    let pointSelectionCleared = 0;
 
     panel.on("edit", () => { editCount += 1; });
     panel.on("save", () => { saveCount += 1; });
     panel.on("date-apply", value => { appliedDate = value; });
     panel.on("translation-mode", value => { translationMode = value; });
+    panel.on("point-editing-mode", value => { pointEditingMode = value; });
+    panel.on("point-selection-clear", () => { pointSelectionCleared += 1; });
     panel.attach(host);
+    const simplificationGroup = panel.element.querySelector(
+        ".editor-simplification"
+    );
+    const pointEditingGroup = panel.element.querySelector(
+        ".editor-point-editing"
+    );
+    const translationGroup = panel.element.querySelector(
+        ".editor-translation"
+    );
+
+    assert(simplificationGroup?.querySelector(".editor-tolerance") &&
+        simplificationGroup.querySelector(".editor-preview-modes") &&
+        simplificationGroup.querySelector(".editor-point-modes") &&
+        simplificationGroup.querySelector(".editor-metrics"),
+    "simplification controls are not grouped together");
+    assert(!simplificationGroup.contains(pointEditingGroup) &&
+        !simplificationGroup.contains(translationGroup),
+    "point editing or translation was nested in simplification");
+    assert(pointEditingGroup.compareDocumentPosition(translationGroup) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    "point editing is not followed by Track translation");
+    assert(panel.element.textContent.includes("簡略化ポイント表示"),
+        "simplification point preview label is unclear");
     panel.setSelectedTrack("trip.gpx");
     assert(!panel.editButton.disabled, "selected Track did not enable Edit");
     panel.editButton.click();
@@ -644,6 +703,20 @@ function testPanelAccessibility() {
     panel.translationMode.dispatchEvent(new Event("change", { bubbles: true }));
     assert(translationMode === true,
         "translation mode checkbox did not emit its state");
+    panel.pointEditingMode.checked = true;
+    panel.pointEditingMode.dispatchEvent(new Event("change", { bubbles: true }));
+    assert(pointEditingMode === true,
+        "point editing mode checkbox did not emit its state");
+    panel.configurePointEditing({
+        enabled: true,
+        selected: { trackIndex: 0, segmentIndex: 1, pointIndex: 2 }
+    });
+    assert(panel.pointEditingStatus.textContent.includes("Point 3") &&
+        !panel.actionButtons.get("point-selection-clear").disabled,
+    "selected point identity was not presented");
+    panel.actionButtons.get("point-selection-clear").click();
+    assert(pointSelectionCleared === 1,
+        "point selection clear action was not emitted");
     panel.configureTranslation({
         northMeters: -12.3,
         eastMeters: 45.6,

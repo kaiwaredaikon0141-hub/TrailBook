@@ -1353,3 +1353,13 @@ Status: Completed
 - Drive GPXはmetadataのrelative path / size / lastModifiedで既存Geometry Cacheをmedia download前にlookupする。hitはdownload / parseを行わず、missだけを最大4並列でdownload / parse / cache writeする
 - GitHub Pages workflowは`src/`だけをartifact rootへコピーし、repository secretsからartifact内だけのruntime configを生成する。actual credentialはsource / workflow / logへ保存しない
 - Google Drive Readerは補助的な直接接続手段とし、端末 / Files / OS pickerの既存Library openを主導線とする
+
+## Release 1.8 Unit 3 Architecture — Single Track Point Move
+
+- `TrackPointEditingService`はTrack / Segment / Pointのsource index identity、緯度clamp、経度wrap、Leaflet project / unproject drag計算、source / translated display座標の変換をpure serviceとして担当する
+- `GPXEditingSession`はpoint editをsource座標系のlat / lon override配列としてsnapshotへ含め、1 dragを1つの`point-move` commandとして既存上限20件のhistoryへ記録する
+- 座標合成順はsource point → point override → whole-Track translationとし、retained maskは表示 / serialize対象を最後に決定する。この順序をSession、Preview、Serializerで共通化する
+- `EditingPreviewLayerManager`はretained After pointのhit targetを専用Canvas paneに遅延生成し、drag中は選択markerと対応Polylineの`setLatLngs`だけを更新する。Map draggingはpoint mousedownからmouseupまでだけ停止する
+- `TrackEditingCoordinator`はpoint selection / drag endをSessionへ投影し、Done draft / resume、Undo / Redo、Cancel、Saveを既存Editor lifecycleのまま調停する。App / TreeViewへ責務を追加しない
+- `GPXEditingSerializer`はsource DOM cloneのretained対象`trkpt`へpoint overrideを適用した後にtranslationを適用し、除外pointをremoveする。座標以外のpoint属性 / child、Waypoint、route、metadata、Backup bytesは変更しない
+- Point editing UIはDesktop Track Editorに限定し、Mobileは既存のEditor入口非表示を維持する

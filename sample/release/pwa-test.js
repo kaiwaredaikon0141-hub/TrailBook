@@ -119,6 +119,12 @@ async function testManifestAndAssets() {
         "deploy build does not update Service Worker source");
     assert(!deployedWorker.includes('APP_SHELL_CACHE_PREFIX}v1'),
         "fixed app shell cache version retained");
+    assert(workerSource.includes(
+        '["localhost", "127.0.0.1", "[::1]"]'
+    ), "localhost development cache bypass missing");
+    assert(workerSource.indexOf("return await fetch(request)") <
+        workerSource.indexOf("const cached = await cache.match(request)"),
+    "localhost does not prefer the current network source");
 
     const mobileCss = await fetch(new URL(
         "../../src/css/theme.css", location.href
@@ -249,7 +255,7 @@ async function testServiceWorkerCache() {
         new URL(request.url).pathname.includes("/js/") &&
         new URL(request.url).pathname.endsWith(".js")
     );
-    assert(cachedModules.length === 98, "production module graph not precached");
+    assert(cachedModules.length === 99, "production module graph not precached");
     assert(!cachedRequests.some(request => request.url.endsWith(".gpx")),
         "GPX entered app shell cache");
     assert(!cachedRequests.some(request => request.url.includes("googleapis.com")),
