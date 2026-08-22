@@ -292,6 +292,13 @@ async function run() {
     "previous Library is not the primary action");
     assert(!accessCopy.element.querySelector(".manual-library-secondary").hidden,
         "device Library change action missing");
+    accessCopy.hide();
+    document.body.append(accessCopy.element);
+    assert(accessCopy.primaryContent.hidden &&
+        !accessCopy.libraryChange.hidden &&
+        getComputedStyle(accessCopy.libraryChange).display !== "none",
+    "open Library state does not preserve compact Library change access");
+    accessCopy.element.remove();
     const driveOption = document.createElement("section");
     driveOption.className = "drive-library-control";
     driveOption.textContent = "Google Driveに直接接続";

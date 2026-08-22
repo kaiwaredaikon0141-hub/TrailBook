@@ -8,6 +8,9 @@ export default class LibraryAccessPanel {
     constructor() {
 
         this.element = this.#create();
+        this.primaryContent = this.element.querySelector(
+            ".library-access-primary"
+        );
         this.previousLibraryButton = this.element.querySelector(
             ".previous-library-open"
         );
@@ -192,12 +195,12 @@ export default class LibraryAccessPanel {
 
     hide() {
 
+        this.primaryContent.hidden = true;
         this.previousLibraryButton.hidden = true;
         this.element.querySelector(".manual-library-primary").hidden = true;
         this.element.querySelector(".manual-library-secondary").hidden = false;
         this.libraryChange.hidden = false;
         this.libraryChange.open = false;
-        this.element.classList.add("is-content-hidden");
         this.element.hidden = false;
     }
 
@@ -211,15 +214,17 @@ export default class LibraryAccessPanel {
         section.setAttribute("aria-live", "polite");
         section.setAttribute("aria-atomic", "true");
         section.innerHTML = `
-            <h4 class="library-access-title"></h4>
-            <p class="library-access-message"></p>
-            <button class="previous-library-open" type="button" hidden>
-                前回のライブラリを開く
-            </button>
-            <button class="manual-library-open manual-library-primary"
-                type="button" hidden>
-                端末からライブラリを開く
-            </button>
+            <div class="library-access-primary">
+                <h4 class="library-access-title"></h4>
+                <p class="library-access-message"></p>
+                <button class="previous-library-open" type="button" hidden>
+                    前回のライブラリを開く
+                </button>
+                <button class="manual-library-open manual-library-primary"
+                    type="button" hidden>
+                    端末からライブラリを開く
+                </button>
+            </div>
             <details class="library-change" hidden>
                 <summary>ライブラリを変更</summary>
                 <div class="library-change-options">
@@ -242,7 +247,7 @@ export default class LibraryAccessPanel {
 
     #show(title, message, state = "info", action = "none") {
 
-        this.element.classList.remove("is-content-hidden");
+        this.primaryContent.hidden = false;
         this.previousLibraryButton.hidden = action !== "previous";
         this.element.querySelector(".manual-library-primary").hidden =
             action !== "manual";

@@ -1651,11 +1651,25 @@ function testPreviousLibraryPanel() {
     panel.setPreviousLibraryStatus("saved / granted");
     panel.hide();
     assert(!panel.element.hidden, "persistence status hidden with panel content");
+    assert(panel.primaryContent.hidden,
+        "successful restore retained primary Library content");
     assert(panel.previousLibraryButton.hidden &&
         panel.element.querySelector(".manual-library-primary").hidden,
     "successful restore retained a duplicate primary action");
     assert(!panel.libraryChange.hidden && !panel.libraryChange.open,
         "successful restore removed compact Library change access");
+    panel.element.hidden = false;
+    document.body.append(panel.element);
+    assert(getComputedStyle(panel.libraryChange).display !== "none",
+        "successful restore hid the Library change disclosure");
+    panel.element.remove();
+    panel.showPreviousLibrary("Previous", "granted");
+    assert(!panel.primaryContent.hidden && !panel.libraryChange.hidden,
+        "Library recovery UI did not restore primary and change actions");
+    panel.showLoadFailure();
+    assert(!panel.element.querySelector(".manual-library-primary").hidden &&
+        !panel.libraryChange.hidden,
+    "restore failure did not recover manual and change Library actions");
     assert(panel.previousLibraryStatus.textContent.endsWith("saved / granted"),
         "persistence status text missing");
     panel.setPreviousLibraryStatus("invalid");

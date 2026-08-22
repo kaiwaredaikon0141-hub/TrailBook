@@ -3274,6 +3274,24 @@ Static validation:
 - App.js / TreeView.js: 954 / 995 lines
 - `git diff --check`: Pass
 
+#### Mobile Library Change Disclosure Regression Fix 2
+
+- Library open success hides only the duplicate primary open action.
+- The compact `ライブラリを変更` disclosure remains available after restore.
+- Primary-action visibility and change-library visibility use separate DOM containers.
+- Restore failure continues to expose both the recovery action and change disclosure.
+
+Static validation:
+
+- View State / Previous Library: 350 assertions Pass
+- Mobile Viewer: 49 assertions Pass (portrait / landscape)
+- Desktop layout: 42 assertions Pass
+- PWA: 59 assertions Pass
+- Production modules: 98 / 98 reachable
+- Missing import / circular dependency: 0 / 0
+- App.js / TreeView.js: 954 / 995 lines
+- `git diff --check`: Pass
+
 #### Mobile Library Open Action Regression Fix
 
 - Library未openでPrevious Handleが`granted` / `prompt`なら「前回のライブラリを開く」、`denied` / no Handle / invalidなら「端末からライブラリを開く」を常に主操作として表示する
