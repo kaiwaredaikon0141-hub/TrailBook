@@ -4,7 +4,7 @@
 
 ## Current Status
 
-- Current Release: `1.7.0`
+- Current Release: `1.8.0`
 - Completed: Release 0.1からRelease 1.7
 - Next Release: Not defined
 
@@ -124,7 +124,9 @@ Release 1.5 Unit roles:
 
 Release 1.7はCompletedです。Release 1.6までのViewer / Editorを維持し、Mobile Viewer、GPS / Follow、Driving Mode / Wake Lock、read-only Google Drive Reader、GitHub Pages deploymentを追加しました。Drive large cold-loadの追加高速化とoffline mapは将来候補です。
 
-Search / Tree navigation復元、Stable Library Identity / Alias、point移動・追加・削除、区間削除、Track分割・結合、Backup overwrite / deleteに加え、Statistics、Replay、HeatMap、vehicle metadata、Cloud Sync、Mobile editing、offline map、Drive large cold-load optimization、Waypoint性能最適化、Plugin、AI Searchなどは未実装の将来候補です。
+Release 1.8はCompletedです。PWA app shell、Previous Library Restore、Mobile Library / Map controls、localhost build diagnostics、Desktop Track Point Move / Add / Deleteを追加し、既存Backup / SaveとBefore / After preview契約を維持します。
+
+Search / Tree navigation復元、Stable Library Identity / Alias、複数point選択、区間削除、Track分割・結合、Backup overwrite / deleteに加え、Statistics、Replay、HeatMap、vehicle metadata、Cloud Sync、Mobile editing、offline map、Drive large cold-load optimization、Waypoint性能最適化、Plugin、AI Searchなどは未実装の将来候補です。
 
 ## Source of Truth
 

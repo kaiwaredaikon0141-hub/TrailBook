@@ -4,8 +4,8 @@ TrailBookの開発を始める人とAIのための入口です。
 
 ## Current Status
 
-- Current Version: `1.7.0`
-- Current Release: Release 1.7
+- Current Version: `1.8.0`
+- Current Release: Release 1.8
 - Completed: Release 0.1からRelease 1.7
 - Next Release: Not defined
 - Branch: `main`

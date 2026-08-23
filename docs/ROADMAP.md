@@ -1,9 +1,9 @@
 # ROADMAP.md
 
-Version: 1.7 Completed
+Version: 1.8 Completed
 Status: Official
-Current Release: 1.7.0
-Next Release: Release 1.8（In Progress）
+Current Release: 1.8.0
+Next Release: Release 1.9（Not Started）
 
 ## Version Policy
 
@@ -719,15 +719,15 @@ Goal: 既存Viewerをresponsive Mobile UIへ拡張し、HTTPS上でGPS / Driving
 - Google Drive cold cacheで大量visible GPXを初回表示する際の追加高速化
 - Google Drive write / sync、access token永続化
 
-## Next Release — Release 1.8 PWA
+## Completed Release — Release 1.8 PWA / Track Point Editing
 
-Status: In Progress
+Status: Completed
 
 Goal: GitHub Pages版TrailBookをinstallable PWAとし、network未接続でもapp shellを起動できるようにする。
 
 ### Unit 1 — PWA Foundation
 
-Status: Browser Acceptance Pending
+Status: Implementation / Static Test / Browser Acceptance Completed
 
 - relative Manifest、standalone表示、192 / 512px icon
 - version付きService Worker app-shell cache
@@ -744,7 +744,7 @@ Out of scope:
 
 ### Unit 2 — Previous Library / Track Display Auto Restore
 
-Status: Browser Acceptance Pending
+Status: Implementation / Static Test / Browser Acceptance Completed
 
 - persisted DirectoryHandleのread permissionがgrantedならPickerなしで前回Libraryを自動open
 - promptでは自動permission requestを行わず、既存Handleを使う「前回のライブラリを開く」を最優先表示
@@ -762,7 +762,7 @@ Out of scope:
 
 ### Unit 3 — Track Point Editing: Single Point Move
 
-Status: Static Test Completed / Browser Acceptance Pending
+Status: Implementation / Static Test / Browser Acceptance Completed
 
 - Desktop Track Editorの「ポイント編集」でAfter Trackの既存`trkpt`を1点ずつ選択し、drag完了時に1 commandとしてUndo / Redo historyへ確定する
 - point identityはsource document orderのTrack / Segment / Point indexを維持し、immutable sourceを変更せずsource座標系のlat / lon overrideとしてSessionへ保持する
@@ -779,7 +779,7 @@ Out of scope:
 
 ### Unit 4 — Track Point Add / Delete
 
-Status: Static Test In Progress / Browser Acceptance Pending
+Status: Implementation / Static Test / Browser Acceptance Completed
 
 - Desktop Point Editingで選択source pointを1 commandとして削除し、segment出力が2点未満になる操作を拒否する
 - Track edgeの15px以内だけで単一点を追加し、source indexを持たないsession unique `addedPointId`と明示`insertionPosition`でsegment内順序を保持する
@@ -827,19 +827,11 @@ Track色は将来、単なる装飾ではなく、使用した車またはバイ
 
 Release 0.9では、車両情報の読み込み、保存、編集、色変更を実装しない。
 
-### TrackPoint Editing Mode
+### TrackPoint Editing Mode（Release 1.8で単一点Move / Add / Deleteを実装）
 
-将来、単一GPXだけを対象とする編集モードをViewerから分離して追加する。
+Release 1.8では単一GPXのEditorでTrackPoint選択、単一点Move / Add / Delete、Undo / Redo、draft破棄、Original Backup付き明示保存を実装した。
 
-候補機能:
-
-- 編集対象GPXを1件に限定
-- TrackPoint選択、移動、追加、削除
-- Segment分割、結合
-- Undo / Redo
-- 保存、別名保存、編集破棄
-- 元GPX保護
-- 外部変更との競合確認
+後続候補は複数選択、範囲削除、Segment / Track split・merge、time / elevation補間、連続描画である。
 
 方針:
 
@@ -860,7 +852,7 @@ Release 1.2 Shared Library Settings、Release 1.3 Previous View Restoration、Re
 - Date-based Display（Release 1.4でCompleted）
 - Vehicle Metadata / Track Style
 - GPX Editing Foundation（Release 1.5でCompleted）
-- TrackPoint Editing
+- Advanced TrackPoint Editing（複数選択、範囲削除、Segment / Track split・merge、time / elevation補間、連続描画）
 - Mobile Viewer UX（Release 1.7でCompleted。Mobile editingは未実装）
 - Google Drive large cold-load optimization
 - Offline Map

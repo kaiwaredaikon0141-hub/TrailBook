@@ -31,7 +31,7 @@ Service Workerが保存するのはTrailBook本体のHTML、CSS、production Jav
 
 Pages deploy時はartifact内の`trailbook.build.js`とService Workerへdeploy commitの先頭8文字を埋め込みます。Library sidebar最下部の`TrailBook v... · ...`で実行中buildを確認できます。app-shell cache名もbuildごとに変わり、新Service Worker activate時は旧TrailBook app-shell cacheだけを削除します。更新中の画面を強制reloadせず、次回起動または通常reloadで新buildへ切り替えます。
 
-localhostでもService Workerを利用できます。開発中にapp-shell cacheが不要な場合はbrowser DevToolsのApplication / StorageからTrailBookのService Workerと`trailbook-app-shell-*` cacheを解除してください。
+localhost / `127.0.0.1`ではService Workerを登録せず、既存TrailBook registrationと`trailbook-app-shell-*` cacheだけを自動解除します。GitHub Pagesでは従来どおりService Workerとoffline app shellを利用します。
 
 ## Browser acceptance
 

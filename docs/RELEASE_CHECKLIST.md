@@ -3144,16 +3144,16 @@ Release 1.7 Status: Ready for final commit and tag
 | Missing import / circular dependency | 0 / 0 |
 | App.js / TreeView.js | 954 / 995 lines |
 
-## Release 1.8 — In Progress
+## Release 1.8 — Completed
 
-Current production version: `1.7.0`
+Current production version: `1.8.0`
 
 ### Unit 1 — PWA Foundation
 
 - Implementation Status: Completed
 - Static Test Status: Completed
-- Browser Acceptance Status: Pending
-- Unit 1 Status: Browser Acceptance Pending
+- Browser Acceptance Status: Completed
+- Unit 1 Status: Completed
 
 Accepted implementation scope:
 
@@ -3162,7 +3162,7 @@ Accepted implementation scope:
 - version付きTrailBook app-shell cacheと旧TrailBook cacheだけのcleanup
 - index、CSS、全production module、Leaflet vendor asset、Manifest、iconのprecache
 - Google API / OAuth response、map tile、GPXをService Worker cache対象外として維持
-- HTTPS / localhostだけのService Worker登録と、登録失敗時の通常Web継続
+- GitHub Pages HTTPSではService Workerを登録し、localhost / `127.0.0.1`では既存TrailBook registration / cacheを限定解除して未登録を維持
 - GitHub Pages repository subpath互換をrelative URLで維持
 
 Static validation:
@@ -3178,8 +3178,8 @@ Static validation:
 
 - Implementation Status: Completed
 - Static Test Status: Completed
-- Browser Acceptance Status: Pending
-- Unit 3 Status: Browser Acceptance Pending
+- Browser Acceptance Status: Completed
+- Unit 3 Status: Completed
 
 Implemented scope:
 
@@ -3207,14 +3207,14 @@ Static validation:
 - Missing import / circular dependency: 0 / 0
 - App.js / TreeView.js: 954 / 995 lines
 - `git diff --check`: Pass
-- Browser Acceptance: Pending
+- Browser Acceptance: Completed
 
 ### Unit 4 Track Point Add / Delete
 
 - Implementation Status: Completed
-- Static Test Status: Pending browser runner
-- Browser Acceptance Status: Pending
-- Unit 4 Status: Browser Acceptance Pending
+- Static Test Status: Completed
+- Browser Acceptance Status: Completed
+- Unit 4 Status: Completed
 
 Implemented scope:
 
@@ -3227,11 +3227,13 @@ Implemented scope:
 
 Static validation:
 
-- Track Point Mutation test定義: add / delete / ordering / history / serializer / preview / 3,050 pointを収録
-- Browser test runner: Pending（実行失敗扱いにしない）
-- Production module graph、missing import、cycle、line count、`git diff --check`は最終検証で確定する
+- Track Point Mutation: 148 assertions Pass
+- Editing Preview / lifecycle: 174 assertions Pass
+- Point Move: 56 assertions Pass
+- Track Simplification: 58 assertions Pass
+- Track Translation: 23 assertions Pass
 
-- Production modules: 97 / 97 reachable
+- Production modules: 101 / 101 reachable
 - Missing import / circular dependency: 0 / 0
 - App.js / TreeView.js: 954 / 995 lines
 - `git diff --check`: Pass
@@ -3247,8 +3249,8 @@ Out of scope:
 
 - Implementation Status: Completed
 - Static Test Status: Completed
-- Browser Acceptance Status: Pending
-- Unit 2 Status: Browser Acceptance Pending
+- Browser Acceptance Status: Completed
+- Unit 2 Status: Completed
 
 Accepted implementation scope:
 
@@ -3274,7 +3276,7 @@ Static validation:
 - App.js / TreeView.js: 954 / 995 lines
 - `git diff --check`: Pass
 
-Browser Acceptance pending:
+Browser Acceptance completed:
 
 - Android PWA standaloneでgranted Handleの自動Library / visible Track / selected Track復元
 - Android Files / Google Drive provider Handleのprompt、denied、offline fallback
@@ -3285,7 +3287,7 @@ Browser Acceptance pending:
 
 - Implementation Status: Completed
 - Static Test Status: Completed
-- Browser Acceptance Status: Pending
+- Browser Acceptance Status: Completed
 
 Accepted implementation scope:
 
@@ -3367,7 +3369,7 @@ Static validation:
 
 - Implementation Status: Completed
 - Static Test Status: Completed
-- Android Browser Re-test Status: Pending
+- Android Browser Re-test Status: Completed
 
 Confirmed path and diagnostics:
 
@@ -3396,7 +3398,7 @@ Static validation:
 - Mobile Map上のLibrary controlはinline SVGのicon-only buttonとし、48px touch target、`aria-label` / `title`「ライブラリ」、Leaflet zoom controlとの余白を維持する
 - Previous Handleが`prompt`なら「前回のライブラリを開く」を主操作とし、Handleがない、invalid、deniedの場合は「端末からライブラリを開く」を主操作とする
 - 「ライブラリを変更」は初期状態で閉じたcompact disclosureとし、展開時だけ端末 / Files / Google Drive経由とGoogle Drive API直接接続を表示する
-- BuildInfoはsidebarのTree scroll領域外に置き、sidebar全体をscrollすると最下部で`TrailBook v1.7.0 · <build>`を確認できる。短いlandscapeでもTreeと重ねない
+- BuildInfoはsidebarのTree scroll領域外に置き、sidebar全体をscrollすると最下部で`TrailBook v1.8.0 · <build>`を確認できる。短いlandscapeでもTreeと重ねない
 - Previous Library restore、DirectoryHandle persistence、Drive Reader、Geometry Cache、PWA、GPS / Driving Modeのlifecycleは変更しない
 
 Static validation:

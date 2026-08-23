@@ -4,7 +4,7 @@ TrailBookは、GPXを含むFolderをLibraryとして閲覧する、個人利用�
 
 ## Current Status
 
-- Current Release: `1.7.0`
+- Current Release: `1.8.0`
 - Release 1.7: Completed
 - Next Release: Not defined
 
@@ -57,7 +57,7 @@ Release 1.7はMobile Viewer、GPS現在地 / Follow、走行中モード / Scree
 
 ## Data Principles
 
-- Current Release 1.7は、利用者の明示`保存`時にoriginal bytesのBackupを検証した後だけGPXを更新します。日付filename rename時もBackup originalはrenameしません。
+- Current Release 1.8も、利用者の明示`保存`時にoriginal bytesのBackupを検証した後だけGPXを更新します。日付filename renameやTrack Point編集でもBackup originalは変更しません。
 - Backup成功前、自動、backgroundではGPXを変更・移動・削除しません。date-based filename renameは明示`保存`と検証成功後だけ旧source pathを削除します。
 - `trailbook.json`への書き込みはSave、Migration、明示Overwriteの利用者操作時だけ行います。
 - SQLiteやIndexedDBをFolder / GPXに代わるLibrary正本として使用しません。
@@ -177,7 +177,7 @@ TrailBookはGPXファイルやGPX内容を外部serverへアップロードし�
 - 大量GPX表示中にWaypointをONにすると、多数のMarker描画により操作が重くなります。大量LibraryではWaypoint OFFを推奨します。
 - Waypointは初期OFFです。
 - OpenStreetMap背景tileはオンライン依存で、offline地図保存はありません。
-- point移動・追加・削除、区間削除、Track分割・結合、BackupのOverwrite / deleteは未実装です。
+- 複数point選択、区間削除、Track分割・結合、BackupのOverwrite / deleteは未実装です。
 - 編集draftはsession memory限定で、page reload、Library変更、別GPXの編集開始では破棄されます。
 - Folder rename / moveとImport / Exportは未実装です。
 - automatic merge、polling、background sync、cloud APIはありません。
