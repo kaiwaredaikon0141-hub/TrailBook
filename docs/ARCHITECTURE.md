@@ -6,6 +6,15 @@ Baseline: Release 1.3.0
 Current: Release 1.3 Previous View Restoration Completed
 Depends: PROJECT.md, ROADMAP.md, DECISIONS.md
 
+## Release 1.9 Unit 1 Architecture — Persistent Display Snapshot
+
+- `DisplaySnapshotStore`は最後に表示成功したLibrary identity、Geometry Cache namespace、visible path、selection、Map view、sidebar stateだけを端末IndexedDBへ保存する。GPX本文は複製しない。
+- Phase AはDirectoryHandle permissionやLibrary scanより先にSnapshotを読み、既存Geometry Cacheのschemaが一致するentryだけを楽観的に表示する。cache missのTrackは個別に省略する。
+- Phase Bは既存`PreviousLibraryCoordinator`と`ViewStateCoordinator`を使用し、permission、scan、size / lastModifiedによるcache validation、Tree / selection同期を行う。stale Trackだけ既存loaderで再生成する。
+- `prompt`では自動`requestPermission()`を行わず、cached displayを維持したまま既存の「前回のライブラリを開く」操作を提示する。
+- Snapshot更新は表示、selection、Map、sidebar変更を750 ms debounceし、`visibilitychange: hidden`と`pagehide`でbest-effort flushする。
+- localhostでは`appShellReady`、`snapshotLoaded`、`geometryRestored`、`libraryReady`を`[TrailBook Startup]`として1回だけ記録する。
+
 ## Architecture Overview
 
 TrailBookは責務分離、低結合、Event Driven Architectureを採用する。

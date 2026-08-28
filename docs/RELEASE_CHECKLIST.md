@@ -4,6 +4,29 @@ Version: 1.0.0〜1.5.0 release records
 Status: Release 1.0〜1.5 Completed
 Baseline: v1.4.0 for Release 1.5
 
+## Release 1.9 Unit 1 — Fast Mobile Cold Start
+
+- [x] Snapshot schemaにLibrary/cache identity、Map、visible Track、selection、sidebar stateを保存
+- [x] GPX raw本文をSnapshotへ保存しない
+- [x] Phase AでLibrary scan前にGeometry Cache hitを表示
+- [x] cache missはTrack単位で省略
+- [x] Phase Bで既存permission / scan / size / lastModified validationを実行
+- [x] `prompt`で自動permission requestを行わずcached displayを維持
+- [x] debounce、`visibilitychange`、`pagehide`保存
+- [x] localhost startup metrics
+
+Static validation:
+
+- Display Snapshot: 28 assertions Pass
+- Previous Library / View State: 350 assertions Pass
+- Mobile Viewer: 42 assertions Pass
+- Google Drive regression: 106 assertions Pass
+- PWA app-shell module graph: 103 modules
+- Production modules: 103 / 103 reachable
+- Missing import / circular dependency: 0 / 0
+- App.js / TreeView.js: 978 / 995 lines
+- `git diff --check`: Pass
+
 ## Purpose
 
 Release 1.0 Stable Viewerを、個人利用環境で安全・安定・再現可能に使える状態として確認するためのchecklistである。

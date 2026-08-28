@@ -272,6 +272,48 @@ export default class GeometryCacheRepository {
         }
     }
 
+    /**
+     * Reads a previously verified cache entry without touching its source.
+     * Phase-B Library loading performs the normal file identity validation.
+     */
+    async getDisplaySnapshot(namespace, path) {
+
+        const key = this.#key(namespace, path);
+
+        if (!key) return null;
+
+        try {
+            const record = await this.adapter.get(key);
+
+            if (!this.#isCurrentSchemaRecord(record, namespace, path)) {
+                return null;
+            }
+
+            const geometry = copyGeometry(record.geometry);
+            const summary = TrackDiscoveryEntry.fromRecord(record.summary);
+
+            if (!geometry || !summary || summary.relativePath !== path) {
+                return null;
+            }
+
+            return {
+                result: {
+                    metadata: null,
+                    tracks: geometry.tracks,
+                    waypoints: geometry.waypoints,
+                    warnings: []
+                },
+                summary,
+                fileIdentity: {
+                    size: record.size,
+                    lastModified: record.lastModified
+                }
+            };
+        } catch {
+            return null;
+        }
+    }
+
     async set(namespace, path, file, result, summary) {
 
         const key = this.#key(namespace, path);
@@ -348,15 +390,22 @@ export default class GeometryCacheRepository {
     #isValidRecord(record, namespace, path, file) {
 
         return Boolean(
+            this.#isCurrentSchemaRecord(record, namespace, path) &&
+            record.size === file.size &&
+            record.lastModified === file.lastModified
+        );
+    }
+
+    #isCurrentSchemaRecord(record, namespace, path) {
+
+        return Boolean(
             record &&
             record.cacheSchemaVersion === this.config.cacheSchemaVersion &&
             record.parserSchemaVersion === this.config.parserSchemaVersion &&
             record.textDecoderSchemaVersion ===
                 this.config.textDecoderSchemaVersion &&
             record.namespace === namespace &&
-            record.path === path &&
-            record.size === file.size &&
-            record.lastModified === file.lastModified
+            record.path === path
         );
     }
 

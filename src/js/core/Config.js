@@ -53,6 +53,15 @@ const Config = {
         recordKey: "last"
     },
 
+    displaySnapshot: {
+        databaseName: "trailbook.displaySnapshot",
+        databaseVersion: 1,
+        objectStoreName: "snapshots",
+        recordKey: "last",
+        schemaVersion: 1,
+        debounceMs: 750
+    },
+
     googleDrive: getGoogleDriveRuntimeConfig(),
 
     geometryCache: {

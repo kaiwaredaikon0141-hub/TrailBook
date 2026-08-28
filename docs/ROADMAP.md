@@ -2,6 +2,13 @@
 
 Version: 1.8 Completed
 Status: Official
+
+## Release 1.9 Unit 1 — Fast Mobile Cold Start
+
+- Status: Implemented; Browser performance acceptance pending.
+- Persistent Display SnapshotからGeometry Cache hitをLibrary scan前に表示するPhase Aを追加する。
+- Previous Library permission / scan / metadata revalidationはPhase Bとして既存経路を維持する。
+- GPX本文の複製、cache schema変更、Drive自動認証、offline mapは対象外とする。
 Current Release: 1.8.0
 Next Release: Release 1.9（Not Started）
 

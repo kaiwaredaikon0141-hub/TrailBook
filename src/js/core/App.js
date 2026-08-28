@@ -10,10 +10,12 @@ import TrackStyleService from "../services/TrackStyleService.js";
 import DisplaySettingsStore from "../services/DisplaySettingsStore.js";
 import ViewStateStore from "../services/ViewStateStore.js";
 import PreviousLibraryStore from "../services/PreviousLibraryStore.js";
+import DisplaySnapshotStore from "../services/DisplaySnapshotStore.js";
 import DiscoveryViewStateStore from "../services/DiscoveryViewStateStore.js";
 import LibrarySettingsCoordinator from "./LibrarySettingsCoordinator.js";
 import ViewStateCoordinator from "./ViewStateCoordinator.js";
 import PreviousLibraryCoordinator from "./PreviousLibraryCoordinator.js";
+import DisplaySnapshotCoordinator from "./DisplaySnapshotCoordinator.js";
 import TrackDiscoveryCoordinator from "./TrackDiscoveryCoordinator.js";
 import DisplayState from "../state/DisplayState.js";
 import SelectionState from "../state/SelectionState.js";
@@ -75,6 +77,9 @@ export default class App {
         this.previousLibraryStore = new PreviousLibraryStore(
             this.config.previousLibrary
         );
+        this.displaySnapshotStore = new DisplaySnapshotStore(
+            this.config.displaySnapshot
+        );
         this.discoveryViewStateStore = new DiscoveryViewStateStore(
             this.config.discoveryView
         );
@@ -115,7 +120,8 @@ export default class App {
         this.createComponents();
         this.createLayout();
         this.bindEvents();
-        void this.previousLibraryCoordinator.initialize();
+        void this.displaySnapshotCoordinator.initialize()
+            .finally(() => this.previousLibraryCoordinator.initialize());
     }
 
     createComponents() {
@@ -186,6 +192,18 @@ export default class App {
             selectionState: this.selectionState,
             debounceMs: this.config.viewState.debounceMs
         });
+        this.displaySnapshotCoordinator = new DisplaySnapshotCoordinator({
+            eventBus: this.eventBus,
+            store: this.displaySnapshotStore,
+            repository: this.gpxGeometryLoader.repository,
+            mapView: this.mapView,
+            controls: this.viewStateControls,
+            displayState: this.displayState,
+            selectionState: this.selectionState,
+            getTrackStyle: color => this.createTrackStyle(color),
+            getSelectionStyles: color => this.createSelectionStyles(color),
+            debounceMs: this.config.displaySnapshot.debounceMs
+        });
         this.previousLibraryCoordinator = new PreviousLibraryCoordinator({
             store: this.previousLibraryStore,
             scanner: this.folderScanner,
@@ -196,7 +214,9 @@ export default class App {
                 this.librarySettingsCoordinator.canSwitchLibrary(),
             flushViewState: () => this.viewStateCoordinator.flush(),
             beforeLoad: () => {
-                this.clearSelection("library-switch");
+                if (!this.displaySnapshotCoordinator?.hasInstantRestore()) {
+                    this.clearSelection("library-switch");
+                }
                 this.trackDiscoveryCoordinator.clearLibrary();
             },
             applyLibrary: (library, context) =>
@@ -373,12 +393,16 @@ export default class App {
             generation,
             isCurrent
         });
+        this.displaySnapshotCoordinator?.setLibraryContext({
+            libraryIdentity: this.currentLibraryId,
+            cacheNamespace
+        });
         void this.viewStateCoordinator.restoreLibrary({
             libraryId: this.currentLibraryId,
             libraryName: library.name,
             generation,
             isCurrent
-        });
+        }).finally(() => this.displaySnapshotCoordinator?.markLibraryReady());
 
         return true;
     }
