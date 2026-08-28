@@ -121,7 +121,10 @@ export default class App {
         this.createLayout();
         this.bindEvents();
         void this.displaySnapshotCoordinator.initialize()
-            .finally(() => this.previousLibraryCoordinator.initialize());
+            .finally(() => {
+                this.displaySnapshotCoordinator.beginPhaseB();
+                return this.previousLibraryCoordinator.initialize();
+            });
     }
 
     createComponents() {
@@ -202,7 +205,8 @@ export default class App {
             selectionState: this.selectionState,
             getTrackStyle: color => this.createTrackStyle(color),
             getSelectionStyles: color => this.createSelectionStyles(color),
-            debounceMs: this.config.displaySnapshot.debounceMs
+            debounceMs: this.config.displaySnapshot.debounceMs,
+            diagnosticRoot: sidebar
         });
         this.previousLibraryCoordinator = new PreviousLibraryCoordinator({
             store: this.previousLibraryStore,
@@ -214,6 +218,7 @@ export default class App {
                 this.librarySettingsCoordinator.canSwitchLibrary(),
             flushViewState: () => this.viewStateCoordinator.flush(),
             beforeLoad: () => {
+                this.displaySnapshotCoordinator.beginPhaseB();
                 if (!this.displaySnapshotCoordinator?.hasInstantRestore()) {
                     this.clearSelection("library-switch");
                 }
@@ -402,7 +407,9 @@ export default class App {
             libraryName: library.name,
             generation,
             isCurrent
-        }).finally(() => this.displaySnapshotCoordinator?.markLibraryReady());
+        }).then(restored => this.displaySnapshotCoordinator?.completePhaseB({
+            restored
+        }));
 
         return true;
     }

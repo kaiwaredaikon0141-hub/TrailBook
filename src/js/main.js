@@ -154,6 +154,7 @@ window.addEventListener("DOMContentLoaded", () => {
             app.librarySettingsCoordinator.canSwitchLibrary(),
         flushViewState: () => app.viewStateCoordinator.flush(),
         beforeLoad: () => {
+            app.displaySnapshotCoordinator.beginPhaseB();
             app.clearSelection("library-switch");
             app.trackDiscoveryCoordinator.clearLibrary();
         },

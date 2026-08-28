@@ -45,6 +45,7 @@ class EventTargetMock {
 function snapshot(paths = ["one.gpx", "missing.gpx"]) {
     return {
         schemaVersion: 1,
+        revision: 4,
         libraryIdentity: "root-name:GPX",
         cacheNamespace: "local-cache",
         savedAt: 10,
@@ -86,6 +87,7 @@ async function testStore() {
     assert(loaded.visibleTracks.length === 1, "visible tracks lost");
     assert(loaded.selectedTrack.relativePath === "one.gpx", "selection lost");
     assert(loaded.map.zoom === 12, "map state lost");
+    assert(loaded.revision === 4, "snapshot revision lost");
 
     adapter.value = { ...snapshot(), schemaVersion: 99 };
     assert(await store.load() === null, "unknown snapshot schema accepted");
@@ -204,28 +206,56 @@ async function testCoordinator() {
         "sidebar state not restored");
     assert(coordinator.hasInstantRestore(), "phase-A state missing");
     assert(order.includes("map-state"), "map state not restored");
+    assert(coordinator.getStatus().restoreState === "phaseA",
+        "phase-A lifecycle state missing");
 
+    displayState.setLibrary({});
+    displayState.registerFile("one.gpx", {}, "#123456");
+    displayState.registerFile("missing.gpx", {}, "#654321");
+    displayState.setChecked("one.gpx", true);
+    displayState.setChecked("missing.gpx", true);
+    assert(timers.length === 0,
+        "phase-A display changes scheduled a snapshot overwrite");
+    documentTarget.visibilityState = "hidden";
+    documentTarget.emit("visibilitychange");
+    windowTarget.emit("pagehide");
+    await Promise.resolve();
+    assert(writes.length === 0,
+        "phase-A lifecycle event overwrote the last-known-good snapshot");
+
+    coordinator.beginPhaseB();
     coordinator.setLibraryContext({
         libraryIdentity: "root-name:GPX",
         cacheNamespace: "local-cache"
     });
-    displayState.setLibrary({});
-    displayState.registerFile("one.gpx", {}, "#123456");
-    displayState.setChecked("one.gpx", true);
-    timers.at(-1)();
+    documentTarget.emit("visibilitychange");
+    windowTarget.emit("pagehide");
     await Promise.resolve();
-    await Promise.resolve();
-    assert(writes.length === 1, "debounced snapshot was not saved");
+    assert(writes.length === 0,
+        "phase-B lifecycle event overwrote the last-known-good snapshot");
+    assert(await coordinator.completePhaseB({ restored: true }),
+        "phase-B reconciliation did not commit");
+    assert(writes.length === 1, "phase-B snapshot was not saved");
+    assert(writes[0].revision === 5, "snapshot revision was not advanced");
     assert(writes[0].visibleTracks[0].geometryCacheKey.namespace ===
         "local-cache", "local cache namespace lost");
+    assert(writes[0].visibleTracks.length === 2,
+        "partial cache miss discarded an existing snapshot reference");
+    assert(writes[0].visibleTracks.some(
+        track => track.relativePath === "missing.gpx"
+    ), "missing cache reference was not retained for revalidation");
+    assert(writes[0].selectedTrack.relativePath === "one.gpx",
+        "selection was not preserved by phase-B commit");
+    assert(coordinator.getStatus().restoreState === "ready",
+        "ready lifecycle state missing");
 
+    coordinator.beginPhaseB();
     coordinator.setLibraryContext({
         libraryIdentity: "root-name:OTHER",
         cacheNamespace: "other-cache"
     });
-    timers.at(-1)();
-    await Promise.resolve();
-    await Promise.resolve();
+    assert(await coordinator.completePhaseB({ restored: true }),
+        "Library switch snapshot was not committed");
     assert(writes.at(-1).libraryIdentity === "root-name:OTHER",
         "Library switch retained old snapshot identity");
     assert(writes.at(-1).visibleTracks[0].geometryCacheKey.namespace ===
@@ -238,11 +268,169 @@ async function testCoordinator() {
     await Promise.resolve();
     assert(writes.length >= 2, "lifecycle best-effort save missing");
 
-    coordinator.markLibraryReady();
-    coordinator.markLibraryReady();
     assert(metrics.length === 1, "startup metrics emitted more than once");
     assert(metrics[0].restoredTrackCount === 1 &&
         metrics[0].cacheMissCount === 1, "startup metrics incorrect");
+}
+
+async function testLastKnownGoodAcrossRestarts() {
+    const persisted = new MemoryAdapter(snapshot(["one.gpx"]));
+    const store = new DisplaySnapshotStore(Config.displaySnapshot, {
+        adapter: persisted
+    });
+    const repository = {
+        async getDisplaySnapshot(namespace, path) {
+            return namespace === "local-cache" && path === "one.gpx"
+                ? { result: geometry(), summary: { trackNames: ["one"] } }
+                : null;
+        }
+    };
+    const revisionSequence = [];
+
+    for (let restart = 0; restart < 3; restart += 1) {
+        const eventBus = new EventBus();
+        const displayState = new DisplayState();
+        const selectionState = new SelectionState();
+        const documentTarget = new EventTargetMock();
+        const windowTarget = new EventTargetMock();
+        const displayed = [];
+        const coordinator = new DisplaySnapshotCoordinator({
+            eventBus,
+            store,
+            repository,
+            mapView: {
+                isValidViewState: () => true,
+                setViewState: () => {},
+                getViewState: () => ({ lat: 35, lng: 135, zoom: 12 }),
+                invalidateSize: () => {},
+                displayGPX: path => displayed.push(path),
+                setSelectedPath: () => {}
+            },
+            controls: {
+                isSidebarOpen: () => true,
+                getSidebarWidth: () => 320,
+                getTrackInfoHeight: () => 200,
+                setSidebarOpen: () => {},
+                setSidebarWidth: () => {},
+                setTrackInfoHeight: () => {}
+            },
+            displayState,
+            selectionState,
+            getTrackStyle: color => ({ color }),
+            getSelectionStyles: color => ({
+                selectedMainStyle: { color },
+                selectedOutlineStyle: { color: "white" }
+            }),
+            documentTarget,
+            windowTarget,
+            reportMetrics: () => {}
+        });
+
+        assert(await coordinator.initialize(),
+            `restart ${restart + 1} did not restore cached geometry`);
+        assert(displayed.length === 1,
+            `restart ${restart + 1} restored an incorrect display count`);
+        assert(selectionState.getSelectedPath() === "one.gpx",
+            `restart ${restart + 1} lost selection`);
+
+        coordinator.beginPhaseB();
+        displayState.setLibrary({});
+        documentTarget.visibilityState = "hidden";
+        documentTarget.emit("visibilitychange");
+        await Promise.resolve();
+        assert(persisted.value.visibleTracks.length === 1,
+            `restart ${restart + 1} task-kill replaced snapshot with empty state`);
+
+        displayState.registerFile("one.gpx", {}, "#123456");
+        displayState.setChecked("one.gpx", true);
+        selectionState.select("one.gpx", "view-state-restore");
+        coordinator.setLibraryContext({
+            libraryIdentity: "root-name:GPX",
+            cacheNamespace: "local-cache"
+        });
+        assert(await coordinator.completePhaseB({ restored: true }),
+            `restart ${restart + 1} phase-B commit failed`);
+        revisionSequence.push(persisted.value.revision);
+    }
+
+    assert(revisionSequence.join(",") === "5,6,7",
+        "restart commits did not advance monotonically");
+    assert(persisted.value.visibleTracks.length === 1,
+        "restart cycle lost visible Track references");
+    assert(persisted.value.selectedTrack.relativePath === "one.gpx",
+        "restart cycle lost selected Track");
+    assert(persisted.value.cacheNamespace === "local-cache",
+        "restart cycle lost Geometry Cache namespace");
+}
+
+async function testEmptyPhaseBDoesNotReplaceKnownGood() {
+    const adapter = new MemoryAdapter(snapshot(["one.gpx"]));
+    const store = new DisplaySnapshotStore(Config.displaySnapshot, { adapter });
+    const displayState = new DisplayState();
+    const selectionState = new SelectionState();
+    const coordinator = new DisplaySnapshotCoordinator({
+        eventBus: new EventBus(),
+        store,
+        repository: {
+            async getDisplaySnapshot(namespace, path) {
+                return path === "one.gpx"
+                    ? { result: geometry(), summary: { trackNames: ["one"] } }
+                    : null;
+            }
+        },
+        mapView: {
+            isValidViewState: () => true,
+            setViewState: () => {},
+            getViewState: () => ({ lat: 35, lng: 135, zoom: 12 }),
+            invalidateSize: () => {},
+            displayGPX: () => {},
+            setSelectedPath: () => {}
+        },
+        controls: {
+            isSidebarOpen: () => true,
+            getSidebarWidth: () => 320,
+            getTrackInfoHeight: () => 200,
+            setSidebarOpen: () => {},
+            setSidebarWidth: () => {},
+            setTrackInfoHeight: () => {}
+        },
+        displayState,
+        selectionState,
+        getTrackStyle: color => ({ color }),
+        getSelectionStyles: color => ({
+            selectedMainStyle: { color },
+            selectedOutlineStyle: { color: "white" }
+        }),
+        documentTarget: new EventTargetMock(),
+        windowTarget: new EventTargetMock(),
+        reportMetrics: () => {}
+    });
+
+    await coordinator.initialize();
+    coordinator.beginPhaseB();
+    displayState.setLibrary({});
+    coordinator.setLibraryContext({
+        libraryIdentity: "root-name:GPX",
+        cacheNamespace: "local-cache"
+    });
+    assert(!await coordinator.completePhaseB({ restored: true }),
+        "temporary empty phase-B state replaced last-known-good snapshot");
+    assert(adapter.value.visibleTracks.length === 1,
+        "last-known-good visible state was not preserved");
+    assert(coordinator.getStatus().lastWriteStatus ===
+        "preserved-last-known-good", "empty-state suppression was not reported");
+
+    displayState.registerFile("one.gpx", {}, "#123456");
+    displayState.setChecked("one.gpx", true);
+    selectionState.clear("restore-incomplete");
+    assert(!await coordinator.completePhaseB({ restored: true }),
+        "phase-B committed before selected Track restoration completed");
+    assert(adapter.value.selectedTrack.relativePath === "one.gpx",
+        "incomplete selection replaced last-known-good selection");
+
+    selectionState.select("one.gpx", "view-state-restore");
+    assert(await coordinator.completePhaseB({ restored: true }),
+        "valid phase-B state did not commit after selection restoration");
 }
 
 async function testDriveIdentityAndNoHandleDependency() {
@@ -267,6 +455,8 @@ try {
     await testStore();
     await testOptimisticGeometryRead();
     await testCoordinator();
+    await testLastKnownGoodAcrossRestarts();
+    await testEmptyPhaseBDoesNotReplaceKnownGood();
     await testDriveIdentityAndNoHandleDependency();
     output.textContent = `PASS: ${assertions} assertions`;
     document.documentElement.dataset.testStatus = "pass";

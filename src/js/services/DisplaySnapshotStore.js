@@ -102,6 +102,9 @@ function normalizeSnapshot(value, schemaVersion) {
 
     return {
         schemaVersion,
+        revision: Number.isInteger(value.revision) && value.revision >= 0
+            ? value.revision
+            : 0,
         libraryIdentity: value.libraryIdentity,
         cacheNamespace: value.cacheNamespace,
         savedAt: Number.isFinite(value.savedAt) ? value.savedAt : 0,

@@ -1,4 +1,5 @@
 const DEFAULT_COLOR = "#e53935";
+const RESTORE_STATES = new Set(["idle", "phaseA", "phaseB", "ready"]);
 
 function now() {
 
@@ -12,6 +13,22 @@ function reportDevelopmentMetrics(metrics) {
     if (["localhost", "127.0.0.1", "[::1]"].includes(hostname)) {
         console.info("[TrailBook Startup]", metrics);
     }
+}
+
+function createIdentityToken(identity, cacheNamespace) {
+
+    if (!identity) return "none";
+
+    let hash = 2166136261;
+
+    for (const character of identity) {
+        hash ^= character.codePointAt(0);
+        hash = Math.imul(hash, 16777619);
+    }
+
+    const source = cacheNamespace?.startsWith("drive:") ? "drive" : "local";
+
+    return `${source}:${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }
 
 /**
@@ -35,6 +52,7 @@ export default class DisplaySnapshotCoordinator {
         clearTimer = globalThis.clearTimeout.bind(globalThis),
         documentTarget = globalThis.document,
         windowTarget = globalThis.window,
+        diagnosticRoot = null,
         reportMetrics = reportDevelopmentMetrics
     }) {
 
@@ -53,12 +71,17 @@ export default class DisplaySnapshotCoordinator {
             clearTimer,
             documentTarget,
             windowTarget,
+            diagnosticRoot,
             reportMetrics
         });
         this.libraryIdentity = null;
         this.cacheNamespace = null;
         this.timerId = null;
         this.phaseARestored = false;
+        this.restoreState = "idle";
+        this.lastKnownGood = null;
+        this.lastWriteReason = null;
+        this.lastWriteStatus = "none";
         this.metricsReported = false;
         this.startedAt = now();
         this.metrics = {
@@ -70,22 +93,27 @@ export default class DisplaySnapshotCoordinator {
             cacheMissCount: 0
         };
         this.#bindEvents();
+        this.#attachDiagnostic();
     }
 
     async initialize() {
 
         const startedAt = this.startedAt;
 
+        this.#setRestoreState("phaseA");
         this.metrics.appShellReady = 0;
         const snapshot = await this.store.load();
         this.metrics.snapshotLoaded = Math.max(0, now() - startedAt);
 
         if (!snapshot) {
+            this.#updateDiagnostic({ snapshotStatus: "missing" });
             return false;
         }
 
+        this.lastKnownGood = snapshot;
         this.libraryIdentity = snapshot.libraryIdentity;
         this.cacheNamespace = snapshot.cacheNamespace;
+        this.#updateDiagnostic({ snapshotStatus: "found" });
         if (this.mapView.isValidViewState(snapshot.map)) {
             this.mapView.setViewState(snapshot.map, {
                 animate: false,
@@ -125,6 +153,9 @@ export default class DisplaySnapshotCoordinator {
             ? null
             : Math.max(0, firstGeometryAt - startedAt);
         this.phaseARestored = restored.length > 0;
+        this.#updateDiagnostic({
+            phaseAStatus: this.phaseARestored ? "success" : "cache-miss"
+        });
 
         const selectedPath = snapshot.selectedTrack?.relativePath;
 
@@ -145,18 +176,38 @@ export default class DisplaySnapshotCoordinator {
         return this.phaseARestored;
     }
 
+    beginPhaseB() {
+
+        this.#cancelTimer();
+        this.#setRestoreState("phaseB");
+        this.#updateDiagnostic({ phaseBStatus: "started" });
+    }
+
+    async completePhaseB({ restored = false } = {}) {
+
+        if (this.restoreState !== "phaseB" || !restored) {
+            this.#updateDiagnostic({ phaseBStatus: "incomplete" });
+            return false;
+        }
+
+        const saved = await this.#save("phaseB-complete");
+
+        if (!saved) return false;
+
+        this.#setRestoreState("ready");
+        this.phaseARestored = false;
+        this.metrics.libraryReady ??= Math.max(0, now() - this.startedAt);
+        this.#updateDiagnostic({ phaseBStatus: "success" });
+        this.#reportMetrics();
+
+        return true;
+    }
+
     setLibraryContext({ libraryIdentity, cacheNamespace }) {
 
         this.libraryIdentity = libraryIdentity;
         this.cacheNamespace = cacheNamespace;
-        this.phaseARestored = false;
-        this.#scheduleSave();
-    }
-
-    markLibraryReady() {
-
-        this.metrics.libraryReady ??= Math.max(0, now() - this.startedAt);
-        this.#reportMetrics();
+        this.#updateDiagnostic();
     }
 
     hasInstantRestore() {
@@ -164,62 +215,113 @@ export default class DisplaySnapshotCoordinator {
         return this.phaseARestored;
     }
 
-    flush() {
+    flush(reason = "pagehide") {
 
         this.#cancelTimer();
-        return this.#save();
+        return this.#save(reason);
     }
 
     #bindEvents() {
 
+        this.eventBus.on("map:view-changed", () => {
+            this.#scheduleSave("map-change");
+        });
+        ["gpx:display-toggled", "folder:display-toggled"].forEach(name => {
+            this.eventBus.on(name, () => this.#scheduleSave("visible-change"));
+        });
+        this.eventBus.on("map:clear-requested", () => {
+            this.#scheduleSave("visible-change");
+        });
+        this.eventBus.on("selection:changed", () => {
+            this.#scheduleSave("selection-change");
+        });
         [
-            "map:view-changed",
-            "gpx:display-toggled",
-            "folder:display-toggled",
-            "map:clear-requested",
-            "selection:changed",
             "view-state:sidebar-toggled",
             "view-state:sidebar-width-changed",
             "view-state:track-info-height-changed"
-        ].forEach(name => this.eventBus.on(name, () => this.#scheduleSave()));
-        this.displayState.subscribe(() => this.#scheduleSave());
+        ].forEach(name => this.eventBus.on(
+            name,
+            () => this.#scheduleSave("sidebar-change")
+        ));
+        this.displayState.subscribe(() => {
+            this.#scheduleSave("visible-change");
+        });
         this.documentTarget?.addEventListener?.("visibilitychange", () => {
             if (this.documentTarget.visibilityState === "hidden") {
-                void this.flush();
+                void this.flush("visibility-hidden");
             }
         });
         this.windowTarget?.addEventListener?.("pagehide", () => {
-            void this.flush();
+            void this.flush("pagehide");
         });
     }
 
-    #scheduleSave() {
+    #scheduleSave(reason) {
 
-        if (!this.libraryIdentity || !this.cacheNamespace) return;
+        if (
+            this.restoreState !== "ready" ||
+            !this.libraryIdentity ||
+            !this.cacheNamespace
+        ) {
+            return;
+        }
 
         this.#cancelTimer();
         this.timerId = this.setTimer(() => {
             this.timerId = null;
-            void this.#save();
+            void this.#save(reason);
         }, this.debounceMs);
     }
 
-    async #save() {
+    async #save(reason) {
 
-        if (!this.libraryIdentity || !this.cacheNamespace) return false;
+        this.lastWriteReason = reason;
+        const phaseBCommit =
+            this.restoreState === "phaseB" &&
+            reason === "phaseB-complete";
+
+        if (
+            (this.restoreState !== "ready" && !phaseBCommit) ||
+            !this.libraryIdentity ||
+            !this.cacheNamespace
+        ) {
+            this.lastWriteStatus = "suppressed";
+            this.#updateDiagnostic();
+            return false;
+        }
 
         const libraryIdentity = this.libraryIdentity;
         const cacheNamespace = this.cacheNamespace;
         const visibleTracks = [];
+        const sameKnownLibrary =
+            this.lastKnownGood?.libraryIdentity === libraryIdentity &&
+            this.lastKnownGood?.cacheNamespace === cacheNamespace;
 
         for (const path of this.displayState.getCheckedPaths()) {
             const display = this.displayState.getDisplay(path);
+
+            if (!display) continue;
+
             const cached = await this.repository.getDisplaySnapshot(
                 cacheNamespace,
                 path
             );
 
-            if (!display || !cached) continue;
+            if (!cached) {
+                const previous = sameKnownLibrary
+                    ? this.lastKnownGood.visibleTracks.find(
+                        track => track.relativePath === path
+                    )
+                    : null;
+
+                if (previous) {
+                    visibleTracks.push({
+                        ...previous,
+                        displayStyle: { color: display.color }
+                    });
+                }
+                continue;
+            }
 
             visibleTracks.push({
                 relativePath: path,
@@ -236,16 +338,46 @@ export default class DisplaySnapshotCoordinator {
         const selected = visibleTracks.find(
             track => track.relativePath === selectedPath
         );
+        const previousSelectedPath = sameKnownLibrary
+            ? this.lastKnownGood.selectedTrack?.relativePath
+            : null;
+        const selectionIncomplete = Boolean(
+            previousSelectedPath &&
+            !selected &&
+            visibleTracks.some(
+                track => track.relativePath === previousSelectedPath
+            )
+        );
 
         if (
             libraryIdentity !== this.libraryIdentity ||
             cacheNamespace !== this.cacheNamespace
         ) {
+            this.lastWriteStatus = "stale-context";
+            this.#updateDiagnostic();
             return false;
         }
 
-        return this.store.save({
+        if (
+            visibleTracks.length === 0 &&
+            this.lastKnownGood?.visibleTracks?.length > 0 &&
+            sameKnownLibrary &&
+            reason !== "visible-change"
+        ) {
+            this.lastWriteStatus = "preserved-last-known-good";
+            this.#updateDiagnostic();
+            return false;
+        }
+
+        if (selectionIncomplete && reason === "phaseB-complete") {
+            this.lastWriteStatus = "preserved-last-known-good";
+            this.#updateDiagnostic();
+            return false;
+        }
+
+        const snapshot = {
             schemaVersion: this.store.config.schemaVersion,
+            revision: (this.lastKnownGood?.revision ?? 0) + 1,
             libraryIdentity,
             cacheNamespace,
             savedAt: Date.now(),
@@ -260,7 +392,29 @@ export default class DisplaySnapshotCoordinator {
                 width: this.controls.getSidebarWidth(),
                 trackInfoHeight: this.controls.getTrackInfoHeight()
             }
-        });
+        };
+        const saved = await this.store.save(snapshot);
+
+        if (saved) {
+            this.lastKnownGood = snapshot;
+        }
+        this.lastWriteStatus = saved ? "committed" : "failed";
+        this.#updateDiagnostic();
+        return saved;
+    }
+
+    getStatus() {
+
+        return {
+            restoreState: this.restoreState,
+            revision: this.lastKnownGood?.revision ?? null,
+            libraryIdentity: this.libraryIdentity,
+            visibleTrackCount: this.lastKnownGood?.visibleTracks?.length ?? 0,
+            selectedTrack: this.lastKnownGood?.selectedTrack ?? null,
+            lastWriteReason: this.lastWriteReason,
+            lastWriteStatus: this.lastWriteStatus,
+            ...this.metrics
+        };
     }
 
     #restoreSidebar(state) {
@@ -288,6 +442,58 @@ export default class DisplaySnapshotCoordinator {
         const values = { ...this.metrics };
 
         this.reportMetrics(values);
+    }
+
+    #setRestoreState(state) {
+
+        if (!RESTORE_STATES.has(state)) return;
+
+        this.restoreState = state;
+        this.#updateDiagnostic();
+    }
+
+    #attachDiagnostic() {
+
+        if (
+            !this.diagnosticRoot?.append ||
+            !this.documentTarget?.createElement
+        ) return;
+
+        this.diagnosticElement = this.documentTarget.createElement("details");
+        this.diagnosticElement.className = "fast-restore-diagnostic";
+        this.diagnosticElement.innerHTML = `
+            <summary>Fast Restore</summary>
+            <pre></pre>
+        `;
+        this.diagnosticRoot.append(this.diagnosticElement);
+        this.#updateDiagnostic();
+    }
+
+    #updateDiagnostic(overrides = {}) {
+
+        Object.assign(this, overrides);
+        const output = this.diagnosticElement?.querySelector("pre");
+
+        if (!output) return;
+
+        const identity = createIdentityToken(
+            this.libraryIdentity,
+            this.cacheNamespace
+        );
+        output.textContent = [
+            `snapshot: ${this.snapshotStatus || "checking"}`,
+            `revision: ${this.lastKnownGood?.revision ?? "-"}`,
+            `library: ${identity}`,
+            `visible: ${this.lastKnownGood?.visibleTracks?.length ?? 0}`,
+            `cache refs: ${this.lastKnownGood?.visibleTracks?.length ?? 0}`,
+            `selected: ${this.lastKnownGood?.selectedTrack ? "yes" : "no"}`,
+            `cache hits: ${this.metrics.restoredTrackCount}`,
+            `cache miss: ${this.metrics.cacheMissCount}`,
+            `phaseA: ${this.phaseAStatus || this.restoreState}`,
+            `phaseB: ${this.phaseBStatus || "pending"}`,
+            `snapshot write: ${this.lastWriteStatus}`,
+            `write reason: ${this.lastWriteReason || "-"}`
+        ].join("\n");
     }
 
     #cancelTimer() {
