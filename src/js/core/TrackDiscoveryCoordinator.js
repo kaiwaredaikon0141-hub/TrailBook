@@ -158,6 +158,26 @@ export default class TrackDiscoveryCoordinator {
         };
     }
 
+    reconcileLibrary({ namespace, fileEntries, entries }) {
+
+        if (!this.available) return false;
+        this.fileHandles = new Map(
+            fileEntries.map(({ path, fileHandle }) => [path, fileHandle])
+        );
+        this.index.setLibrary({
+            namespace,
+            fileEntries,
+            cachedEntries: entries,
+            generation: this.generation
+        });
+        this.trackInfo.setLibrary({
+            generation: this.generation,
+            isCurrent: this.isCurrent
+        });
+        this.#applyFilter(entries);
+        return true;
+    }
+
     clearLibrary() {
 
         this.available = false;

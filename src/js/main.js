@@ -6,6 +6,7 @@ import BatchSimplificationCoordinator, {
     collectBatchEntries
 } from "./core/BatchSimplificationCoordinator.js";
 import EditedGPXLibraryRefreshCoordinator from "./core/EditedGPXLibraryRefreshCoordinator.js";
+import LibraryRefreshCoordinator from "./core/LibraryRefreshCoordinator.js";
 import TrackEditingCoordinator from "./core/TrackEditingCoordinator.js";
 import { registerTrailBookServiceWorker } from "./services/PWAServiceWorker.js";
 import { folderPathFromFilePath } from "./utils/PathUtils.js";
@@ -101,6 +102,44 @@ window.addEventListener("DOMContentLoaded", () => {
             app.libraryAccessPanel.hide();
         }
     });
+    const libraryRefresh = new LibraryRefreshCoordinator({
+        eventBus: app.eventBus,
+        scanner: app.folderScanner,
+        previousLibraryCoordinator: app.previousLibraryCoordinator,
+        librarySnapshotService: app.librarySnapshotService,
+        treeView: app.treeView,
+        discoveryCoordinator: app.trackDiscoveryCoordinator,
+        displayState: app.displayState,
+        selectionState: app.selectionState,
+        repository: app.gpxGeometryLoader.repository,
+        getNamespace: () => app.gpxGeometryLoader.namespace,
+        canRefresh: () => app.displaySnapshotCoordinator.getStatus()
+            .restoreState === "ready",
+        getLibrary: () => app.currentLibrary,
+        setLibrary: library => { app.currentLibrary = library; },
+        getColor: path => app.getColor(path),
+        removePath: path => app.stopDisplay(path, { refocus: false }),
+        reloadVisiblePath: async ({ path, fileHandle }) => {
+            app.stopDisplay(path, { refocus: false, preserveSelection: true });
+            app.handleDisplayToggled({
+                path, fileHandle, checked: true,
+                preserveMapView: true, preserveSelection: true
+            });
+        },
+        onLibraryUpdated: library => {
+            app.librarySettingsCoordinator.reconcileFolderPaths(
+                app.treeView.getSearchSourceEntries()
+                    .filter(entry => entry.kind === "folder")
+                    .map(entry => entry.path)
+            );
+            app.updateFolderColorPresentation();
+            app.statusBar.showLibraryLoaded(library);
+            app.libraryAccessPanel.hide();
+            void app.displaySnapshotCoordinator.flush("library-refresh");
+        }
+    });
+
+    libraryRefresh.bind();
 
     let batchSimplification = null;
     let driveLibrary = null;

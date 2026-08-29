@@ -26,6 +26,7 @@ export default class PreviousLibraryCoordinator {
         beforeLoad,
         applyLibrary,
         getCurrentLibrary,
+        hasUsableLibrary = () => Boolean(getCurrentLibrary()),
         getSupport = getFolderPickerSupport,
         pickDirectory = pickFolder,
         reportError = (message, error) => console.error(message, error)
@@ -41,12 +42,14 @@ export default class PreviousLibraryCoordinator {
         this.beforeLoad = beforeLoad;
         this.applyLibrary = applyLibrary;
         this.getCurrentLibrary = getCurrentLibrary;
+        this.hasUsableLibrary = hasUsableLibrary;
         this.getSupport = getSupport;
         this.pickDirectory = pickDirectory;
         this.reportError = reportError;
         this.generation = 0;
         this.previousHandle = null;
         this.previousPermission = "prompt";
+        this.loading = false;
 
         this.accessPanel.setPreviousLibraryAction(
             () => void this.openPrevious()
@@ -165,25 +168,47 @@ export default class PreviousLibraryCoordinator {
         return this.#openHandle(handle, { remember: false });
     }
 
+    isLoading() {
+        return this.loading;
+    }
+
+    getRefreshHandle() {
+        return this.getCurrentLibrary()?.rootFolder?.handle || this.previousHandle;
+    }
+
+    async queryRefreshPermission(handle = this.getRefreshHandle()) {
+        return handle ? this.#queryReadPermission(handle) : "denied";
+    }
+
+    async refreshPreviousIfGranted() {
+
+        const handle = this.getRefreshHandle();
+
+        if (!handle || this.loading ||
+            await this.#queryReadPermission(handle) !== "granted") return false;
+        return this.#openHandle(handle, { remember: false });
+    }
+
     #configureAccess() {
 
         const support = this.getSupport();
         let disabledReason = "";
+        const showEnvironmentStatus = !this.hasUsableLibrary();
 
         if (support.reason === "insecure-context") {
             disabledReason = "安全な接続で開いてください";
             this.accessPanel.showInsecureContext();
-            this.statusBar.showUnsupportedEnvironment();
+            if (showEnvironmentStatus) this.statusBar.showUnsupportedEnvironment();
         } else if (support.reason === "missing-api") {
             disabledReason = "このbrowserではFolder選択を利用できません";
             this.accessPanel.showUnsupportedBrowser();
-            this.statusBar.showUnsupportedEnvironment();
+            if (showEnvironmentStatus) this.statusBar.showUnsupportedEnvironment();
         } else if (support.isMobile) {
             this.accessPanel.showUnverifiedMobile();
-            this.statusBar.showInitial();
+            if (showEnvironmentStatus) this.statusBar.showInitial();
         } else {
             this.accessPanel.showInitial();
-            this.statusBar.showInitial();
+            if (showEnvironmentStatus) this.statusBar.showInitial();
         }
 
         this.toolbar.setFolderPickerState({
@@ -212,6 +237,7 @@ export default class PreviousLibraryCoordinator {
         const isCurrent = () => generation === this.generation;
         const cacheNamespace = await this.#resolveCacheNamespace(handle);
 
+        this.loading = true;
         this.beforeLoad();
         this.accessPanel.showLoading(handle.name);
         this.statusBar.showLibraryLoading(handle.name);
@@ -272,6 +298,8 @@ export default class PreviousLibraryCoordinator {
                 }
             }
             return false;
+        } finally {
+            if (isCurrent()) this.loading = false;
         }
     }
 

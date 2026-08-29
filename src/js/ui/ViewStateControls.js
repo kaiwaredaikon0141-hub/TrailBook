@@ -158,6 +158,8 @@ export default class ViewStateControls {
             this.toolbar?.sidebarToggleButton.focus();
         }
 
+        const wasOpen = this.sidebarOpen;
+
         this.sidebarOpen = normalizedOpen;
         this.sidebar.hidden = this.mobileLayout ? false : !normalizedOpen;
         this.sidebar.classList.toggle("is-mobile-open", normalizedOpen);
@@ -173,6 +175,9 @@ export default class ViewStateControls {
             !normalizedOpen
         );
         this.toolbar.setSidebarOpen(normalizedOpen);
+        if (normalizedOpen && !wasOpen) {
+            this.eventBus.emit("library:sidebar-opened");
+        }
         const resizeVisible = this.resizeHandle.setSidebarOpen(normalizedOpen);
 
         this.workspace.classList.toggle(

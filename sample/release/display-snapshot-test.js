@@ -327,6 +327,7 @@ async function testLibrarySnapshotService() {
     const provisional = [];
     const accessStates = [];
     const removed = [];
+    const statusLibraries = [];
     let actualFileEntries = [];
     const displayState = new DisplayState();
     const selectionState = new SelectionState();
@@ -371,7 +372,10 @@ async function testLibrarySnapshotService() {
         eventBus,
         mapView: { removeGPX: path => removed.push(path) },
         selectionState,
-        getColor: () => "#123456"
+        getColor: () => "#123456",
+        statusBar: {
+            showLibraryLoaded: library => statusLibraries.push(library.name)
+        }
     });
     const state = service.capture({
         libraryIdentity: "root-name:GPX",
@@ -405,6 +409,8 @@ async function testLibrarySnapshotService() {
         "cached selected Track was not restored");
     assert(service.isProvisionalFor("local-cache"),
         "cached Library was not marked provisional");
+    assert(statusLibraries[0] === "GPX",
+        "cached Library left the stale open-Library status message visible");
     assert(accessStates[0] === true && events[0].value.provisional,
         "viewer-only availability was not announced");
     selectionState.select("Trips/one.gpx", "system");

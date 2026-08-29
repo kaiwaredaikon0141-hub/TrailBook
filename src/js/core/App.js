@@ -181,7 +181,7 @@ export default class App {
         });
         this.librarySnapshotService = new LibrarySnapshotService({
             treeView: this.treeView, discoveryCoordinator: this.trackDiscoveryCoordinator,
-            displayState: this.displayState, searchView: this.searchView, accessPanel: this.libraryAccessPanel, eventBus: this.eventBus, mapView: this.mapView, selectionState: this.selectionState, getColor: path => this.getColor(path)
+            displayState: this.displayState, searchView: this.searchView, accessPanel: this.libraryAccessPanel, eventBus: this.eventBus, mapView: this.mapView, selectionState: this.selectionState, getColor: path => this.getColor(path), statusBar: this.statusBar
         });
         this.workspace.append(sidebar, this.mapView.element);
         this.viewStateControls.attach({
@@ -235,7 +235,7 @@ export default class App {
             },
             applyLibrary: (library, context) =>
                 this.handleLibraryLoaded(library, context),
-            getCurrentLibrary: () => this.currentLibrary
+            getCurrentLibrary: () => this.currentLibrary, hasUsableLibrary: () => Boolean(this.currentLibrary) || this.librarySnapshotService.isProvisional()
         });
 
         app.replaceChildren(

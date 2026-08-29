@@ -136,7 +136,8 @@ export default class LibrarySnapshotService {
         eventBus,
         mapView,
         selectionState,
-        getColor
+        getColor,
+        statusBar = null
     }) {
         Object.assign(this, {
             treeView,
@@ -147,7 +148,8 @@ export default class LibrarySnapshotService {
             eventBus,
             mapView,
             selectionState,
-            getColor
+            getColor,
+            statusBar
         });
         this.provisional = false;
         this.cacheNamespace = null;
@@ -235,6 +237,7 @@ export default class LibrarySnapshotService {
         });
         this.searchView.setAvailable(true);
         this.accessPanel.setProvisionalLibrary(true);
+        this.statusBar?.showLibraryLoaded(model.library);
         this.provisional = true;
         this.cacheNamespace = cacheNamespace;
         this.provisionalPaths = new Set(

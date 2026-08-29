@@ -118,6 +118,19 @@ export default class LibrarySettingsCoordinator {
         this.#render();
     }
 
+    reconcileFolderPaths(folderPaths) {
+
+        this.folderPaths = [...new Set(
+            folderPaths.filter(path => typeof path === "string")
+        )];
+        this.folderColorState.setActiveLibrary(
+            this.libraryId,
+            this.folderPaths,
+            this.state.getSnapshot().folderColors
+        );
+        this.#render();
+    }
+
     async save() {
 
         const status = this.state.getStatus();

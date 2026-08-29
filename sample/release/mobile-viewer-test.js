@@ -235,6 +235,9 @@ async function run() {
     assert(fixture.controls.isSidebarOpen() &&
         fixture.shell.classList.contains("is-mobile-open"),
     "Library button did not open mobile Sidebar");
+    assert(fixture.eventBus.events.some(event =>
+        event.name === "library:sidebar-opened"),
+    "opening the Library Sidebar did not request a background refresh");
     assert(!fixture.workspace.querySelector(".mobile-sidebar-backdrop").hidden,
         "mobile backdrop did not open");
     fixture.workspace.querySelector(".mobile-sidebar-backdrop").click();

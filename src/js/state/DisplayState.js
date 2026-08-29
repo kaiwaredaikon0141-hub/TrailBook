@@ -59,6 +59,16 @@ export default class DisplayState {
         this.#notify(path);
     }
 
+    unregisterFile(path) {
+
+        const removed = this.displays.delete(path);
+
+        this.cache.delete(path);
+        this.requestIds.delete(path);
+        if (removed) this.#notify(null);
+        return removed;
+    }
+
     replaceFilePath(sourcePath, targetPath, fileHandle, color) {
 
         const previous = this.displays.get(sourcePath);
