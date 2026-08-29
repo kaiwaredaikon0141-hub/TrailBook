@@ -150,6 +150,10 @@ async function testDrivingMode() {
     });
 
     controller.attach(document.body);
+    assert(controller.button.querySelector("svg") &&
+        controller.button.querySelector(".driving-mode-label") &&
+        controller.button.title && controller.button.getAttribute("aria-label"),
+    "driving control is not a labelled platform-independent icon");
     assert(await controller.enable() && controller.isActive(),
         "Mobile driving mode did not start");
     assert(currentPosition.starts === 1 && currentPosition.isFollowing(),

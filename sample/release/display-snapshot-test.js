@@ -10,6 +10,8 @@ import DisplayState from "../../src/js/state/DisplayState.js";
 import SelectionState from "../../src/js/state/SelectionState.js";
 import TrackDiscoveryEntry from
     "../../src/js/models/TrackDiscoveryEntry.js";
+import LibrarySnapshotService from
+    "../../src/js/services/LibrarySnapshotService.js";
 
 const output = document.getElementById("result");
 let assertions = 0;
@@ -60,7 +62,27 @@ function snapshot(paths = ["one.gpx", "missing.gpx"]) {
             displayStyle: { color: index ? "#222222" : "#111111" }
         })),
         selectedTrack: { relativePath: "one.gpx", trackIdentity: "track-0" },
-        sidebarState: { open: false, width: 320, trackInfoHeight: 200 }
+        sidebarState: { open: false, width: 320, trackInfoHeight: 200 },
+        library: {
+            identity: "root-name:GPX",
+            rootName: "GPX",
+            folders: ["Trips"],
+            entries: paths.map((relativePath, index) => ({
+                relativePath,
+                folderPath: "",
+                originalFileName: relativePath,
+                displayName: relativePath.replace(/\.gpx$/i, ""),
+                trackNames: [`track-${index}`],
+                resolvedDate: index ? null : "2026-08-29",
+                pointCount: 2,
+                distance: 100,
+                status: "ready"
+            })),
+            mode: "date",
+            filter: { query: "one", from: "", to: "" },
+            expandedPaths: ["", "Trips"],
+            expandedDateIds: ["year:2026", "month:2026-08"]
+        }
     };
 }
 
@@ -88,6 +110,10 @@ async function testStore() {
     assert(loaded.selectedTrack.relativePath === "one.gpx", "selection lost");
     assert(loaded.map.zoom === 12, "map state lost");
     assert(loaded.revision === 4, "snapshot revision lost");
+    assert(loaded.library.entries.length === 1,
+        "cached Library entries were not persisted");
+    assert(loaded.library.mode === "date",
+        "cached Library navigation mode was not persisted");
 
     adapter.value = { ...snapshot(), schemaVersion: 99 };
     assert(await store.load() === null, "unknown snapshot schema accepted");
@@ -168,7 +194,7 @@ async function testCoordinator() {
         view: null,
         isValidViewState: value => value?.zoom === 12,
         setViewState(value) { order.push("map-state"); this.view = value; },
-        getViewState: () => ({ lat: 36, lng: 136, zoom: 11 }),
+        getViewState() { return this.view ?? { lat: 36, lng: 136, zoom: 11 }; },
         invalidateSize: () => {},
         displayGPX: (path, result) => {
             displays.push({ path, result });
@@ -177,6 +203,7 @@ async function testCoordinator() {
         setSelectedPath: path => { order.push(`select:${path}`); }
     };
     const metrics = [];
+    let libraryReady = 0;
     const coordinator = new DisplaySnapshotCoordinator({
         eventBus,
         store,
@@ -190,6 +217,16 @@ async function testCoordinator() {
             selectedMainStyle: { color },
             selectedOutlineStyle: { color: "white" }
         }),
+        restoreLibrarySnapshot: async (state, context) => {
+            assert(context.restoredTracks.length === 1,
+                "cached tree did not receive restored geometry state");
+            assert(context.selectedPath === "one.gpx",
+                "cached tree did not receive selected Track");
+            order.push(`tree:${state.entries.length}`);
+            return true;
+        },
+        captureLibrarySnapshot: () => snapshot(["one.gpx"]).library,
+        markLibraryReady: () => { libraryReady += 1; },
         setTimer: callback => { timers.push(callback); return timers.length; },
         clearTimer: () => {},
         documentTarget,
@@ -206,6 +243,10 @@ async function testCoordinator() {
         "sidebar state not restored");
     assert(coordinator.hasInstantRestore(), "phase-A state missing");
     assert(order.includes("map-state"), "map state not restored");
+    assert(order.indexOf("map-state") < order.indexOf("display:one.gpx"),
+        "map state was not restored before geometry");
+    assert(order.indexOf("select:one.gpx") < order.indexOf("tree:2"),
+        "cached tree restored before geometry selection was ready");
     assert(coordinator.getStatus().restoreState === "phaseA",
         "phase-A lifecycle state missing");
 
@@ -246,6 +287,11 @@ async function testCoordinator() {
     ), "missing cache reference was not retained for revalidation");
     assert(writes[0].selectedTrack.relativePath === "one.gpx",
         "selection was not preserved by phase-B commit");
+    assert(writes[0].map.zoom === 12,
+        "phase-B replaced the snapshot map view");
+    assert(writes[0].library.entries.length === 1,
+        "phase-B omitted lightweight Library metadata");
+    assert(libraryReady === 1, "actual Library did not leave provisional mode");
     assert(coordinator.getStatus().restoreState === "ready",
         "ready lifecycle state missing");
 
@@ -271,6 +317,101 @@ async function testCoordinator() {
     assert(metrics.length === 1, "startup metrics emitted more than once");
     assert(metrics[0].restoredTrackCount === 1 &&
         metrics[0].cacheMissCount === 1, "startup metrics incorrect");
+}
+
+async function testLibrarySnapshotService() {
+    const events = [];
+    const eventBus = { emit: (name, value) => events.push({ name, value }) };
+    const selected = [];
+    const rendered = [];
+    const provisional = [];
+    const accessStates = [];
+    const removed = [];
+    let actualFileEntries = [];
+    const displayState = new DisplayState();
+    const selectionState = new SelectionState();
+    const discoveryEntry = new TrackDiscoveryEntry({
+        relativePath: "Trips/one.gpx",
+        folderPath: "Trips",
+        originalFileName: "one.gpx",
+        displayName: "Morning Ride",
+        trackNames: ["Morning Ride"],
+        resolvedDate: "2026-08-29",
+        pointCount: 2,
+        distance: 100
+    });
+    const treeView = {
+        expandedPaths: new Set(["", "Trips"]),
+        getSearchSourceEntries: () => [
+            { kind: "folder", path: "Trips", name: "Trips" },
+            { kind: "file", path: "Trips/one.gpx", name: "one.gpx" }
+        ],
+        getFileEntries: () => actualFileEntries,
+        async render(library, options) { rendered.push({ library, options }); },
+        setDisplayChecked: () => {},
+        setDisplayLoaded: () => {},
+        setSelectedPath: (path, options) => selected.push({ path, options })
+    };
+    const discoveryCoordinator = {
+        getSnapshotState: () => ({
+            entries: [discoveryEntry], mode: "date",
+            filter: { query: "ride", from: "", to: "" },
+            expandedDateIds: ["year:2026", "month:2026-08"]
+        }),
+        setProvisionalLibrary: state => provisional.push(state)
+    };
+    const service = new LibrarySnapshotService({
+        treeView,
+        discoveryCoordinator,
+        displayState,
+        searchView: { setAvailable: () => {} },
+        accessPanel: {
+            setProvisionalLibrary: value => accessStates.push(value)
+        },
+        eventBus,
+        mapView: { removeGPX: path => removed.push(path) },
+        selectionState,
+        getColor: () => "#123456"
+    });
+    const state = service.capture({
+        libraryIdentity: "root-name:GPX",
+        rootName: "GPX"
+    });
+
+    assert(Number.isFinite(state.entries[0].resolvedDate),
+        "Date Tree metadata was not captured");
+    assert(state.mode === "date" && state.filter.query === "ride",
+        "mode/filter state was not captured");
+    assert(await service.restore(state, {
+        cacheNamespace: "local-cache",
+        restoredTracks: [{
+            path: "Trips/one.gpx", result: geometry(), color: "#123456"
+        }],
+        selectedPath: "Trips/one.gpx"
+    }), "cached Library tree restore failed");
+    assert(rendered[0].library.gpxFileCount === 1,
+        "cached Folder Tree file count incorrect");
+    assert(rendered[0].options.preserveNavigation,
+        "cached Folder Tree navigation was not restored");
+    assert(provisional[0].entries[0].resolvedDate instanceof Date,
+        "cached Date/Search entry was not restored");
+    assert(displayState.getDisplay("Trips/one.gpx")?.state === "loaded",
+        "visible Track check/load state was not restored");
+    assert(selected[0].path === "Trips/one.gpx",
+        "cached selected Track was not restored");
+    assert(service.isProvisionalFor("local-cache"),
+        "cached Library was not marked provisional");
+    assert(accessStates[0] === true && events[0].value.provisional,
+        "viewer-only availability was not announced");
+    selectionState.select("Trips/one.gpx", "system");
+    actualFileEntries = [];
+    service.reconcileActual();
+    assert(removed[0] === "Trips/one.gpx" &&
+        selectionState.getSelectedPath() === null,
+    "removed actual file left stale geometry or selection");
+    service.markReady();
+    assert(!service.isProvisional() && accessStates.at(-1) === false,
+        "actual Library did not replace provisional availability");
 }
 
 async function testLastKnownGoodAcrossRestarts() {
@@ -455,6 +596,7 @@ try {
     await testStore();
     await testOptimisticGeometryRead();
     await testCoordinator();
+    await testLibrarySnapshotService();
     await testLastKnownGoodAcrossRestarts();
     await testEmptyPhaseBDoesNotReplaceKnownGood();
     await testDriveIdentityAndNoHandleDependency();

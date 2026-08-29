@@ -4,6 +4,26 @@ Version: 1.0.0〜1.5.0 release records
 Status: Release 1.0〜1.5 Completed
 Baseline: v1.4.0 for Release 1.5
 
+## Release 1.9 Unit 2 — Complete Fast Restore UX
+
+- [x] Apply snapshot center/zoom before cached geometry; no Phase A/B auto-fit or reset.
+- [x] Save and restore lightweight Folder/Date/Search tree metadata without GPX bytes.
+- [x] Restore visible checks, selection, mode, filter, and expanded nodes where valid.
+- [x] Keep cached Library provisional/viewer-only until actual Library reconciliation.
+- [x] Suppress redundant Previous Library primary action while cached tree is available.
+- [x] Use inline SVG for mobile GPS and Driving controls; keep 48 px touch targets and accessible names.
+- [x] Extend Fast Restore diagnostic with map, tree source/count, and provisional/ready state.
+- [ ] Android PWA Browser Acceptance.
+
+Validation:
+
+- Display Snapshot / cached Library lifecycle: 86 assertions Pass.
+- Discovery Index regression: 85 assertions Pass.
+- Production modules: 104 / 104 reachable.
+- Missing import / circular dependency: 0 / 0.
+- App.js / TreeView.js: 999 / 996 lines.
+- Browser-only Mobile/PWA regression runner: Pending (browser unavailable).
+
 ## Release 1.9 Unit 1 — Fast Mobile Cold Start
 
 - [x] Snapshot schemaにLibrary/cache identity、Map、visible Track、selection、sidebar stateを保存

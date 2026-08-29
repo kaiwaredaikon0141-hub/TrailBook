@@ -110,6 +110,54 @@ export default class TrackDiscoveryCoordinator {
         }
     }
 
+    setProvisionalLibrary({
+        namespace,
+        libraryId,
+        fileEntries,
+        entries,
+        mode,
+        filter,
+        expandedDateIds = []
+    }) {
+
+        this.available = true;
+        this.generation += 1;
+        this.isCurrent = () => true;
+        this.fileHandles = new Map(
+            fileEntries.map(({ path, fileHandle }) => [path, fileHandle])
+        );
+        this.index.setLibrary({
+            namespace,
+            fileEntries,
+            cachedEntries: entries,
+            generation: this.generation
+        });
+        this.trackInfo.setLibrary({
+            generation: this.generation,
+            isCurrent: this.isCurrent
+        });
+        this.mode = mode === "date" ? "date" : "folder";
+        this.modeStore.setMode(this.mode);
+        this.activeFilter = this.filterService.normalize(filter);
+        this.modeStore.setActiveLibrary(libraryId);
+        this.searchView?.setFilter(this.activeFilter);
+        this.dateTree.expandedIds = new Set(expandedDateIds);
+        this.dateTree.setAvailable(true);
+        this.#updateControls();
+        this.#applyMode();
+        this.#applyFilter(entries);
+    }
+
+    getSnapshotState() {
+
+        return {
+            entries: this.index.getEntries(),
+            mode: this.mode,
+            filter: this.activeFilter,
+            expandedDateIds: [...this.dateTree.expandedIds]
+        };
+    }
+
     clearLibrary() {
 
         this.available = false;

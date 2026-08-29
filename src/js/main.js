@@ -112,7 +112,7 @@ window.addEventListener("DOMContentLoaded", () => {
         refreshEditedFile: saved => editedFileRefresh.refreshVerifiedFile(saved),
         setSaveBusy: busy => app.toolbar.setFolderPickerBusy(busy),
         isExternalBusy: () => Boolean(batchSimplification?.isBusy()) ||
-            Boolean(driveLibrary?.isReadOnlyActive()),
+            Boolean(driveLibrary?.isReadOnlyActive()) || !app.currentLibrary,
         interactionRoot: app.workspace.querySelector(".sidebar-shell"),
         getFileEntry: path => {
             const entry = app.treeView.getFileEntries()

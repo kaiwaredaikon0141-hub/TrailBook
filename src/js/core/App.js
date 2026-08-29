@@ -11,6 +11,7 @@ import DisplaySettingsStore from "../services/DisplaySettingsStore.js";
 import ViewStateStore from "../services/ViewStateStore.js";
 import PreviousLibraryStore from "../services/PreviousLibraryStore.js";
 import DisplaySnapshotStore from "../services/DisplaySnapshotStore.js";
+import LibrarySnapshotService from "../services/LibrarySnapshotService.js";
 import DiscoveryViewStateStore from "../services/DiscoveryViewStateStore.js";
 import LibrarySettingsCoordinator from "./LibrarySettingsCoordinator.js";
 import ViewStateCoordinator from "./ViewStateCoordinator.js";
@@ -178,7 +179,10 @@ export default class App {
             folderTree: this.treeView.element.querySelector(".tree-root"),
             searchView: this.searchView
         });
-
+        this.librarySnapshotService = new LibrarySnapshotService({
+            treeView: this.treeView, discoveryCoordinator: this.trackDiscoveryCoordinator,
+            displayState: this.displayState, searchView: this.searchView, accessPanel: this.libraryAccessPanel, eventBus: this.eventBus, mapView: this.mapView, selectionState: this.selectionState, getColor: path => this.getColor(path)
+        });
         this.workspace.append(sidebar, this.mapView.element);
         this.viewStateControls.attach({
             toolbar: this.toolbar,
@@ -205,6 +209,11 @@ export default class App {
             selectionState: this.selectionState,
             getTrackStyle: color => this.createTrackStyle(color),
             getSelectionStyles: color => this.createSelectionStyles(color),
+            captureLibrarySnapshot: ({ libraryIdentity }) => this.librarySnapshotService
+                .capture({ libraryIdentity, rootName: this.currentLibrary?.name }),
+            restoreLibrarySnapshot: (state, context) => this.librarySnapshotService
+                .restore(state, context),
+            markLibraryReady: () => this.librarySnapshotService.markReady(),
             debounceMs: this.config.displaySnapshot.debounceMs,
             diagnosticRoot: sidebar
         });
@@ -222,7 +231,7 @@ export default class App {
                 if (!this.displaySnapshotCoordinator?.hasInstantRestore()) {
                     this.clearSelection("library-switch");
                 }
-                this.trackDiscoveryCoordinator.clearLibrary();
+                if (!this.librarySnapshotService.isProvisional()) this.trackDiscoveryCoordinator.clearLibrary();
             },
             applyLibrary: (library, context) =>
                 this.handleLibraryLoaded(library, context),
@@ -342,17 +351,21 @@ export default class App {
         if (!settingsLoad) {
             return false;
         }
-
-        this.clearSelection("library-switch");
+        const preserveCached = this.librarySnapshotService
+            .isProvisionalFor(cacheNamespace);
+        if (!preserveCached) this.clearSelection("library-switch");
         this.displayQueue.clear();
         clearTimeout(this.#searchRefreshTimer);
-        this.searchView.setAvailable(false);
-        this.mapView.clear();
-        this.mapView.resetView({ silent: true });
+        if (!preserveCached) {
+            this.searchView.setAvailable(false);
+            this.mapView.clear();
+            this.mapView.resetView({ silent: true });
+        }
         this.gpxGeometryLoader.setLibraryNamespace(cacheNamespace);
         this.displayState.setLibrary(library.rootFolder.handle);
 
-        await this.treeView.render(library);
+        await this.treeView.render(library, { preserveNavigation: preserveCached });
+        if (preserveCached) this.treeView.setSelectedPath(this.selectionState.getSelectedPath(), { reveal: true });
 
         if (!isCurrent()) {
             return false;
@@ -407,9 +420,10 @@ export default class App {
             libraryName: library.name,
             generation,
             isCurrent
-        }).then(restored => this.displaySnapshotCoordinator?.completePhaseB({
-            restored
-        }));
+        }).then(restored => {
+            this.librarySnapshotService.reconcileActual();
+            return this.displaySnapshotCoordinator?.completePhaseB({ restored });
+        });
 
         return true;
     }

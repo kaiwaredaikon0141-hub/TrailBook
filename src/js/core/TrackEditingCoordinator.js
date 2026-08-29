@@ -643,6 +643,9 @@ export default class TrackEditingCoordinator {
 
     #bindEvents() {
 
+        this.eventBus.on("library:provisional-state-changed", ({ provisional }) => {
+            this.panel.setEditingAvailable?.(!provisional);
+        });
         this.eventBus.on("selection:changed", ({ path }) => {
             if ((this.session || this.loading) && path !== this.sourcePath) {
                 this.cancel({ restoreFocus: false });

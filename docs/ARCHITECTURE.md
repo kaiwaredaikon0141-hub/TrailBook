@@ -6,6 +6,14 @@ Baseline: Release 1.3.0
 Current: Release 1.3 Previous View Restoration Completed
 Depends: PROJECT.md, ROADMAP.md, DECISIONS.md
 
+## Release 1.9 Unit 2 Architecture — Complete Fast Restore UX
+
+- The existing Display Snapshot now carries lightweight Library tree metadata only; GPX source bytes remain outside the snapshot.
+- Phase A applies the saved map center/zoom before cached geometry, then restores selection and a provisional Folder/Date/Search projection.
+- Provisional cached files are viewer-only. Editing and writes remain unavailable until the real provider or DirectoryHandle is ready.
+- Phase B atomically replaces the cached tree with the current scanned Library while preserving map view, visible Track identity, selection, mode, filters, and expansion where valid.
+- Mobile Library, Base Map, Map Mode, GPS, and Driving controls use inline SVG/CSS icons with accessible labels and platform-independent rendering.
+
 ## Release 1.9 Unit 1 Architecture — Persistent Display Snapshot
 
 - `DisplaySnapshotStore`は最後に表示成功したLibrary identity、Geometry Cache namespace、visible path、selection、Map view、sidebar stateだけを端末IndexedDBへ保存する。GPX本文は複製しない。

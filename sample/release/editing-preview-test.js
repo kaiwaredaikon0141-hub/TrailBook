@@ -747,6 +747,12 @@ function testPanelAccessibility() {
         "simplification point preview label is unclear");
     panel.setSelectedTrack("trip.gpx");
     assert(!panel.editButton.disabled, "selected Track did not enable Edit");
+    panel.setEditingAvailable(false);
+    assert(panel.editButton.disabled,
+        "provisional cached Library did not disable editing");
+    panel.setEditingAvailable(true);
+    assert(!panel.editButton.disabled,
+        "actual Library readiness did not re-enable editing");
     panel.editButton.click();
     assert(editCount === 1, "keyboard-capable native Edit button not wired");
     panel.showLoading("trip.gpx");

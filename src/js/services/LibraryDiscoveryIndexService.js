@@ -28,18 +28,27 @@ export default class LibraryDiscoveryIndexService {
         this.entryVersions = new Map();
     }
 
-    setLibrary({ namespace = null, fileEntries = [], generation = 0 } = {}) {
+    setLibrary({
+        namespace = null,
+        fileEntries = [],
+        cachedEntries = null,
+        generation = 0
+    } = {}) {
 
         this.cancel();
         this.generation = generation;
         this.fileEntries = this.#normalizeFileEntries(fileEntries);
-        this.entries.clear();
+        this.entries = new Map(
+            (Array.isArray(cachedEntries) ? cachedEntries : [])
+                .filter(entry => entry?.relativePath)
+                .map(entry => [entry.relativePath, entry])
+        );
         this.failures.clear();
         this.entryPromises.clear();
         this.entryVersions = new Map(
             this.fileEntries.map(entry => [entry.relativePath, 0])
         );
-        this.status = "idle";
+        this.status = Array.isArray(cachedEntries) ? "ready" : "idle";
         this.buildPromise = null;
         this.loader.setLibraryNamespace?.(namespace);
     }

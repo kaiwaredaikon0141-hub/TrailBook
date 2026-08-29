@@ -1,3 +1,5 @@
+import { normalizeLibrarySnapshot } from "./LibrarySnapshotService.js";
+
 class IndexedDBSnapshotAdapter {
 
     constructor(config, indexedDBFactory) {
@@ -116,7 +118,11 @@ function normalizeSnapshot(value, schemaVersion) {
                 trackIdentity: value.selectedTrack.trackIdentity ?? null
             }
             : null,
-        sidebarState: value.sidebarState ?? null
+        sidebarState: value.sidebarState ?? null,
+        library: normalizeLibrarySnapshot(
+            value.library,
+            value.libraryIdentity
+        )
     };
 }
 

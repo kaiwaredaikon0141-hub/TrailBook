@@ -47,6 +47,9 @@ export default class DisplaySnapshotCoordinator {
         selectionState,
         getTrackStyle,
         getSelectionStyles,
+        captureLibrarySnapshot = () => null,
+        restoreLibrarySnapshot = async () => false,
+        markLibraryReady = () => {},
         debounceMs = 750,
         setTimer = globalThis.setTimeout.bind(globalThis),
         clearTimer = globalThis.clearTimeout.bind(globalThis),
@@ -66,6 +69,9 @@ export default class DisplaySnapshotCoordinator {
             selectionState,
             getTrackStyle,
             getSelectionStyles,
+            captureLibrarySnapshot,
+            restoreLibrarySnapshot,
+            markLibraryReady,
             debounceMs,
             setTimer,
             clearTimer,
@@ -83,6 +89,8 @@ export default class DisplaySnapshotCoordinator {
         this.lastWriteReason = null;
         this.lastWriteStatus = "none";
         this.metricsReported = false;
+        this.snapshotView = null;
+        this.mapChangedDuringRestore = false;
         this.startedAt = now();
         this.metrics = {
             appShellReady: 0,
@@ -113,17 +121,23 @@ export default class DisplaySnapshotCoordinator {
         this.lastKnownGood = snapshot;
         this.libraryIdentity = snapshot.libraryIdentity;
         this.cacheNamespace = snapshot.cacheNamespace;
+        this.snapshotView = snapshot.map;
         this.#updateDiagnostic({ snapshotStatus: "found" });
         if (this.mapView.isValidViewState(snapshot.map)) {
             this.mapView.setViewState(snapshot.map, {
                 animate: false,
                 silent: true
             });
+            this.#updateDiagnostic({
+                mapRestoreStatus:
+                    `${snapshot.map.lat},${snapshot.map.lng} / z${snapshot.map.zoom}`
+            });
         }
         this.#restoreSidebar(snapshot.sidebarState);
 
         let firstGeometryAt = null;
         const restored = [];
+        const restoredTracks = [];
 
         for (const track of snapshot.visibleTracks) {
             const cached = await this.repository.getDisplaySnapshot(
@@ -146,6 +160,11 @@ export default class DisplaySnapshotCoordinator {
             );
             firstGeometryAt ??= now();
             restored.push(track.relativePath);
+            restoredTracks.push({
+                path: track.relativePath,
+                result: cached.result,
+                color
+            });
         }
 
         this.metrics.restoredTrackCount = restored.length;
@@ -160,7 +179,12 @@ export default class DisplaySnapshotCoordinator {
         const selectedPath = snapshot.selectedTrack?.relativePath;
 
         if (selectedPath && restored.includes(selectedPath)) {
-            this.selectionState.select(selectedPath, "system");
+            const change = this.selectionState.select(selectedPath, "system");
+            if (change) this.eventBus.emit("selection:changed", {
+                path: selectedPath,
+                previousPath: change.previousPath,
+                reason: "display-snapshot-restore"
+            });
             const color = snapshot.visibleTracks.find(
                 track => track.relativePath === selectedPath
             )?.displayStyle?.color || DEFAULT_COLOR;
@@ -172,6 +196,20 @@ export default class DisplaySnapshotCoordinator {
                 styles.selectedOutlineStyle
             );
         }
+
+        const treeRestored = await this.restoreLibrarySnapshot(
+            snapshot.library,
+            {
+                cacheNamespace: snapshot.cacheNamespace,
+                restoredTracks,
+                selectedPath
+            }
+        );
+        this.#updateDiagnostic({
+            treeSource: treeRestored ? "cached" : "none",
+            treeEntryCount: snapshot.library?.entries?.length ?? 0,
+            libraryAvailability: treeRestored ? "provisional" : "none"
+        });
 
         return this.phaseARestored;
     }
@@ -190,14 +228,30 @@ export default class DisplaySnapshotCoordinator {
             return false;
         }
 
+        if (
+            this.phaseARestored &&
+            !this.mapChangedDuringRestore &&
+            this.mapView.isValidViewState(this.snapshotView)
+        ) {
+            this.mapView.setViewState(this.snapshotView, {
+                animate: false,
+                silent: true
+            });
+        }
         const saved = await this.#save("phaseB-complete");
 
         if (!saved) return false;
 
         this.#setRestoreState("ready");
+        this.markLibraryReady();
         this.phaseARestored = false;
+        this.snapshotView = null;
         this.metrics.libraryReady ??= Math.max(0, now() - this.startedAt);
-        this.#updateDiagnostic({ phaseBStatus: "success" });
+        this.#updateDiagnostic({
+            phaseBStatus: "success",
+            treeSource: "actual",
+            libraryAvailability: "ready"
+        });
         this.#reportMetrics();
 
         return true;
@@ -223,7 +277,12 @@ export default class DisplaySnapshotCoordinator {
 
     #bindEvents() {
 
-        this.eventBus.on("map:view-changed", () => {
+        this.eventBus.on("map:view-changed", ({ programmatic = false } = {}) => {
+            if (!programmatic && ["phaseA", "phaseB"].includes(
+                this.restoreState
+            )) {
+                this.mapChangedDuringRestore = true;
+            }
             this.#scheduleSave("map-change");
         });
         ["gpx:display-toggled", "folder:display-toggled"].forEach(name => {
@@ -391,8 +450,10 @@ export default class DisplaySnapshotCoordinator {
                 open: this.controls.isSidebarOpen(),
                 width: this.controls.getSidebarWidth(),
                 trackInfoHeight: this.controls.getTrackInfoHeight()
-            }
+            },
+            library: this.captureLibrarySnapshot({ libraryIdentity })
         };
+        this.treeEntryCount = snapshot.library?.entries?.length ?? 0;
         const saved = await this.store.save(snapshot);
 
         if (saved) {
@@ -491,6 +552,10 @@ export default class DisplaySnapshotCoordinator {
             `cache miss: ${this.metrics.cacheMissCount}`,
             `phaseA: ${this.phaseAStatus || this.restoreState}`,
             `phaseB: ${this.phaseBStatus || "pending"}`,
+            `map restored: ${this.mapRestoreStatus || "no"}`,
+            `tree source: ${this.treeSource || "none"}`,
+            `tree entries: ${this.treeEntryCount ?? 0}`,
+            `library: ${this.libraryAvailability || "none"}`,
             `snapshot write: ${this.lastWriteStatus}`,
             `write reason: ${this.lastWriteReason || "-"}`
         ].join("\n");

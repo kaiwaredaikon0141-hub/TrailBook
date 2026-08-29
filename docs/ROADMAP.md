@@ -3,6 +3,13 @@
 Version: 1.8 Completed
 Status: Official
 
+## Release 1.9 Unit 2 — Complete Fast Restore UX
+
+- Status: Implemented; Android PWA acceptance pending.
+- Restore the saved map view and cached Library tree during Phase A.
+- Keep the cached Library viewer-only until Phase B provider reconciliation completes.
+- Use platform-independent mobile control icons.
+
 ## Release 1.9 Unit 1 — Fast Mobile Cold Start
 
 - Status: Implemented; Browser performance acceptance pending.

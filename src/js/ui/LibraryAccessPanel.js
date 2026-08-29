@@ -26,6 +26,7 @@ export default class LibraryAccessPanel {
         );
         this.previousLibraryAction = null;
         this.manualLibraryAction = null;
+        this.provisionalLibrary = false;
         this.previousLibraryButton.addEventListener("click", () => {
             this.previousLibraryAction?.();
         });
@@ -99,6 +100,11 @@ export default class LibraryAccessPanel {
 
     showPreviousLibrary(folderName, permission = "prompt") {
 
+        if (this.provisionalLibrary) {
+            this.hide();
+            return;
+        }
+
         const denied = permission === "denied";
         const granted = permission === "granted";
 
@@ -160,6 +166,12 @@ export default class LibraryAccessPanel {
             `Previous Library: ${normalized}`;
     }
 
+    setProvisionalLibrary(active) {
+
+        this.provisionalLibrary = Boolean(active);
+        if (this.provisionalLibrary) this.hide();
+    }
+
     showPermissionFailure() {
 
         this.#show(
@@ -185,12 +197,15 @@ export default class LibraryAccessPanel {
 
     showEmpty(libraryName) {
 
+        const provisional = this.provisionalLibrary;
+        this.provisionalLibrary = false;
         this.#show(
             `${libraryName}: GPX 0件`,
             "このFolderにはGPXファイルがありません。別のLibraryへ切り替えることができます。",
             "info",
             "manual"
         );
+        this.provisionalLibrary = provisional;
     }
 
     hide() {
@@ -246,6 +261,11 @@ export default class LibraryAccessPanel {
     }
 
     #show(title, message, state = "info", action = "none") {
+
+        if (this.provisionalLibrary) {
+            this.hide();
+            return;
+        }
 
         this.primaryContent.hidden = false;
         this.previousLibraryButton.hidden = action !== "previous";

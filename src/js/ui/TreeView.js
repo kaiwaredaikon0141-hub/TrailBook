@@ -52,7 +52,7 @@ export default class TreeView {
      * @param {import("../models/Library.js").default} library
      * @returns {Promise<void>}
      */
-    async render(library) {
+    async render(library, { preserveNavigation = false } = {}) {
         const requestId = ++this.renderRequestId;
         const previousState = this.captureNavigationState();
         const previousCommittedState = this.captureCommittedState();
@@ -60,7 +60,8 @@ export default class TreeView {
         try {
 
             const prepared = this.metadataBuilder.build(library);
-            const sameLibrary = await this.isSameLibrary(prepared.rootHandle);
+            const sameLibrary = preserveNavigation ||
+                await this.isSameLibrary(prepared.rootHandle);
 
             if (requestId !== this.renderRequestId) {
                 return;

@@ -46,6 +46,7 @@ export default class TrackEditingPanel {
         this.draftStatus = this.element.querySelector(".editor-draft-status");
         this.target = this.element.querySelector(".editor-target");
         this.selectedPath = null;
+        this.editingAvailable = true;
         this.draftPath = null;
         this.canSerialize = false;
         this.saveEnabled = false;
@@ -77,13 +78,19 @@ export default class TrackEditingPanel {
     setSelectedTrack(path) {
 
         this.selectedPath = path || null;
-        this.editButton.disabled = !path;
+        this.editButton.disabled = !path || !this.editingAvailable;
         this.editButton.textContent = path && path === this.draftPath
             ? "編集を再開"
             : "編集";
         this.editButton.title = path
             ? `${path} を編集`
             : "編集するTrackを選択してください";
+    }
+
+    setEditingAvailable(available) {
+
+        this.editingAvailable = Boolean(available);
+        this.setSelectedTrack(this.selectedPath);
     }
 
     getTolerance() {

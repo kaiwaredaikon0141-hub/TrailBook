@@ -25,6 +25,7 @@ export default class DrivingModeController {
         this.active = false;
         this.element = this.#create();
         this.button = this.element.querySelector(".driving-mode-button");
+        this.label = this.element.querySelector(".driving-mode-label");
         this.status = this.element.querySelector(".driving-mode-status");
         this.button.addEventListener("click", () => void this.toggle());
         this.currentPosition.button?.addEventListener(
@@ -86,7 +87,10 @@ export default class DrivingModeController {
 
         this.element.hidden = !this.mobileMedia?.matches;
         this.button.setAttribute("aria-pressed", String(this.active));
-        this.button.textContent = this.active ? "走行中終了" : "走行中";
+        this.label.textContent = this.active ? "走行中終了" : "走行中";
+        const label = this.active ? "走行中モードを終了" : "走行中モードを開始";
+        this.button.setAttribute("aria-label", label);
+        this.button.title = label;
 
         if (!this.active) {
             this.status.textContent = "";
@@ -110,8 +114,13 @@ export default class DrivingModeController {
         control.className = "driving-mode-control";
         control.innerHTML = `
             <button class="driving-mode-button" type="button"
-                aria-pressed="false" aria-describedby="driving-mode-status">
-                走行中
+                aria-pressed="false" aria-label="走行中モードを開始"
+                title="走行中モードを開始" aria-describedby="driving-mode-status">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M8 3h8l2 18H6L8 3z"></path>
+                    <path d="M12 5v4M12 13v4"></path>
+                </svg>
+                <span class="driving-mode-label">走行中</span>
             </button>
             <span id="driving-mode-status" class="driving-mode-status"
                 role="status" aria-live="polite"></span>

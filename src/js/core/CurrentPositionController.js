@@ -211,8 +211,14 @@ export default class CurrentPositionController {
         control.className = "current-position-control";
         control.innerHTML = `
             <button class="current-position-button" type="button"
-                aria-label="現在地を表示・追従" aria-describedby="current-position-status">
-                現在地
+                aria-label="現在地を表示・追従" title="現在地を表示・追従"
+                aria-describedby="current-position-status">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <circle cx="12" cy="12" r="4"></circle>
+                    <path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path>
+                    <circle cx="12" cy="12" r="9"></circle>
+                </svg>
+                <span>現在地</span>
             </button>
             <span id="current-position-status" class="current-position-status"
                 role="status" aria-live="polite"></span>

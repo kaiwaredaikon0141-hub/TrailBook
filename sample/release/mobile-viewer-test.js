@@ -292,6 +292,16 @@ async function run() {
     "previous Library is not the primary action");
     assert(!accessCopy.element.querySelector(".manual-library-secondary").hidden,
         "device Library change action missing");
+    accessCopy.setProvisionalLibrary(true);
+    accessCopy.showPreviousLibrary("Previous", "prompt");
+    assert(accessCopy.primaryContent.hidden &&
+        !accessCopy.libraryChange.hidden,
+    "cached viewer tree did not suppress the redundant previous-Library action");
+    accessCopy.showPreviousLibrary("Previous", "denied");
+    assert(accessCopy.primaryContent.hidden &&
+        !accessCopy.libraryChange.hidden,
+    "permission denial removed the cached viewer tree controls");
+    accessCopy.setProvisionalLibrary(false);
     accessCopy.hide();
     document.body.append(accessCopy.element);
     assert(accessCopy.primaryContent.hidden &&

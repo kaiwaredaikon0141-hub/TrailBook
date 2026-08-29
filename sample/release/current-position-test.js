@@ -92,6 +92,10 @@ function createController({ portrait = true } = {}) {
 async function run() {
     const fixture = createController();
 
+    assert(fixture.controller.button.querySelector("svg") &&
+        fixture.controller.button.title &&
+        fixture.controller.button.getAttribute("aria-label"),
+    "GPS control is not a labelled platform-independent icon");
     fixture.controller.button.click();
     assert(fixture.geolocation.watchCalls.length === 1,
         "watchPosition did not start");
