@@ -374,7 +374,8 @@ function testInitialStateHydrationOrdering() {
     "raw Snapshot getter diagnostic lost its returned state");
     assert(initialRaw.coordinator.permission === "prompt" &&
         initialRaw.coordinator.hasHandle === true &&
-        initialRaw.coordinator.libraryState === "provisional",
+        initialRaw.coordinator.libraryState === "provisional" &&
+        initialRaw.coordinator.runtimeBuildId === "local",
     "correct raw getter state was lost during Coordinator hydration");
     existing.eventBus.emit("library:provisional-state-changed", {
         provisional: true

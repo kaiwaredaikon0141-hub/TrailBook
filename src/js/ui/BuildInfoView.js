@@ -150,6 +150,20 @@ function buildInfoText({
     return parts.join(" \u00b7 ");
 }
 
+export function getServiceWorkerStatus(
+    registration,
+    navigatorObject = globalThis.navigator
+) {
+
+    if (!registration) return "unavailable";
+    if (registration.waiting) return "waiting";
+    if (registration.installing) return "installing";
+    if (navigatorObject?.serviceWorker?.controller || registration.active) {
+        return "active";
+    }
+    return "unavailable";
+}
+
 export function updateBuildInfoElement(element, {
     config = Config,
     runtimeBuild = globalThis.TRAILBOOK_BUILD,
@@ -199,7 +213,8 @@ export async function resolveBuildInfoElements(elements, {
     locationObject = globalThis.location,
     serviceWorkerRegistration = null,
     developmentBuildIdentifier = null,
-    developmentIdentifierOptions = {}
+    developmentIdentifierOptions = {},
+    navigatorObject = globalThis.navigator
 } = {}) {
 
     const localDevelopment = isLocalDevelopmentLocation(locationObject);
@@ -217,9 +232,7 @@ export async function resolveBuildInfoElements(elements, {
     ]);
     const serviceWorkerStatus = localDevelopment
         ? "disabled"
-        : registration
-            ? "active"
-            : "unavailable";
+        : getServiceWorkerStatus(registration, navigatorObject);
 
     elements.filter(Boolean).forEach(element => updateBuildInfoElement(element, {
         config,
@@ -228,6 +241,41 @@ export async function resolveBuildInfoElements(elements, {
         developmentBuildIdentifier: resolvedIdentifier,
         serviceWorkerStatus
     }));
+
+    if (!localDevelopment && registration) {
+        const renderLifecycle = () => {
+            const status = getServiceWorkerStatus(
+                registration,
+                navigatorObject
+            );
+
+            elements.filter(Boolean).forEach(element => updateBuildInfoElement(
+                element,
+                {
+                    config,
+                    runtimeBuild,
+                    locationObject,
+                    developmentBuildIdentifier: resolvedIdentifier,
+                    serviceWorkerStatus: status
+                }
+            ));
+        };
+        const watchWorker = worker => worker?.addEventListener?.(
+            "statechange",
+            renderLifecycle
+        );
+
+        watchWorker(registration.installing);
+        watchWorker(registration.waiting);
+        registration.addEventListener?.("updatefound", () => {
+            watchWorker(registration.installing);
+            renderLifecycle();
+        });
+        navigatorObject?.serviceWorker?.addEventListener?.(
+            "controllerchange",
+            renderLifecycle
+        );
+    }
 
     return {
         developmentBuildIdentifier: resolvedIdentifier,

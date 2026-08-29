@@ -85,6 +85,16 @@ jobs:
               encoding="utf-8",
               newline="\n",
           )
+
+          runtime_build = Path("_site/js/runtime/RuntimeBuild.js")
+          runtime_build.write_text(
+              runtime_build.read_text(encoding="utf-8").replace(
+                  "__TRAILBOOK_RUNTIME_BUILD_ID__",
+                  short_commit or "local",
+              ),
+              encoding="utf-8",
+              newline="\n",
+          )
           PY
 
       - name: Upload Pages artifact

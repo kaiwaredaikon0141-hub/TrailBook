@@ -9,6 +9,7 @@ import {
     createBuildInfoElement,
     getBuildIdentifier,
     getDevelopmentBuildIdentifier,
+    getServiceWorkerStatus,
     resolveBuildInfoElements,
     updateBuildInfoElement
 } from "../../src/js/ui/BuildInfoView.js";
@@ -212,6 +213,9 @@ async function testManifestAndAssets() {
         "Pages build does not use commit SHA");
     assert(workflow.includes('"__TRAILBOOK_BUILD_ID__"'),
         "Pages Service Worker build replacement missing");
+    assert(workflow.includes('Path("_site/js/runtime/RuntimeBuild.js")') &&
+        workflow.includes('"__TRAILBOOK_RUNTIME_BUILD_ID__"'),
+        "Pages runtime module build replacement missing");
 
     const workerSource = await fetch(new URL(
         "../../src/service-worker.js", location.href
@@ -220,17 +224,51 @@ async function testManifestAndAssets() {
         "__TRAILBOOK_BUILD_ID__",
         "431fb68c"
     );
+    const nextWorker = workerSource.replace(
+        "__TRAILBOOK_BUILD_ID__",
+        "9abcdef0"
+    );
     assert(workerSource.includes('"./trailbook.build.js"'),
         "build runtime not in app shell");
     assert(deployedWorker.includes('APP_SHELL_BUILD_ID = "431fb68c"'),
         "deploy build does not update Service Worker source");
     assert(!deployedWorker.includes('APP_SHELL_CACHE_PREFIX}v1'),
         "fixed app shell cache version retained");
+    assert(deployedWorker.includes('APP_SHELL_BUILD_ID = "431fb68c"') &&
+        nextWorker.includes('APP_SHELL_BUILD_ID = "9abcdef0"') &&
+        workerSource.includes("`${APP_SHELL_CACHE_PREFIX}${"),
+        "same application version did not retain commit-specific cache identity");
+    assert(workerSource.includes('searchParams.set("trailbook-build"') &&
+        workerSource.includes('fetch(buildFetchUrl(url), { cache: "reload" })'),
+        "new app shell does not bypass old HTTP/module cache by build ID");
+    assert(workerSource.includes("assertBuildMarker") &&
+        workerSource.includes("Runtime module") &&
+        workerSource.includes("Build metadata"),
+        "mixed build metadata/runtime module is not rejected during install");
+    assert(!workerSource.includes("self.skipWaiting()"),
+        "Service Worker can still replace the controller mid-page");
+    assert(workerSource.includes("self.clients.claim()"),
+        "activated Service Worker no longer claims its scope");
     assert(!workerSource.includes("self.location.hostname"),
         "localhost-only fetch branch remains in production worker");
     assert(workerSource.indexOf("const cached = await cache.match(request)") <
         workerSource.indexOf("return await fetch(request)"),
     "production app shell is no longer cache-first");
+    assert(!workerSource.includes("indexedDB") &&
+        !workerSource.includes("DisplaySnapshot") &&
+        !workerSource.includes("PreviousLibrary"),
+        "app-shell update touches persistent Viewer data");
+
+    const runtimeSource = await fetch(new URL(
+        "../../src/js/runtime/RuntimeBuild.js", location.href
+    )).then(response => response.text());
+    const deployedRuntime = runtimeSource.replace(
+        "__TRAILBOOK_RUNTIME_BUILD_ID__",
+        "431fb68c"
+    );
+
+    assert(deployedRuntime.includes('DEPLOYED_BUILD_ID = "431fb68c"'),
+        "production runtime module marker was not generated");
 
     const mobileCss = await fetch(new URL(
         "../../src/css/theme.css", location.href
@@ -245,6 +283,39 @@ async function testManifestAndAssets() {
 }
 
 async function testRegistrationContract() {
+
+    assert(getServiceWorkerStatus({ waiting: {} }, {}) === "waiting",
+        "waiting Service Worker was reported active");
+    assert(getServiceWorkerStatus({ installing: {} }, {}) === "installing",
+        "installing Service Worker was reported active");
+    assert(getServiceWorkerStatus({ active: {} }, {}) === "active",
+        "active Service Worker was not reported active");
+    const lifecycleListeners = {};
+    const lifecycleRegistration = {
+        active: {},
+        addEventListener(name, listener) {
+            lifecycleListeners[name] = listener;
+        }
+    };
+    const lifecycleInfo = createBuildInfoElement({
+        config: Config,
+        runtimeBuild: { commit: "431fb68c" },
+        locationObject: { hostname: "example.github.io" }
+    });
+
+    await resolveBuildInfoElements([lifecycleInfo], {
+        config: Config,
+        runtimeBuild: { commit: "431fb68c" },
+        locationObject: { hostname: "example.github.io" },
+        serviceWorkerRegistration: lifecycleRegistration,
+        navigatorObject: { serviceWorker: {} }
+    });
+    assert(lifecycleInfo.textContent.endsWith("SW: active"),
+        "active lifecycle status was not rendered");
+    lifecycleRegistration.waiting = {};
+    lifecycleListeners.updatefound();
+    assert(lifecycleInfo.textContent.endsWith("SW: waiting"),
+        "waiting lifecycle did not replace the active status");
 
     assert(isLocalDevelopmentLocation({ hostname: "localhost" }),
         "localhost not detected as development");
@@ -286,6 +357,8 @@ async function testRegistrationContract() {
     assert(calls.length === 1, "registration count");
     assert(calls[0].url === "./service-worker.js", "registration URL not relative");
     assert(calls[0].options.scope === "./", "registration scope not relative");
+    assert(calls[0].options.updateViaCache === "none",
+        "Service Worker update check can reuse an old HTTP-cached script");
 
     const warnings = [];
     const failed = await registerTrailBookServiceWorker({
@@ -465,7 +538,7 @@ async function testServiceWorkerCache() {
         new URL(request.url).pathname.includes("/js/") &&
         new URL(request.url).pathname.endsWith(".js")
     );
-    assert(cachedModules.length === 104, "production module graph not precached");
+    assert(cachedModules.length === 106, "production module graph not precached");
     assert(!cachedRequests.some(request => request.url.endsWith(".gpx")),
         "GPX entered app shell cache");
     assert(!cachedRequests.some(request => request.url.includes("googleapis.com")),

@@ -82,7 +82,7 @@ export async function registerTrailBookServiceWorker({
     try {
         return await navigatorObject.serviceWorker.register(
             "./service-worker.js",
-            { scope: "./" }
+            { scope: "./", updateViaCache: "none" }
         );
     } catch (error) {
         consoleObject?.warn?.(

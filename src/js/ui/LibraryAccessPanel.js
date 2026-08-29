@@ -195,6 +195,7 @@ export default class LibraryAccessPanel {
             `libraryIdentity: ${value(diagnostic.snapshot.libraryIdentity)}`,
             "",
             "Coordinator Hydration",
+            `runtime module: ${diagnostic.coordinator.runtimeBuildId}`,
             `hydrate called count: ${diagnostic.coordinator.hydrateCallCount}`,
             `last hydrate reason: ${diagnostic.coordinator.reason}`,
             `resulting permission: ${diagnostic.coordinator.permission}`,

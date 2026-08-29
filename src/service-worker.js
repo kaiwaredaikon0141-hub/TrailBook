@@ -25,6 +25,32 @@ const CORE_ASSETS = [
 const MODULE_ENTRY = "./js/main.js";
 const MODULE_SPECIFIER_PATTERN = /\b(?:import|export)\s+(?:(?:[\w*{}\s,]+)\s+from\s+)?["']([^"']+)["']/g;
 const DYNAMIC_IMPORT_PATTERN = /\bimport\(\s*["']([^"']+)["']\s*\)/g;
+const RUNTIME_BUILD_MODULE = "./js/runtime/RuntimeBuild.js";
+
+function buildFetchUrl(url) {
+
+    const result = new URL(url);
+
+    if (/^[0-9a-f]{8}$/i.test(APP_SHELL_BUILD_ID)) {
+        result.searchParams.set("trailbook-build", APP_SHELL_BUILD_ID);
+    }
+    return result.href;
+}
+
+async function fetchBuildAsset(url) {
+
+    return fetch(buildFetchUrl(url), { cache: "reload" });
+}
+
+function assertBuildMarker(source, label) {
+
+    if (
+        /^[0-9a-f]{8}$/i.test(APP_SHELL_BUILD_ID) &&
+        !source.includes(APP_SHELL_BUILD_ID)
+    ) {
+        throw new Error(`${label} does not match ${APP_SHELL_BUILD_ID}`);
+    }
+}
 
 function collectModuleSpecifiers(source) {
 
@@ -46,7 +72,7 @@ async function precacheModuleGraph(cache) {
         if (visited.has(moduleUrl)) continue;
         visited.add(moduleUrl);
 
-        const response = await fetch(moduleUrl, { cache: "reload" });
+        const response = await fetchBuildAsset(moduleUrl);
 
         if (!response.ok) {
             throw new Error(`App shell module fetch failed: ${response.status}`);
@@ -54,6 +80,10 @@ async function precacheModuleGraph(cache) {
 
         await cache.put(moduleUrl, response.clone());
         const source = await response.text();
+
+        if (moduleUrl === new URL(RUNTIME_BUILD_MODULE, scope).href) {
+            assertBuildMarker(source, "Runtime module");
+        }
 
         collectModuleSpecifiers(source).forEach(specifier => {
             if (!specifier.startsWith(".")) return;
@@ -71,12 +101,32 @@ async function precacheModuleGraph(cache) {
     }
 }
 
+async function precacheCoreAssets(cache) {
+
+    const scope = self.registration.scope;
+
+    await Promise.all(CORE_ASSETS.map(async asset => {
+        const assetUrl = new URL(asset, scope).href;
+        const response = await fetchBuildAsset(assetUrl);
+
+        if (!response.ok) {
+            throw new Error(`App shell asset fetch failed: ${response.status}`);
+        }
+        if (asset === "./trailbook.build.js") {
+            assertBuildMarker(
+                await response.clone().text(),
+                "Build metadata"
+            );
+        }
+        await cache.put(assetUrl, response);
+    }));
+}
+
 self.addEventListener("install", event => {
     event.waitUntil((async () => {
         const cache = await caches.open(APP_SHELL_CACHE);
-        await cache.addAll(CORE_ASSETS);
+        await precacheCoreAssets(cache);
         await precacheModuleGraph(cache);
-        await self.skipWaiting();
     })());
 });
 

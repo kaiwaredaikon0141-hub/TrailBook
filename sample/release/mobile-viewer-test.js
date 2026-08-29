@@ -450,6 +450,7 @@ async function run() {
             libraryIdentity: "local:test"
         },
         coordinator: {
+            runtimeBuildId: "test-build",
             hydrateCallCount: 4,
             reason: "sidebar-open",
             permission: "prompt",
@@ -463,6 +464,7 @@ async function run() {
     );
 
     assert(hydrationDiagnostic.textContent.includes("getter called: yes") &&
+        hydrationDiagnostic.textContent.includes("runtime module: test-build") &&
         hydrationDiagnostic.textContent.includes("permission: prompt") &&
         hydrationDiagnostic.textContent.includes("provisional: yes") &&
         hydrationDiagnostic.textContent.includes("cachedCount: 1123") &&

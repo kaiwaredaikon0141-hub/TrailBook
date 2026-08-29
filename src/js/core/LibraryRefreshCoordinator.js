@@ -1,6 +1,7 @@
 import TreeMetadataBuilder from "../ui/TreeMetadataBuilder.js";
 import TrackSummaryBuilder from "../services/TrackSummaryBuilder.js";
 import TrackDiscoveryEntry from "../models/TrackDiscoveryEntry.js";
+import { RUNTIME_BUILD_ID } from "../runtime/RuntimeBuild.js";
 
 const METADATA_CONCURRENCY = 8;
 
@@ -378,6 +379,7 @@ export default class LibraryRefreshCoordinator {
                 libraryIdentity: snapshot.libraryIdentity ?? null
             }),
             coordinator: Object.freeze({
+                runtimeBuildId: RUNTIME_BUILD_ID,
                 hydrateCallCount: this.hydrateCallCount,
                 reason,
                 permission: this.refreshState.permission,
