@@ -175,8 +175,8 @@ async function testRefreshAndReconciliation() {
         "new GPX was not added to Discovery/Date/Search metadata");
     assert(snapshotUpdates === 1,
         "reconciled Tree metadata was not offered to Snapshot persistence");
-    assert(coordinator.getDiagnostic().scanned === 3 &&
-        coordinator.getDiagnostic().added === 1,
+    assert(coordinator.getDiagnostic().scannedCount === 3 &&
+        coordinator.getDiagnostic().addedCount === 1,
     "refresh diagnostic did not report actual/cached diff counts");
     now += 100;
     assert(await coordinator.refresh() === false && scanCount === 1,
@@ -193,9 +193,9 @@ async function testPromptDoesNotRequestOrScan() {
     let requests = 0;
     let refreshAction = null;
     let refreshState = null;
-    let diagnostic = null;
     let persistenceListener = null;
     let provisional = true;
+    const publishOrder = [];
     const eventBus = new EventBus();
     const coordinator = new LibraryRefreshCoordinator({
         eventBus,
@@ -212,9 +212,14 @@ async function testPromptDoesNotRequestOrScan() {
         },
         librarySnapshotService: { isProvisional: () => provisional },
         accessPanel: {
-            setLibraryRefreshAction(action) { refreshAction = action; },
-            setLibraryRefreshState(state) { refreshState = state; },
-            setLibraryRefreshDiagnostic(value) { diagnostic = value; }
+            setLibraryRefreshAction(action) {
+                refreshAction = action;
+                publishOrder.push("action");
+            },
+            setLibraryRefreshState(state) {
+                refreshState = state;
+                publishOrder.push("state");
+            }
         },
         treeView: {}, discoveryCoordinator: {}, displayState: {},
         selectionState: {}, repository: {}, getNamespace: () => null,
@@ -224,13 +229,18 @@ async function testPromptDoesNotRequestOrScan() {
     });
 
     coordinator.bind();
+    assert(publishOrder[0] === "action" && publishOrder.includes("state"),
+        "refresh action connection did not trigger state publication in order");
     assert(refreshState.canManualRefresh === false,
         "refresh action was visible before Coordinator received permission state");
     persistenceListener({ permission: "prompt", hasHandle: true });
     assert(refreshState.canManualRefresh === true &&
         refreshState.libraryState === "provisional",
     "late prompt/Handle state did not enable provisional manual refresh");
-    assert(diagnostic.cached === null && diagnostic.scanned === null,
+    assert(refreshState === coordinator.refreshState &&
+        Object.isFrozen(refreshState),
+    "Panel did not receive the Coordinator's immutable state object directly");
+    assert(refreshState.cachedCount === null && refreshState.scannedCount === null,
         "unknown cached/scanned counts incorrectly blocked refresh state");
     assert(await coordinator.refresh() === false,
         "permission prompt unexpectedly refreshed the Library");
@@ -242,8 +252,8 @@ async function testPromptDoesNotRequestOrScan() {
     "permission prompt was not exposed by the refresh diagnostic");
     assert(refreshState.canManualRefresh && typeof refreshAction === "function",
         "permission prompt did not expose the explicit refresh action");
-    assert(diagnostic.permission === "prompt" && diagnostic.handle === "yes" &&
-        diagnostic.cached === 0 && diagnostic.scanned === null,
+    assert(refreshState.permission === "prompt" && refreshState.hasHandle &&
+        refreshState.cachedCount === 0 && refreshState.scannedCount === null,
     "initial prompt diagnostic was not wired to the Library panel");
     assert(await coordinator.refresh({
         reason: "manual-refresh",
@@ -251,8 +261,9 @@ async function testPromptDoesNotRequestOrScan() {
     }), "explicit refresh action did not reconnect the saved Handle");
     assert(scans === 0 && requests === 1,
         "explicit refresh action did not use the existing previous-Library action");
-    assert(!refreshState.canManualRefresh && diagnostic.permission === "granted" &&
-        diagnostic.result === "success",
+    assert(!refreshState.canManualRefresh &&
+        refreshState.permission === "granted" &&
+        refreshState.result === "success",
     "successful refresh did not update action visibility and diagnostic state");
     persistenceListener({ permission: "denied", hasHandle: true });
     assert(!refreshState.canManualRefresh,

@@ -29,11 +29,13 @@ export default class LibraryRefreshCoordinator {
         this.activeRefresh = null;
         this.lastResult = null;
         this.lastCompletedAt = -Infinity;
-        this.diagnostic = {
-            permission: "unknown", handle: false, cached: null, scanned: null,
-            added: null, removed: null, modified: null,
+        this.refreshState = Object.freeze({
+            permission: "unknown", hasHandle: false, libraryState: "none",
+            canManualRefresh: false,
+            cachedCount: null, scannedCount: null,
+            addedCount: null, removedCount: null, modifiedCount: null,
             reason: "none", result: "idle"
-        };
+        });
         this.refreshActionConnected =
             typeof this.accessPanel?.setLibraryRefreshAction === "function";
         if (this.refreshActionConnected) {
@@ -44,7 +46,7 @@ export default class LibraryRefreshCoordinator {
         this.previousLibraryCoordinator.setPersistenceStatusListener?.(
             state => this.#handlePersistenceState(state)
         );
-        this.#updateDiagnostic();
+        this.#publishRefreshState();
     }
 
     bind() {
@@ -58,7 +60,7 @@ export default class LibraryRefreshCoordinator {
     }
 
     getDiagnostic() {
-        return { ...this.diagnostic };
+        return { ...this.refreshState };
     }
 
     refresh({ reason = "manual", reconnect = false } = {}) {
@@ -66,10 +68,10 @@ export default class LibraryRefreshCoordinator {
         if (!this.canRefresh() || this.previousLibraryCoordinator.isLoading() ||
             (!reconnect &&
                 this.now() - this.lastCompletedAt < this.minimumIntervalMs)) {
-            this.#updateDiagnostic({ reason, result: "suppressed" });
+            this.#publishRefreshState({ reason, result: "suppressed" });
             return Promise.resolve(false);
         }
-        this.#updateDiagnostic({ reason, result: "checking" });
+        this.#publishRefreshState({ reason, result: "checking" });
         this.activeRefresh = (reconnect ? this.#reconnect() : this.#refresh())
             .finally(() => {
                 this.lastCompletedAt = this.now();
@@ -83,20 +85,22 @@ export default class LibraryRefreshCoordinator {
         const cached = this.treeView.getFileEntries?.().length ?? 0;
         const handle = this.previousLibraryCoordinator.getRefreshHandle();
 
-        this.#updateDiagnostic({ handle: Boolean(handle), cached });
+        this.#publishRefreshState({
+            hasHandle: Boolean(handle), cachedCount: cached
+        });
         if (!handle) {
-            this.#updateDiagnostic({ result: "no-handle" });
+            this.#publishRefreshState({ result: "no-handle" });
             return false;
         }
         const opened = await this.previousLibraryCoordinator.openPrevious();
         const scanned = this.treeView.getFileEntries?.().length ?? cached;
 
-        this.#updateDiagnostic({
+        this.#publishRefreshState({
             permission: opened ? "granted" : "denied",
-            scanned,
-            added: opened ? Math.max(0, scanned - cached) : 0,
-            removed: opened ? 0 : null,
-            modified: opened ? 0 : null,
+            scannedCount: scanned,
+            addedCount: opened ? Math.max(0, scanned - cached) : 0,
+            removedCount: opened ? 0 : null,
+            modifiedCount: opened ? 0 : null,
             result: opened ? "success" : "permission-denied"
         });
         return opened;
@@ -109,24 +113,26 @@ export default class LibraryRefreshCoordinator {
             this.previousLibraryCoordinator.getRefreshHandle();
         const cached = this.treeView.getFileEntries?.().length ?? 0;
 
-        this.#updateDiagnostic({ handle: Boolean(handle), cached });
+        this.#publishRefreshState({
+            hasHandle: Boolean(handle), cachedCount: cached
+        });
         if (!handle) {
-            this.#updateDiagnostic({ result: "no-handle" });
+            this.#publishRefreshState({ result: "no-handle" });
             return false;
         }
         const permission = await this.previousLibraryCoordinator
             .queryRefreshPermission(handle);
 
-        this.#updateDiagnostic({ permission });
+        this.#publishRefreshState({ permission });
         if (permission === "prompt") {
-            this.#updateDiagnostic({
+            this.#publishRefreshState({
                 reason: "waiting-permission",
                 result: "waiting"
             });
             return false;
         }
         if (permission !== "granted") {
-            this.#updateDiagnostic({ result: "permission-denied" });
+            this.#publishRefreshState({ result: "permission-denied" });
             return false;
         }
         if (!currentLibrary) {
@@ -137,9 +143,9 @@ export default class LibraryRefreshCoordinator {
             const result = await opened;
             const scanned = this.treeView.getFileEntries?.().length ?? cached;
 
-            this.#updateDiagnostic({
-                scanned,
-                added: result ? Math.max(0, scanned - cached) : 0,
+            this.#publishRefreshState({
+                scannedCount: scanned,
+                addedCount: result ? Math.max(0, scanned - cached) : 0,
                 result: result ? "refreshed" : "not-ready"
             });
             return result;
@@ -151,9 +157,11 @@ export default class LibraryRefreshCoordinator {
         if (currentLibrary !== this.getLibrary()) return false;
         const result = await this.#reconcile(library, currentLibrary);
 
-        this.#updateDiagnostic({
-            scanned,
-            ...(result || {}),
+        this.#publishRefreshState({
+            scannedCount: scanned,
+            addedCount: result?.added ?? null,
+            removedCount: result?.removed ?? null,
+            modifiedCount: result?.modified ?? null,
             result: result ? "success" : "stale-context"
         });
         return result;
@@ -314,9 +322,9 @@ export default class LibraryRefreshCoordinator {
 
     #handlePersistenceState({ permission, hasHandle }) {
 
-        this.#updateDiagnostic({
+        this.#publishRefreshState({
             permission,
-            handle: hasHandle,
+            hasHandle,
             ...(permission === "prompt" ? {
                 reason: "waiting-permission",
                 result: "waiting"
@@ -324,36 +332,22 @@ export default class LibraryRefreshCoordinator {
         });
     }
 
-    #updateDiagnostic(values = {}) {
-
-        Object.assign(this.diagnostic, values);
-        this.#publishRefreshState();
-    }
-
-    #publishRefreshState() {
+    #publishRefreshState(values = {}) {
 
         const libraryState = this.librarySnapshotService.isProvisional()
             ? "provisional"
             : this.getLibrary()
                 ? "ready"
                 : "none";
-        const hasHandle = Boolean(this.diagnostic.handle);
-        const canManualRefresh = this.diagnostic.permission === "prompt" &&
-            hasHandle && libraryState === "provisional" &&
+        const next = { ...this.refreshState, ...values, libraryState };
+        const canManualRefresh = next.permission === "prompt" &&
+            next.hasHandle === true && libraryState === "provisional" &&
             this.refreshActionConnected;
 
-        this.accessPanel?.setLibraryRefreshState?.({
-            permission: this.diagnostic.permission,
-            hasHandle,
-            libraryState,
-            canManualRefresh,
-            result: this.diagnostic.result
+        this.refreshState = Object.freeze({
+            ...next,
+            canManualRefresh
         });
-        this.accessPanel?.setLibraryRefreshDiagnostic?.({
-            ...this.diagnostic,
-            handle: hasHandle ? "yes" : "no",
-            libraryState,
-            canManualRefresh: canManualRefresh ? "yes" : "no"
-        });
+        this.accessPanel?.setLibraryRefreshState?.(this.refreshState);
     }
 }

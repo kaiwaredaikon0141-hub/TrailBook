@@ -34,8 +34,13 @@ export default class LibraryAccessPanel {
         this.manualLibraryAction = null;
         this.libraryRefreshAction = null;
         this.provisionalLibrary = false;
-        this.libraryRefreshState = { canManualRefresh: false };
-        this.refreshDiagnostic = {};
+        this.libraryRefreshState = Object.freeze({
+            permission: "unknown", hasHandle: false, libraryState: "none",
+            canManualRefresh: false,
+            cachedCount: null, scannedCount: null,
+            addedCount: null, removedCount: null, modifiedCount: null,
+            reason: "none", result: "idle"
+        });
         this.previousLibraryButton.addEventListener("click", () => {
             this.previousLibraryAction?.();
         });
@@ -46,6 +51,9 @@ export default class LibraryAccessPanel {
         });
         this.libraryRefreshButton.addEventListener("click", () => {
             this.libraryRefreshAction?.();
+        });
+        this.libraryChange.addEventListener("toggle", () => {
+            this.#renderLibraryRefreshState();
         });
     }
 
@@ -157,32 +165,8 @@ export default class LibraryAccessPanel {
 
     setLibraryRefreshState(state = {}) {
 
-        this.libraryRefreshState = { ...state };
+        this.libraryRefreshState = state;
         this.#renderLibraryRefreshState();
-    }
-
-    setLibraryRefreshDiagnostic(values = {}) {
-
-        Object.assign(this.refreshDiagnostic, values);
-        const output = this.libraryRefreshDiagnostic?.querySelector("pre");
-
-        if (!output) return;
-        const value = key => this.refreshDiagnostic[key] ?? "-";
-        const text = [
-            `permission: ${value("permission")}`,
-            `handle: ${value("handle")}`,
-            `cached: ${value("cached")}`,
-            `scanned: ${value("scanned")}`,
-            `added: ${value("added")}`,
-            `removed: ${value("removed")}`,
-            `modified: ${value("modified")}`,
-            `reason: ${value("reason")}`,
-            `result: ${value("result")}`,
-            `library: ${value("libraryState")}`,
-            `manual refresh: ${value("canManualRefresh")}`
-        ].join("\n");
-
-        if (output.textContent !== text) output.textContent = text;
     }
 
     setFolderPickerState({ disabled, descriptionId, disabledReason = "" }) {
@@ -342,7 +326,28 @@ export default class LibraryAccessPanel {
 
     #renderLibraryRefreshState() {
 
+        const state = this.libraryRefreshState;
+
         this.libraryRefreshButton.hidden =
-            this.libraryRefreshState.canManualRefresh !== true;
+            state.canManualRefresh !== true;
+        const output = this.libraryRefreshDiagnostic?.querySelector("pre");
+
+        if (!output) return;
+        const value = key => state[key] ?? "-";
+        const text = [
+            `permission: ${value("permission")}`,
+            `handle: ${state.hasHandle ? "yes" : "no"}`,
+            `cached: ${value("cachedCount")}`,
+            `scanned: ${value("scannedCount")}`,
+            `added: ${value("addedCount")}`,
+            `removed: ${value("removedCount")}`,
+            `modified: ${value("modifiedCount")}`,
+            `reason: ${value("reason")}`,
+            `result: ${value("result")}`,
+            `library: ${value("libraryState")}`,
+            `manual refresh: ${state.canManualRefresh ? "yes" : "no"}`
+        ].join("\n");
+
+        if (output.textContent !== text) output.textContent = text;
     }
 }

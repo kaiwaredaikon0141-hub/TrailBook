@@ -387,33 +387,42 @@ async function run() {
     accessCopy.setPreviousLibraryStatus("saved / prompt");
     assert(accessCopy.libraryRefreshButton.hidden,
         "Panel inferred refresh visibility before Coordinator state arrived");
-    accessCopy.setLibraryRefreshState({
+    const promptRefreshState = Object.freeze({
         permission: "prompt",
         hasHandle: true,
         libraryState: "provisional",
         canManualRefresh: true,
+        cachedCount: null,
+        scannedCount: null,
+        addedCount: null,
+        removedCount: null,
+        modifiedCount: null,
+        reason: "waiting-permission",
         result: "waiting"
     });
+    accessCopy.setLibraryRefreshState(promptRefreshState);
+    assert(accessCopy.libraryRefreshState === promptRefreshState,
+        "LibraryAccessPanel merged/reconstructed Coordinator refresh state");
     assert(!accessCopy.libraryRefreshButton.hidden,
         "explicit Coordinator refresh state did not expose refresh action");
     assert(accessCopy.libraryChangeContainer.contains(
         accessCopy.libraryRefreshButton
     ), "refresh action is not inside expanded Library change options");
     accessCopy.libraryChange.open = false;
-    accessCopy.setLibraryRefreshState({
-        permission: "prompt", hasHandle: true, libraryState: "provisional",
-        canManualRefresh: true, result: "waiting"
-    });
+    accessCopy.setLibraryRefreshState(promptRefreshState);
     accessCopy.libraryChange.open = true;
     assert(!accessCopy.libraryRefreshButton.hidden,
         "collapsed state update was lost when Library options expanded");
+    accessCopy.libraryChange.dispatchEvent(new Event("toggle"));
+    assert(!accessCopy.libraryRefreshButton.hidden,
+        "expanded re-render did not preserve latest manual refresh state");
     accessCopy.element.querySelector(".library-refresh-action").click();
     assert(refreshRequests === 1,
         "cached Library refresh action was not available for permission reconnect");
-    accessCopy.setLibraryRefreshDiagnostic({
-        cached: 1123, scanned: null, added: null, removed: null, modified: null,
-        libraryState: "provisional", canManualRefresh: "yes"
-    });
+    accessCopy.setLibraryRefreshState(Object.freeze({
+        ...promptRefreshState,
+        cachedCount: 1123
+    }));
     const refreshDiagnostic = accessCopy.element.querySelector(
         ".library-refresh-diagnostic"
     );
@@ -432,29 +441,32 @@ async function run() {
     diagnosticObserver.observe(refreshDiagnostic.querySelector("pre"), {
         childList: true, characterData: true, subtree: true
     });
-    accessCopy.setLibraryRefreshDiagnostic({
-        cached: 1123, scanned: null, added: null, removed: null, modified: null,
-        libraryState: "provisional", canManualRefresh: "yes"
-    });
+    accessCopy.setLibraryRefreshState(Object.freeze({
+        ...promptRefreshState,
+        cachedCount: 1123
+    }));
     await new Promise(resolve => setTimeout(resolve, 0));
     diagnosticObserver.disconnect();
     assert(diagnosticMutations === 0,
         "unchanged Library refresh diagnostic caused a DOM refresh loop");
     accessCopy.setLibraryRefreshState({
-        permission: "granted", hasHandle: true, libraryState: "provisional",
-        canManualRefresh: false, result: "checking"
+        ...promptRefreshState,
+        permission: "granted", canManualRefresh: false,
+        reason: "manual-refresh", result: "checking"
     });
     assert(accessCopy.libraryRefreshButton.hidden,
         "granted state retained the prompt-only refresh action");
     accessCopy.setLibraryRefreshState({
-        permission: "denied", hasHandle: true, libraryState: "provisional",
-        canManualRefresh: false, result: "permission-denied"
+        ...promptRefreshState,
+        permission: "denied", canManualRefresh: false,
+        reason: "manual-refresh", result: "permission-denied"
     });
     assert(accessCopy.libraryRefreshButton.hidden,
         "denied state exposed the prompt-only refresh action");
     accessCopy.setLibraryRefreshState({
-        permission: "prompt", hasHandle: true, libraryState: "ready",
-        canManualRefresh: false, result: "success"
+        ...promptRefreshState,
+        libraryState: "ready", canManualRefresh: false,
+        reason: "manual-refresh", result: "success"
     });
     assert(accessCopy.libraryRefreshButton.hidden,
         "actual ready Library retained provisional refresh action");
