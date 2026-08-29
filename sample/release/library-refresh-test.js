@@ -6,6 +6,7 @@ import Folder from "../../src/js/models/Folder.js";
 import Library from "../../src/js/models/Library.js";
 import TrackSummaryBuilder from "../../src/js/services/TrackSummaryBuilder.js";
 import TreeMetadataBuilder from "../../src/js/ui/TreeMetadataBuilder.js";
+import FolderScanner from "../../src/js/services/FolderScanner.js";
 
 const output = document.getElementById("result");
 let assertions = 0;
@@ -30,6 +31,33 @@ function library(name, files) {
 
     root.gpxFiles.push(...files);
     return new Library(name, root, 1, files.length);
+}
+
+function directoryHandle(name, entries) {
+    return {
+        kind: "directory", name,
+        async *values() { yield* entries; }
+    };
+}
+
+async function testFreshRecursiveScan() {
+    const rootFile = fileHandle("root.gpx", 1, 1);
+    const nestedFile = fileHandle("nested.gpx", 1, 1);
+    const ignoredFile = fileHandle("ignored.gpx", 1, 1);
+    const root = directoryHandle("GPX", [
+        rootFile,
+        directoryHandle("Trips", [nestedFile]),
+        directoryHandle("TrailBook_Backup", [ignoredFile])
+    ]);
+    const scanned = await new FolderScanner().scan(root);
+    const paths = new TreeMetadataBuilder().getFileEntries(
+        new TreeMetadataBuilder().build(scanned).nodeMetadata
+    ).map(entry => entry.path);
+
+    assert(paths.includes("root.gpx"), "fresh scan missed a root GPX");
+    assert(paths.includes("Trips/nested.gpx"), "fresh scan missed a nested GPX");
+    assert(!paths.some(path => path.includes("TrailBook_Backup")),
+        "fresh scan included the reserved Backup folder");
 }
 
 function createTree(initialLibrary) {
@@ -91,6 +119,7 @@ async function testRefreshAndReconciliation() {
     const invalidated = [];
     let currentLibrary = oldLibrary;
     let scanCount = 0;
+    let snapshotUpdates = 0;
     let now = 100;
     const eventBus = new EventBus();
     const previous = {
@@ -117,7 +146,7 @@ async function testRefreshAndReconciliation() {
         getColor: () => "#123456",
         removePath: path => removed.push(path),
         reloadVisiblePath: async value => reloaded.push(value.path),
-        onLibraryUpdated: () => {},
+        onLibraryUpdated: () => { snapshotUpdates += 1; },
         now: () => now
     });
 
@@ -144,9 +173,19 @@ async function testRefreshAndReconciliation() {
         "only a visible modified GPX should reload");
     assert(discoveryCalls[0].entries.some(entry => entry.relativePath === "C.gpx"),
         "new GPX was not added to Discovery/Date/Search metadata");
+    assert(snapshotUpdates === 1,
+        "reconciled Tree metadata was not offered to Snapshot persistence");
+    assert(coordinator.getDiagnostic().scanned === 3 &&
+        coordinator.getDiagnostic().added === 1,
+    "refresh diagnostic did not report actual/cached diff counts");
     now += 100;
     assert(await coordinator.refresh() === false && scanCount === 1,
         "rapid sidebar reopen bypassed refresh throttling");
+    now += 3000;
+    const repeated = await coordinator.refresh({ reason: "sidebar-open" });
+
+    assert(repeated.added === 0,
+        "repeated actual scan rediscovered an existing GPX as new");
 }
 
 async function testPromptDoesNotRequestOrScan() {
@@ -159,7 +198,8 @@ async function testPromptDoesNotRequestOrScan() {
             isLoading: () => false,
             getRefreshHandle: () => ({}),
             queryRefreshPermission: async () => "prompt",
-            refreshPreviousIfGranted: async () => { requests += 1; }
+            refreshPreviousIfGranted: async () => false,
+            openPrevious: async () => { requests += 1; return true; }
         },
         librarySnapshotService: { isProvisional: () => true },
         treeView: {}, discoveryCoordinator: {}, displayState: {},
@@ -173,9 +213,19 @@ async function testPromptDoesNotRequestOrScan() {
         "permission prompt unexpectedly refreshed the Library");
     assert(scans === 0 && requests === 0,
         "permission prompt triggered scan or requestPermission");
+    assert(coordinator.getDiagnostic().permission === "prompt" &&
+        coordinator.getDiagnostic().result === "permission-required",
+    "permission prompt was not exposed by the refresh diagnostic");
+    assert(await coordinator.refresh({
+        reason: "refresh-action",
+        reconnect: true
+    }), "explicit refresh action did not reconnect the saved Handle");
+    assert(scans === 0 && requests === 1,
+        "explicit refresh action did not use the existing previous-Library action");
 }
 
 try {
+    await testFreshRecursiveScan();
     await testRefreshAndReconciliation();
     await testPromptDoesNotRequestOrScan();
     output.textContent = `PASS: ${assertions} assertions`;

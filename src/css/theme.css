@@ -172,6 +172,13 @@ body{
     margin-top:6px;
 }
 
+.library-refresh-action{
+
+    width:100%;
+
+    margin-top:4px;
+}
+
 .library-device-description{
 
     margin:0;
@@ -1901,6 +1908,12 @@ body.is-track-info-resizing{
         text-overflow:ellipsis;
 
         white-space:nowrap;
+    }
+
+    .library-refresh-action{
+
+        min-height:44px;
+
     }
 
     .mobile-sidebar-display-controls{

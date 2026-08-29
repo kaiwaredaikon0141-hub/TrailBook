@@ -381,6 +381,13 @@ async function run() {
         !accessCopy.libraryChange.hidden &&
         accessCopy.element.classList.contains("is-compact"),
     "cached viewer tree did not suppress the redundant previous-Library action");
+    let refreshRequests = 0;
+
+    accessCopy.setLibraryRefreshAction(() => { refreshRequests += 1; });
+    accessCopy.showLibraryRefreshAction(true);
+    accessCopy.element.querySelector(".library-refresh-action").click();
+    assert(refreshRequests === 1,
+        "cached Library refresh action was not available for permission reconnect");
     accessCopy.showPreviousLibrary("Previous", "denied");
     assert(accessCopy.primaryContent.hidden &&
         !accessCopy.libraryChange.hidden &&

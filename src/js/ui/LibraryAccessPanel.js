@@ -24,8 +24,12 @@ export default class LibraryAccessPanel {
         this.libraryChangeContainer = this.element.querySelector(
             ".library-change-options"
         );
+        this.libraryRefreshButton = this.element.querySelector(
+            ".library-refresh-action"
+        );
         this.previousLibraryAction = null;
         this.manualLibraryAction = null;
+        this.libraryRefreshAction = null;
         this.provisionalLibrary = false;
         this.previousLibraryButton.addEventListener("click", () => {
             this.previousLibraryAction?.();
@@ -34,6 +38,9 @@ export default class LibraryAccessPanel {
             button.addEventListener("click", () => {
                 this.manualLibraryAction?.();
             });
+        });
+        this.libraryRefreshButton.addEventListener("click", () => {
+            this.libraryRefreshAction?.();
         });
     }
 
@@ -135,6 +142,14 @@ export default class LibraryAccessPanel {
     setManualLibraryAction(action) {
 
         this.manualLibraryAction = action;
+    }
+
+    setLibraryRefreshAction(action) {
+        this.libraryRefreshAction = action;
+    }
+
+    showLibraryRefreshAction(visible) {
+        this.libraryRefreshButton.hidden = !visible;
     }
 
     setFolderPickerState({ disabled, descriptionId, disabledReason = "" }) {
@@ -253,6 +268,9 @@ export default class LibraryAccessPanel {
                     </p>
                 </div>
             </details>
+            <button class="library-refresh-action" type="button" hidden>
+                更新を確認
+            </button>
             <small class="previous-library-status">
                 Previous Library: no persistent handle
             </small>

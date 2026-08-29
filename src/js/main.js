@@ -54,6 +54,7 @@ window.addEventListener("DOMContentLoaded", () => {
         treeView: app.treeView,
         displayState: app.displayState,
         selectionState: app.selectionState,
+        accessPanel: app.libraryAccessPanel,
         discoveryCoordinator: app.trackDiscoveryCoordinator,
         eventBus: app.eventBus,
         getLibrary: () => app.currentLibrary,
@@ -114,7 +115,7 @@ window.addEventListener("DOMContentLoaded", () => {
         repository: app.gpxGeometryLoader.repository,
         getNamespace: () => app.gpxGeometryLoader.namespace,
         canRefresh: () => app.displaySnapshotCoordinator.getStatus()
-            .restoreState === "ready",
+            .restoreState === "ready" || app.librarySnapshotService.isProvisional(),
         getLibrary: () => app.currentLibrary,
         setLibrary: library => { app.currentLibrary = library; },
         getColor: path => app.getColor(path),
