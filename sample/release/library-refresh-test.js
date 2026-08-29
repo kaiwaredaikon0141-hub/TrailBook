@@ -191,6 +191,9 @@ async function testRefreshAndReconciliation() {
 async function testPromptDoesNotRequestOrScan() {
     let scans = 0;
     let requests = 0;
+    let refreshAction = null;
+    let refreshVisible = false;
+    let diagnostic = null;
     const coordinator = new LibraryRefreshCoordinator({
         eventBus: new EventBus(),
         scanner: { scan: async () => { scans += 1; } },
@@ -202,6 +205,11 @@ async function testPromptDoesNotRequestOrScan() {
             openPrevious: async () => { requests += 1; return true; }
         },
         librarySnapshotService: { isProvisional: () => true },
+        accessPanel: {
+            setLibraryRefreshAction(action) { refreshAction = action; },
+            showLibraryRefreshAction(visible) { refreshVisible = visible; },
+            setLibraryRefreshDiagnostic(value) { diagnostic = value; }
+        },
         treeView: {}, discoveryCoordinator: {}, displayState: {},
         selectionState: {}, repository: {}, getNamespace: () => null,
         getLibrary: () => null, setLibrary: () => {}, getColor: () => null,
@@ -214,14 +222,23 @@ async function testPromptDoesNotRequestOrScan() {
     assert(scans === 0 && requests === 0,
         "permission prompt triggered scan or requestPermission");
     assert(coordinator.getDiagnostic().permission === "prompt" &&
-        coordinator.getDiagnostic().result === "permission-required",
+        coordinator.getDiagnostic().result === "waiting" &&
+        coordinator.getDiagnostic().reason === "waiting-permission",
     "permission prompt was not exposed by the refresh diagnostic");
+    assert(refreshVisible && typeof refreshAction === "function",
+        "permission prompt did not expose the explicit refresh action");
+    assert(diagnostic.permission === "prompt" && diagnostic.handle === "yes" &&
+        diagnostic.cached === 0 && diagnostic.scanned === null,
+    "initial prompt diagnostic was not wired to the Library panel");
     assert(await coordinator.refresh({
-        reason: "refresh-action",
+        reason: "manual-refresh",
         reconnect: true
     }), "explicit refresh action did not reconnect the saved Handle");
     assert(scans === 0 && requests === 1,
         "explicit refresh action did not use the existing previous-Library action");
+    assert(!refreshVisible && diagnostic.permission === "granted" &&
+        diagnostic.result === "success",
+    "successful refresh did not update action visibility and diagnostic state");
 }
 
 try {

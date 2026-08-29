@@ -27,10 +27,16 @@ export default class LibraryAccessPanel {
         this.libraryRefreshButton = this.element.querySelector(
             ".library-refresh-action"
         );
+        this.libraryRefreshDiagnostic = this.element.querySelector(
+            ".library-refresh-diagnostic"
+        );
         this.previousLibraryAction = null;
         this.manualLibraryAction = null;
         this.libraryRefreshAction = null;
         this.provisionalLibrary = false;
+        this.persistenceStatus = "no persistent handle";
+        this.refreshActionVisible = false;
+        this.refreshDiagnostic = {};
         this.previousLibraryButton.addEventListener("click", () => {
             this.previousLibraryAction?.();
         });
@@ -145,11 +151,37 @@ export default class LibraryAccessPanel {
     }
 
     setLibraryRefreshAction(action) {
+
         this.libraryRefreshAction = action;
+        this.#syncLibraryRefreshAction();
     }
 
     showLibraryRefreshAction(visible) {
-        this.libraryRefreshButton.hidden = !visible;
+
+        this.refreshActionVisible = Boolean(visible);
+        this.#syncLibraryRefreshAction();
+    }
+
+    setLibraryRefreshDiagnostic(values = {}) {
+
+        Object.assign(this.refreshDiagnostic, values);
+        const output = this.libraryRefreshDiagnostic?.querySelector("pre");
+
+        if (!output) return;
+        const value = key => this.refreshDiagnostic[key] ?? "-";
+        const text = [
+            `permission: ${value("permission")}`,
+            `handle: ${value("handle")}`,
+            `cached: ${value("cached")}`,
+            `scanned: ${value("scanned")}`,
+            `added: ${value("added")}`,
+            `removed: ${value("removed")}`,
+            `modified: ${value("modified")}`,
+            `reason: ${value("reason")}`,
+            `result: ${value("result")}`
+        ].join("\n");
+
+        if (output.textContent !== text) output.textContent = text;
     }
 
     setFolderPickerState({ disabled, descriptionId, disabledReason = "" }) {
@@ -177,13 +209,38 @@ export default class LibraryAccessPanel {
             ? status
             : "no persistent handle";
 
+        this.persistenceStatus = normalized;
         this.previousLibraryStatus.textContent =
             `Previous Library: ${normalized}`;
+        if (normalized !== "saved / prompt") {
+            this.refreshActionVisible = false;
+        } else if (this.provisionalLibrary) {
+            this.refreshActionVisible = true;
+        }
+        this.setLibraryRefreshDiagnostic({
+            permission: normalized.startsWith("saved / ")
+                ? normalized.slice("saved / ".length)
+                : "-",
+            handle: normalized.startsWith("saved / ") ? "yes" : "no",
+            reason: normalized === "saved / prompt"
+                ? "waiting-permission"
+                : this.refreshDiagnostic.reason,
+            result: normalized === "saved / prompt"
+                ? "waiting"
+                : this.refreshDiagnostic.result
+        });
+        this.#syncLibraryRefreshAction();
     }
 
     setProvisionalLibrary(active) {
 
         this.provisionalLibrary = Boolean(active);
+        if (!this.provisionalLibrary) {
+            this.refreshActionVisible = false;
+        } else if (this.persistenceStatus === "saved / prompt") {
+            this.refreshActionVisible = true;
+        }
+        this.#syncLibraryRefreshAction();
         if (this.provisionalLibrary) this.hide();
     }
 
@@ -274,6 +331,10 @@ export default class LibraryAccessPanel {
             <small class="previous-library-status">
                 Previous Library: no persistent handle
             </small>
+            <details class="fast-restore-diagnostic library-refresh-diagnostic" open>
+                <summary>Library Refresh</summary>
+                <pre></pre>
+            </details>
         `;
 
         return section;
@@ -301,5 +362,15 @@ export default class LibraryAccessPanel {
         this.element.querySelector(".library-access-title").textContent = title;
         this.element.querySelector(".library-access-message").textContent = message;
         this.element.hidden = false;
+    }
+
+    #syncLibraryRefreshAction() {
+
+        this.libraryRefreshButton.hidden = !(
+            this.libraryRefreshAction &&
+            this.provisionalLibrary &&
+            this.persistenceStatus === "saved / prompt" &&
+            this.refreshActionVisible
+        );
     }
 }

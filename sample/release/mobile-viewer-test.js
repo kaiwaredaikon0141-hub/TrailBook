@@ -384,10 +384,42 @@ async function run() {
     let refreshRequests = 0;
 
     accessCopy.setLibraryRefreshAction(() => { refreshRequests += 1; });
-    accessCopy.showLibraryRefreshAction(true);
+    accessCopy.setPreviousLibraryStatus("saved / prompt");
+    assert(!accessCopy.libraryRefreshButton.hidden,
+        "cached prompt state did not automatically expose refresh action");
     accessCopy.element.querySelector(".library-refresh-action").click();
     assert(refreshRequests === 1,
         "cached Library refresh action was not available for permission reconnect");
+    accessCopy.setLibraryRefreshDiagnostic({
+        cached: 1123, scanned: null, added: null, removed: null, modified: null
+    });
+    const refreshDiagnostic = accessCopy.element.querySelector(
+        ".library-refresh-diagnostic"
+    );
+
+    assert(refreshDiagnostic.open &&
+        refreshDiagnostic.textContent.includes("permission: prompt") &&
+        refreshDiagnostic.textContent.includes("cached: 1123") &&
+        refreshDiagnostic.textContent.includes("scanned: -"),
+    "Library refresh diagnostic is not visible with prompt counts");
+    let diagnosticMutations = 0;
+    const diagnosticObserver = new MutationObserver(records => {
+        diagnosticMutations += records.length;
+    });
+
+    diagnosticObserver.observe(refreshDiagnostic.querySelector("pre"), {
+        childList: true, characterData: true, subtree: true
+    });
+    accessCopy.setLibraryRefreshDiagnostic({
+        cached: 1123, scanned: null, added: null, removed: null, modified: null
+    });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    diagnosticObserver.disconnect();
+    assert(diagnosticMutations === 0,
+        "unchanged Library refresh diagnostic caused a DOM refresh loop");
+    accessCopy.setPreviousLibraryStatus("saved / granted");
+    assert(accessCopy.libraryRefreshButton.hidden,
+        "granted state retained the prompt-only refresh action");
     accessCopy.showPreviousLibrary("Previous", "denied");
     assert(accessCopy.primaryContent.hidden &&
         !accessCopy.libraryChange.hidden &&

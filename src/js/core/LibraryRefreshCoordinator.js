@@ -30,13 +30,13 @@ export default class LibraryRefreshCoordinator {
         this.lastResult = null;
         this.lastCompletedAt = -Infinity;
         this.diagnostic = {
-            permission: "unknown", handle: false, cached: 0, scanned: 0,
-            added: 0, removed: 0, modified: 0,
+            permission: "unknown", handle: false, cached: null, scanned: null,
+            added: null, removed: null, modified: null,
             reason: "none", result: "idle"
         };
         this.#attachDiagnostic();
         this.accessPanel?.setLibraryRefreshAction?.(
-            () => void this.refresh({ reason: "refresh-action", reconnect: true })
+            () => void this.refresh({ reason: "manual-refresh", reconnect: true })
         );
     }
 
@@ -87,7 +87,9 @@ export default class LibraryRefreshCoordinator {
             permission: opened ? "granted" : "denied",
             scanned,
             added: opened ? Math.max(0, scanned - cached) : 0,
-            result: opened ? "refreshed" : "permission-denied"
+            removed: opened ? 0 : null,
+            modified: opened ? 0 : null,
+            result: opened ? "success" : "permission-denied"
         });
         return opened;
     }
@@ -111,7 +113,10 @@ export default class LibraryRefreshCoordinator {
         this.#updateDiagnostic({ permission });
         if (permission === "prompt") {
             this.accessPanel?.showLibraryRefreshAction?.(true);
-            this.#updateDiagnostic({ result: "permission-required" });
+            this.#updateDiagnostic({
+                reason: "waiting-permission",
+                result: "waiting"
+            });
             return false;
         }
         if (permission !== "granted") {
@@ -146,7 +151,7 @@ export default class LibraryRefreshCoordinator {
         this.#updateDiagnostic({
             scanned,
             ...(result || {}),
-            result: result ? "refreshed" : "stale-context"
+            result: result ? "success" : "stale-context"
         });
         return result;
     }
@@ -306,32 +311,15 @@ export default class LibraryRefreshCoordinator {
 
     #attachDiagnostic() {
 
-        if (!this.accessPanel?.element || !globalThis.document?.createElement) return;
-        this.diagnosticElement = document.createElement("details");
-        this.diagnosticElement.className =
-            "fast-restore-diagnostic library-refresh-diagnostic";
-        this.diagnosticElement.innerHTML =
-            "<summary>Library Refresh</summary><pre></pre>";
-        this.accessPanel.element.append(this.diagnosticElement);
         this.#updateDiagnostic();
     }
 
     #updateDiagnostic(values = {}) {
 
         Object.assign(this.diagnostic, values);
-        const output = this.diagnosticElement?.querySelector("pre");
-
-        if (!output) return;
-        output.textContent = [
-            `permission: ${this.diagnostic.permission}`,
-            `handle: ${this.diagnostic.handle ? "yes" : "no"}`,
-            `cached: ${this.diagnostic.cached}`,
-            `scanned: ${this.diagnostic.scanned}`,
-            `added: ${this.diagnostic.added}`,
-            `removed: ${this.diagnostic.removed}`,
-            `modified: ${this.diagnostic.modified}`,
-            `last reason: ${this.diagnostic.reason}`,
-            `result: ${this.diagnostic.result}`
-        ].join("\n");
+        this.accessPanel?.setLibraryRefreshDiagnostic?.({
+            ...this.diagnostic,
+            handle: this.diagnostic.handle ? "yes" : "no"
+        });
     }
 }
