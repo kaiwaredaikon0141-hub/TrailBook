@@ -192,22 +192,28 @@ async function testPromptDoesNotRequestOrScan() {
     let scans = 0;
     let requests = 0;
     let refreshAction = null;
-    let refreshVisible = false;
+    let refreshState = null;
     let diagnostic = null;
+    let persistenceListener = null;
+    let provisional = true;
+    const eventBus = new EventBus();
     const coordinator = new LibraryRefreshCoordinator({
-        eventBus: new EventBus(),
+        eventBus,
         scanner: { scan: async () => { scans += 1; } },
         previousLibraryCoordinator: {
             isLoading: () => false,
             getRefreshHandle: () => ({}),
             queryRefreshPermission: async () => "prompt",
             refreshPreviousIfGranted: async () => false,
-            openPrevious: async () => { requests += 1; return true; }
+            openPrevious: async () => { requests += 1; return true; },
+            setPersistenceStatusListener(listener) {
+                persistenceListener = listener;
+            }
         },
-        librarySnapshotService: { isProvisional: () => true },
+        librarySnapshotService: { isProvisional: () => provisional },
         accessPanel: {
             setLibraryRefreshAction(action) { refreshAction = action; },
-            showLibraryRefreshAction(visible) { refreshVisible = visible; },
+            setLibraryRefreshState(state) { refreshState = state; },
             setLibraryRefreshDiagnostic(value) { diagnostic = value; }
         },
         treeView: {}, discoveryCoordinator: {}, displayState: {},
@@ -217,6 +223,15 @@ async function testPromptDoesNotRequestOrScan() {
         onLibraryUpdated: () => {}
     });
 
+    coordinator.bind();
+    assert(refreshState.canManualRefresh === false,
+        "refresh action was visible before Coordinator received permission state");
+    persistenceListener({ permission: "prompt", hasHandle: true });
+    assert(refreshState.canManualRefresh === true &&
+        refreshState.libraryState === "provisional",
+    "late prompt/Handle state did not enable provisional manual refresh");
+    assert(diagnostic.cached === null && diagnostic.scanned === null,
+        "unknown cached/scanned counts incorrectly blocked refresh state");
     assert(await coordinator.refresh() === false,
         "permission prompt unexpectedly refreshed the Library");
     assert(scans === 0 && requests === 0,
@@ -225,7 +240,7 @@ async function testPromptDoesNotRequestOrScan() {
         coordinator.getDiagnostic().result === "waiting" &&
         coordinator.getDiagnostic().reason === "waiting-permission",
     "permission prompt was not exposed by the refresh diagnostic");
-    assert(refreshVisible && typeof refreshAction === "function",
+    assert(refreshState.canManualRefresh && typeof refreshAction === "function",
         "permission prompt did not expose the explicit refresh action");
     assert(diagnostic.permission === "prompt" && diagnostic.handle === "yes" &&
         diagnostic.cached === 0 && diagnostic.scanned === null,
@@ -236,9 +251,17 @@ async function testPromptDoesNotRequestOrScan() {
     }), "explicit refresh action did not reconnect the saved Handle");
     assert(scans === 0 && requests === 1,
         "explicit refresh action did not use the existing previous-Library action");
-    assert(!refreshVisible && diagnostic.permission === "granted" &&
+    assert(!refreshState.canManualRefresh && diagnostic.permission === "granted" &&
         diagnostic.result === "success",
     "successful refresh did not update action visibility and diagnostic state");
+    persistenceListener({ permission: "denied", hasHandle: true });
+    assert(!refreshState.canManualRefresh,
+        "denied permission exposed the prompt-only refresh action");
+    provisional = false;
+    persistenceListener({ permission: "prompt", hasHandle: true });
+    eventBus.emit("library:provisional-state-changed", { provisional: false });
+    assert(refreshState.libraryState === "none" && !refreshState.canManualRefresh,
+        "actual/non-provisional state retained manual refresh action");
 }
 
 try {

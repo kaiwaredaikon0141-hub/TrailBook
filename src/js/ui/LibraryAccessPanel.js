@@ -34,8 +34,7 @@ export default class LibraryAccessPanel {
         this.manualLibraryAction = null;
         this.libraryRefreshAction = null;
         this.provisionalLibrary = false;
-        this.persistenceStatus = "no persistent handle";
-        this.refreshActionVisible = false;
+        this.libraryRefreshState = { canManualRefresh: false };
         this.refreshDiagnostic = {};
         this.previousLibraryButton.addEventListener("click", () => {
             this.previousLibraryAction?.();
@@ -153,13 +152,13 @@ export default class LibraryAccessPanel {
     setLibraryRefreshAction(action) {
 
         this.libraryRefreshAction = action;
-        this.#syncLibraryRefreshAction();
+        this.#renderLibraryRefreshState();
     }
 
-    showLibraryRefreshAction(visible) {
+    setLibraryRefreshState(state = {}) {
 
-        this.refreshActionVisible = Boolean(visible);
-        this.#syncLibraryRefreshAction();
+        this.libraryRefreshState = { ...state };
+        this.#renderLibraryRefreshState();
     }
 
     setLibraryRefreshDiagnostic(values = {}) {
@@ -178,7 +177,9 @@ export default class LibraryAccessPanel {
             `removed: ${value("removed")}`,
             `modified: ${value("modified")}`,
             `reason: ${value("reason")}`,
-            `result: ${value("result")}`
+            `result: ${value("result")}`,
+            `library: ${value("libraryState")}`,
+            `manual refresh: ${value("canManualRefresh")}`
         ].join("\n");
 
         if (output.textContent !== text) output.textContent = text;
@@ -209,38 +210,13 @@ export default class LibraryAccessPanel {
             ? status
             : "no persistent handle";
 
-        this.persistenceStatus = normalized;
         this.previousLibraryStatus.textContent =
             `Previous Library: ${normalized}`;
-        if (normalized !== "saved / prompt") {
-            this.refreshActionVisible = false;
-        } else if (this.provisionalLibrary) {
-            this.refreshActionVisible = true;
-        }
-        this.setLibraryRefreshDiagnostic({
-            permission: normalized.startsWith("saved / ")
-                ? normalized.slice("saved / ".length)
-                : "-",
-            handle: normalized.startsWith("saved / ") ? "yes" : "no",
-            reason: normalized === "saved / prompt"
-                ? "waiting-permission"
-                : this.refreshDiagnostic.reason,
-            result: normalized === "saved / prompt"
-                ? "waiting"
-                : this.refreshDiagnostic.result
-        });
-        this.#syncLibraryRefreshAction();
     }
 
     setProvisionalLibrary(active) {
 
         this.provisionalLibrary = Boolean(active);
-        if (!this.provisionalLibrary) {
-            this.refreshActionVisible = false;
-        } else if (this.persistenceStatus === "saved / prompt") {
-            this.refreshActionVisible = true;
-        }
-        this.#syncLibraryRefreshAction();
         if (this.provisionalLibrary) this.hide();
     }
 
@@ -323,11 +299,11 @@ export default class LibraryAccessPanel {
                     <p class="library-device-description">
                         端末・Files・Google Driveなど
                     </p>
+                    <button class="library-refresh-action" type="button" hidden>
+                        更新を確認
+                    </button>
                 </div>
             </details>
-            <button class="library-refresh-action" type="button" hidden>
-                更新を確認
-            </button>
             <small class="previous-library-status">
                 Previous Library: no persistent handle
             </small>
@@ -364,13 +340,9 @@ export default class LibraryAccessPanel {
         this.element.hidden = false;
     }
 
-    #syncLibraryRefreshAction() {
+    #renderLibraryRefreshState() {
 
-        this.libraryRefreshButton.hidden = !(
-            this.libraryRefreshAction &&
-            this.provisionalLibrary &&
-            this.persistenceStatus === "saved / prompt" &&
-            this.refreshActionVisible
-        );
+        this.libraryRefreshButton.hidden =
+            this.libraryRefreshState.canManualRefresh !== true;
     }
 }

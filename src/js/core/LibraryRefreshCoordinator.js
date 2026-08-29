@@ -34,10 +34,17 @@ export default class LibraryRefreshCoordinator {
             added: null, removed: null, modified: null,
             reason: "none", result: "idle"
         };
-        this.#attachDiagnostic();
-        this.accessPanel?.setLibraryRefreshAction?.(
-            () => void this.refresh({ reason: "manual-refresh", reconnect: true })
+        this.refreshActionConnected =
+            typeof this.accessPanel?.setLibraryRefreshAction === "function";
+        if (this.refreshActionConnected) {
+            this.accessPanel.setLibraryRefreshAction(
+                () => void this.refresh({ reason: "manual-refresh", reconnect: true })
+            );
+        }
+        this.previousLibraryCoordinator.setPersistenceStatusListener?.(
+            state => this.#handlePersistenceState(state)
         );
+        this.#updateDiagnostic();
     }
 
     bind() {
@@ -45,6 +52,9 @@ export default class LibraryRefreshCoordinator {
             "library:sidebar-opened",
             () => void this.refresh({ reason: "sidebar-open" })
         );
+        this.eventBus.on("library:provisional-state-changed", () => {
+            this.#publishRefreshState();
+        });
     }
 
     getDiagnostic() {
@@ -75,14 +85,12 @@ export default class LibraryRefreshCoordinator {
 
         this.#updateDiagnostic({ handle: Boolean(handle), cached });
         if (!handle) {
-            this.accessPanel?.showLibraryRefreshAction?.(false);
             this.#updateDiagnostic({ result: "no-handle" });
             return false;
         }
         const opened = await this.previousLibraryCoordinator.openPrevious();
         const scanned = this.treeView.getFileEntries?.().length ?? cached;
 
-        this.accessPanel?.showLibraryRefreshAction?.(!opened);
         this.#updateDiagnostic({
             permission: opened ? "granted" : "denied",
             scanned,
@@ -103,7 +111,6 @@ export default class LibraryRefreshCoordinator {
 
         this.#updateDiagnostic({ handle: Boolean(handle), cached });
         if (!handle) {
-            this.accessPanel?.showLibraryRefreshAction?.(false);
             this.#updateDiagnostic({ result: "no-handle" });
             return false;
         }
@@ -112,7 +119,6 @@ export default class LibraryRefreshCoordinator {
 
         this.#updateDiagnostic({ permission });
         if (permission === "prompt") {
-            this.accessPanel?.showLibraryRefreshAction?.(true);
             this.#updateDiagnostic({
                 reason: "waiting-permission",
                 result: "waiting"
@@ -120,7 +126,6 @@ export default class LibraryRefreshCoordinator {
             return false;
         }
         if (permission !== "granted") {
-            this.accessPanel?.showLibraryRefreshAction?.(false);
             this.#updateDiagnostic({ result: "permission-denied" });
             return false;
         }
@@ -132,7 +137,6 @@ export default class LibraryRefreshCoordinator {
             const result = await opened;
             const scanned = this.treeView.getFileEntries?.().length ?? cached;
 
-            this.accessPanel?.showLibraryRefreshAction?.(!result);
             this.#updateDiagnostic({
                 scanned,
                 added: result ? Math.max(0, scanned - cached) : 0,
@@ -147,7 +151,6 @@ export default class LibraryRefreshCoordinator {
         if (currentLibrary !== this.getLibrary()) return false;
         const result = await this.#reconcile(library, currentLibrary);
 
-        this.accessPanel?.showLibraryRefreshAction?.(false);
         this.#updateDiagnostic({
             scanned,
             ...(result || {}),
@@ -309,17 +312,48 @@ export default class LibraryRefreshCoordinator {
         );
     }
 
-    #attachDiagnostic() {
+    #handlePersistenceState({ permission, hasHandle }) {
 
-        this.#updateDiagnostic();
+        this.#updateDiagnostic({
+            permission,
+            handle: hasHandle,
+            ...(permission === "prompt" ? {
+                reason: "waiting-permission",
+                result: "waiting"
+            } : {})
+        });
     }
 
     #updateDiagnostic(values = {}) {
 
         Object.assign(this.diagnostic, values);
+        this.#publishRefreshState();
+    }
+
+    #publishRefreshState() {
+
+        const libraryState = this.librarySnapshotService.isProvisional()
+            ? "provisional"
+            : this.getLibrary()
+                ? "ready"
+                : "none";
+        const hasHandle = Boolean(this.diagnostic.handle);
+        const canManualRefresh = this.diagnostic.permission === "prompt" &&
+            hasHandle && libraryState === "provisional" &&
+            this.refreshActionConnected;
+
+        this.accessPanel?.setLibraryRefreshState?.({
+            permission: this.diagnostic.permission,
+            hasHandle,
+            libraryState,
+            canManualRefresh,
+            result: this.diagnostic.result
+        });
         this.accessPanel?.setLibraryRefreshDiagnostic?.({
             ...this.diagnostic,
-            handle: this.diagnostic.handle ? "yes" : "no"
+            handle: hasHandle ? "yes" : "no",
+            libraryState,
+            canManualRefresh: canManualRefresh ? "yes" : "no"
         });
     }
 }

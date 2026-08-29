@@ -49,6 +49,8 @@ export default class PreviousLibraryCoordinator {
         this.generation = 0;
         this.previousHandle = null;
         this.previousPermission = "prompt";
+        this.persistenceStatus = "no persistent handle";
+        this.persistenceStatusListener = null;
         this.loading = false;
 
         this.accessPanel.setPreviousLibraryAction(
@@ -174,6 +176,12 @@ export default class PreviousLibraryCoordinator {
 
     getRefreshHandle() {
         return this.getCurrentLibrary()?.rootFolder?.handle || this.previousHandle;
+    }
+
+    setPersistenceStatusListener(listener) {
+
+        this.persistenceStatusListener = listener;
+        this.#notifyPersistenceStatus();
     }
 
     async queryRefreshPermission(handle = this.getRefreshHandle()) {
@@ -336,7 +344,22 @@ export default class PreviousLibraryCoordinator {
 
     #setPersistenceStatus(status) {
 
+        this.persistenceStatus = status;
         this.accessPanel.setPreviousLibraryStatus?.(status);
+        this.#notifyPersistenceStatus();
+    }
+
+    #notifyPersistenceStatus() {
+
+        const prefix = "saved / ";
+
+        this.persistenceStatusListener?.({
+            status: this.persistenceStatus,
+            permission: this.persistenceStatus.startsWith(prefix)
+                ? this.persistenceStatus.slice(prefix.length)
+                : "unknown",
+            hasHandle: Boolean(this.getRefreshHandle())
+        });
     }
 
     #showLoadFailure(error) {
