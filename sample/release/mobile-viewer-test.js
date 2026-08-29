@@ -90,12 +90,16 @@ function createMobileSidebarProbe(trackCount = 1122) {
     close.textContent = "Close";
     fixed.className = "sidebar-fixed-controls";
     search.className = "search-view";
-    search.innerHTML = '<input class="search-input"><p class="search-summary">1122 GPX</p>';
+    search.innerHTML = '<details class="search-disclosure">' +
+        '<summary class="search-disclosure-summary">検索</summary>' +
+        '<div class="search-disclosure-content">' +
+        '<input class="search-input"><p class="search-summary">1122 GPX</p>' +
+        '</div></details>';
     dates.className = "search-date-filter";
     dates.innerHTML = '<label><span>From</span><input type="date"></label>' +
         '<label><span>To</span><input type="date"></label>' +
         '<button class="search-filter-clear">Clear</button>';
-    search.append(dates);
+    search.querySelector(".search-disclosure-content").append(dates);
     modes.className = "discovery-mode-switch";
     modes.innerHTML = "<button>Folder</button><button>Date</button>";
     drive.className = "drive-library-control";
@@ -213,10 +217,10 @@ async function run() {
         layoutCss.includes("width:min(85vw, 360px)"),
     "mobile viewport or Sidebar CSS contract missing");
     assert(layoutCss.includes("flex-direction:column") &&
-        layoutCss.includes("overflow-y:auto") &&
-        layoutCss.includes("flex:1 0 120px") &&
-        layoutCss.includes("min-height:120px"),
-    "mobile Sidebar is not a scrollable vertical flow");
+        layoutCss.includes("overflow-y:hidden") &&
+        layoutCss.includes("flex:1 1 auto") &&
+        layoutCss.includes("min-height:0"),
+    "mobile Sidebar does not reserve its flexible area for the Track Tree");
     assert(themeCss.includes("min-height:44px") &&
         themeCss.includes(".track-editor") &&
         themeCss.includes(".batch-simplification") &&
@@ -240,6 +244,10 @@ async function run() {
         themeCss.includes("display:none") &&
         themeCss.includes(".mobile-sidebar-display-controls"),
     "mobile selects or Map Waypoint/Clear controls remain on the Map");
+    assert(themeCss.includes(".search-disclosure-summary") &&
+        themeCss.includes(".search-view.has-active-filter") &&
+        themeCss.includes("max-height:28dvh"),
+    "mobile Search disclosure or active-filter presentation is missing");
     assert(themeCss.includes("body.is-driving-mode .map-toolbar") &&
         !themeCss.includes("body.is-driving-mode .mobile-map-controls"),
     "driving mode hides the required mobile Map toggles");
@@ -295,13 +303,18 @@ async function run() {
     accessCopy.setProvisionalLibrary(true);
     accessCopy.showPreviousLibrary("Previous", "prompt");
     assert(accessCopy.primaryContent.hidden &&
-        !accessCopy.libraryChange.hidden,
+        !accessCopy.libraryChange.hidden &&
+        accessCopy.element.classList.contains("is-compact"),
     "cached viewer tree did not suppress the redundant previous-Library action");
     accessCopy.showPreviousLibrary("Previous", "denied");
     assert(accessCopy.primaryContent.hidden &&
-        !accessCopy.libraryChange.hidden,
+        !accessCopy.libraryChange.hidden &&
+        accessCopy.element.classList.contains("is-compact"),
     "permission denial removed the cached viewer tree controls");
     accessCopy.setProvisionalLibrary(false);
+    accessCopy.showPreviousLibrary("Previous", "prompt");
+    assert(!accessCopy.element.classList.contains("is-compact"),
+        "unresolved Previous Library state stayed compact");
     accessCopy.hide();
     document.body.append(accessCopy.element);
     assert(accessCopy.primaryContent.hidden &&
@@ -349,9 +362,11 @@ async function run() {
         colorButton.click();
         assert(colorActivations === 1,
             "Explicit color control is not operable in the mobile row");
-        assert(getComputedStyle(probe.shell).overflowY === "auto" &&
+        assert(getComputedStyle(probe.shell).overflowY === "hidden" &&
             getComputedStyle(probe.sidebar).overflowY === "auto",
-        "mobile Sidebar or Tree scrolling contract is inactive");
+        "mobile shell or dedicated Tree scrolling contract is inactive");
+        assert(!probe.search.querySelector(".search-disclosure").open,
+            "mobile Search probe was not collapsed by default");
         assert(probe.buildInfo.getBoundingClientRect().top >=
             probe.sidebar.getBoundingClientRect().bottom - 1,
         "BuildInfo overlaps the mobile Folder Tree");

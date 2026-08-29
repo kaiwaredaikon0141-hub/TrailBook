@@ -11,19 +11,40 @@ export default class SearchView {
 
     /**
      * @param {import("../core/EventBus.js").default} eventBus
+     * @param {{mobileMedia?: MediaQueryList | null}} options
      */
-    constructor(eventBus) {
+    constructor(eventBus, { mobileMedia = globalThis.matchMedia?.(
+        "(max-width: 768px)"
+    ) || null } = {}) {
 
         this.eventBus = eventBus;
+        this.mobileMedia = mobileMedia;
+        this.mobileExpanded = false;
         this.results = [];
         this.selectedPath = null;
         this.element = this.#create();
+        this.disclosure = this.element.querySelector(".search-disclosure");
+        this.disclosureLabel = this.element.querySelector(
+            ".search-disclosure-label"
+        );
         this.input = this.element.querySelector(".search-input");
         this.fromInput = this.element.querySelector(".search-date-from");
         this.toInput = this.element.querySelector(".search-date-to");
         this.clearButton = this.element.querySelector(".search-filter-clear");
         this.summary = this.element.querySelector(".search-summary");
         this.resultList = this.element.querySelector(".search-results");
+        this.handleMobileMediaChange = () => this.#syncDisclosure();
+        this.disclosure.addEventListener("toggle", () => {
+            if (this.mobileMedia?.matches) {
+                this.mobileExpanded = this.disclosure.open;
+            }
+        });
+        this.mobileMedia?.addEventListener?.(
+            "change",
+            this.handleMobileMediaChange
+        );
+        this.#syncDisclosure();
+        this.#updateFilterIndicator();
     }
 
     /**
@@ -73,6 +94,7 @@ export default class SearchView {
         this.fromInput.value = String(filter.from || "");
         this.toInput.value = String(filter.to || "");
         this.#activeQuery = this.input.value;
+        this.#updateFilterIndicator();
 
         if (emit) this.#emitFilterChanged();
     }
@@ -128,6 +150,7 @@ export default class SearchView {
         this.fromInput.value = "";
         this.toInput.value = "";
         this.#clearResults();
+        this.#updateFilterIndicator();
     }
 
     /**
@@ -138,6 +161,10 @@ export default class SearchView {
     destroy() {
 
         this.#cancelQuery();
+        this.mobileMedia?.removeEventListener?.(
+            "change",
+            this.handleMobileMediaChange
+        );
     }
 
     /**
@@ -157,6 +184,7 @@ export default class SearchView {
         const focusState = this.#captureResultFocus();
 
         this.#activeQuery = query;
+        this.#updateFilterIndicator({ query });
         this.results = searchResult.results;
         this.resultList.replaceChildren(
             ...this.results.map(
@@ -173,6 +201,8 @@ export default class SearchView {
         const active = Boolean(
             String(filter?.query || "").trim() || filter?.from || filter?.to
         );
+
+        this.#updateFilterIndicator(filter);
 
         if (!active) {
             this.#clearResults();
@@ -193,6 +223,7 @@ export default class SearchView {
 
     showFilterBuilding(filter, { completed = 0, total = 0 } = {}) {
 
+        this.#updateFilterIndicator(filter);
         if (!String(filter?.query || "").trim() && !filter?.from && !filter?.to) {
             return;
         }
@@ -212,29 +243,36 @@ export default class SearchView {
         section.className = "search-view";
         section.setAttribute("aria-label", "Library検索");
         section.innerHTML = `
-            <label class="search-label" for="library-search">Search</label>
-            <input
-                id="library-search"
-                class="search-input"
-                type="search"
-                aria-label="Libraryを検索"
-                autocomplete="off"
-                disabled
-                placeholder="ライブラリを開いてください"
-            >
-            <div class="search-date-filter" role="group" aria-label="Date range">
-                <label>
-                    <span>From</span>
-                    <input class="search-date-from" type="date" disabled>
-                </label>
-                <label>
-                    <span>To</span>
-                    <input class="search-date-to" type="date" disabled>
-                </label>
-                <button class="search-filter-clear" type="button" disabled>Clear</button>
-            </div>
-            <p class="search-summary" aria-live="polite"></p>
-            <ul class="search-results" aria-label="検索結果" hidden></ul>
+            <details class="search-disclosure" open>
+                <summary class="search-disclosure-summary">
+                    <span class="search-disclosure-label">検索</span>
+                </summary>
+                <div class="search-disclosure-content">
+                    <label class="search-label" for="library-search">Search</label>
+                    <input
+                        id="library-search"
+                        class="search-input"
+                        type="search"
+                        aria-label="Libraryを検索"
+                        autocomplete="off"
+                        disabled
+                        placeholder="ライブラリを開いてください"
+                    >
+                    <div class="search-date-filter" role="group" aria-label="Date range">
+                        <label>
+                            <span>From</span>
+                            <input class="search-date-from" type="date" disabled>
+                        </label>
+                        <label>
+                            <span>To</span>
+                            <input class="search-date-to" type="date" disabled>
+                        </label>
+                        <button class="search-filter-clear" type="button" disabled>Clear</button>
+                    </div>
+                    <p class="search-summary" aria-live="polite"></p>
+                    <ul class="search-results" aria-label="検索結果" hidden></ul>
+                </div>
+            </details>
         `;
 
         section.querySelector(".search-input").addEventListener(
@@ -247,7 +285,10 @@ export default class SearchView {
         );
         section.querySelectorAll(".search-date-from, .search-date-to").forEach(
             input => {
-                input.addEventListener("input", () => this.#scheduleFilter());
+                input.addEventListener("input", () => {
+                    this.#updateFilterIndicator();
+                    this.#scheduleFilter();
+                });
                 input.addEventListener(
                     "keydown",
                     event => this.#handleInputKeyDown(event)
@@ -377,7 +418,27 @@ export default class SearchView {
 
         this.#cancelQuery();
         this.#activeQuery = query;
+        this.#updateFilterIndicator();
         this.#scheduleFilter();
+    }
+
+    #syncDisclosure() {
+
+        this.disclosure.open = this.mobileMedia?.matches
+            ? this.mobileExpanded
+            : true;
+    }
+
+    #updateFilterIndicator(filter = null) {
+
+        const active = Boolean(
+            String(filter?.query ?? this.input.value).trim() ||
+            (filter?.from ?? this.fromInput.value) ||
+            (filter?.to ?? this.toInput.value)
+        );
+
+        this.element.classList.toggle("has-active-filter", active);
+        this.disclosureLabel.textContent = active ? "検索（条件あり）" : "検索";
     }
 
     #handleInputKeyDown(event) {

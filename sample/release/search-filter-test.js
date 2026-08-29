@@ -20,6 +20,25 @@ function assert(condition, message) {
     if (!condition) throw new Error(message);
 }
 
+class FakeMedia {
+    constructor(matches = false) {
+        this.matches = matches;
+        this.listeners = [];
+    }
+    addEventListener(name, listener) {
+        if (name === "change") this.listeners.push(listener);
+    }
+    removeEventListener(name, listener) {
+        if (name === "change") {
+            this.listeners = this.listeners.filter(candidate => candidate !== listener);
+        }
+    }
+    set(matches) {
+        this.matches = matches;
+        this.listeners.forEach(listener => listener({ matches }));
+    }
+}
+
 function entry(path, name, date) {
     return new TrackDiscoveryEntry({
         relativePath: path,
@@ -51,6 +70,45 @@ function row(path, kind) {
 
 async function flush(delay = 0) {
     await new Promise(resolve => setTimeout(resolve, delay));
+}
+
+function testMobileSearchDisclosure() {
+    const eventBus = new EventBus();
+    const mobileMedia = new FakeMedia(true);
+    const searchView = new SearchView(eventBus, { mobileMedia });
+
+    searchView.setAvailable(true);
+    assert(!searchView.disclosure.open,
+        "mobile Search was not collapsed by default");
+    searchView.disclosure.open = true;
+    searchView.disclosure.dispatchEvent(new Event("toggle"));
+    assert(searchView.mobileExpanded,
+        "mobile Search expanded state was not retained");
+    searchView.setFilter({ query: "ridge", from: "", to: "" });
+    assert(searchView.element.classList.contains("has-active-filter") &&
+        searchView.disclosureLabel.textContent === "検索（条件あり）",
+    "collapsed Search does not indicate an active filter");
+    searchView.disclosure.open = false;
+    searchView.disclosure.dispatchEvent(new Event("toggle"));
+    assert(searchView.disclosureLabel.textContent === "検索（条件あり）",
+        "active filter indication disappeared while collapsed");
+    mobileMedia.set(false);
+    assert(searchView.disclosure.open,
+        "desktop Search was left collapsed");
+    searchView.reset();
+    assert(!searchView.element.classList.contains("has-active-filter") &&
+        searchView.disclosureLabel.textContent === "検索",
+    "Search reset retained the active indication");
+    searchView.fromInput.value = "2026-08-01";
+    searchView.fromInput.dispatchEvent(new Event("input", { bubbles: true }));
+    assert(searchView.disclosureLabel.textContent === "検索（条件あり）",
+        "date-only filter is not indicated");
+    searchView.clearButton.click();
+    assert(searchView.disclosureLabel.textContent === "検索",
+        "Clear did not reset the compact Search indication");
+    searchView.destroy();
+    assert(mobileMedia.listeners.length === 0,
+        "Search media-query listener was not cleaned up");
 }
 
 function testSemantics() {
@@ -225,6 +283,8 @@ async function testCoordinator() {
     await flush(20);
     assert(loads === 2, "Discovery Index did not build exactly once per GPX");
     assert(searchView.results.length === 1, "Search result projection mismatch");
+    assert(searchView.element.classList.contains("has-active-filter"),
+        "coordinator-driven Search did not expose its active state");
     assert(searchView.results[0].path === "Library/北/alpha.gpx",
         "Track result path mismatch");
     assert(!displayState.getDisplay("Library/南/beta.gpx").checked,
@@ -235,6 +295,8 @@ async function testCoordinator() {
     await flush();
     assert(loads === 2, "Clear rebuilt or reparsed the Index");
     assert(searchView.results.length === 0, "Clear retained Search results");
+    assert(!searchView.element.classList.contains("has-active-filter"),
+        "cleared coordinator filter retained its active state");
 
     searchView.input.value = "Beta";
     searchView.input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -245,6 +307,7 @@ async function testCoordinator() {
 try {
     testSemantics();
     testStateStore();
+    testMobileSearchDisclosure();
     await testLazyFolderProjection();
     await testCoordinator();
     output.textContent = `PASS: ${assertions} assertions`;

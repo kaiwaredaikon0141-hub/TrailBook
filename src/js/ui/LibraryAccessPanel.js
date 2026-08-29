@@ -210,6 +210,7 @@ export default class LibraryAccessPanel {
 
     hide() {
 
+        this.element.classList.add("is-compact");
         this.primaryContent.hidden = true;
         this.previousLibraryButton.hidden = true;
         this.element.querySelector(".manual-library-primary").hidden = true;
@@ -267,6 +268,7 @@ export default class LibraryAccessPanel {
             return;
         }
 
+        this.element.classList.remove("is-compact");
         this.primaryContent.hidden = false;
         this.previousLibraryButton.hidden = action !== "previous";
         this.element.querySelector(".manual-library-primary").hidden =
