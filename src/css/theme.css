@@ -1305,6 +1305,13 @@ body.is-track-info-resizing{
     background-size:12px 12px;
 }
 
+.folder-color-readonly,
+.tree-color-mode,
+.date-tree-color-indicator{
+
+    display:none;
+}
+
 .folder-color-dialog{
 
     width:min(320px, calc(100vw - 32px));
@@ -2183,26 +2190,60 @@ body.is-track-info-resizing{
 
     .folder-color-control{
 
-        flex:0 0 76px;
+        display:none;
+    }
 
-        min-width:76px;
+    .folder-color-readonly{
 
-        max-width:76px;
+        display:inline-flex;
+
+        flex:0 0 auto;
+
+        align-items:center;
+
+        gap:3px;
 
         margin-left:4px;
 
-        overflow:hidden;
+        color:#52606d;
+
+        font-size:9px;
     }
 
-    .folder-color-mode{
+    .folder-color-readonly-swatch,
+    .tree-color-indicator,
+    .date-tree-color-indicator{
 
-        min-width:0;
+        box-sizing:border-box;
 
-        overflow:hidden;
+        display:inline-block;
 
-        text-overflow:ellipsis;
+        flex:0 0 18px;
 
-        white-space:nowrap;
+        width:18px;
+
+        height:18px;
+
+        border:1px solid rgba(0, 0, 0, 0.35);
+
+        border-radius:3px;
+    }
+
+    .tree-color-indicator,
+    .date-tree-color-indicator{
+
+        margin:0 4px 0 2px;
+    }
+
+    .tree-color-mode{
+
+        display:inline;
+
+        margin-right:3px;
+
+        color:#667085;
+
+        font-size:9px;
     }
 
     input[type="checkbox"]{

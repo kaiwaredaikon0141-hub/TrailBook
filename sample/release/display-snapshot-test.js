@@ -382,6 +382,8 @@ async function testLibrarySnapshotService() {
         "Date Tree metadata was not captured");
     assert(state.mode === "date" && state.filter.query === "ride",
         "mode/filter state was not captured");
+    assert(state.entries[0].color === "#123456",
+        "cached Library Track color was not captured");
     assert(await service.restore(state, {
         cacheNamespace: "local-cache",
         restoredTracks: [{
@@ -397,6 +399,8 @@ async function testLibrarySnapshotService() {
         "cached Date/Search entry was not restored");
     assert(displayState.getDisplay("Trips/one.gpx")?.state === "loaded",
         "visible Track check/load state was not restored");
+    assert(displayState.getDisplay("Trips/one.gpx")?.color === "#123456",
+        "cached Library Track color was not restored");
     assert(selected[0].path === "Trips/one.gpx",
         "cached selected Track was not restored");
     assert(service.isProvisionalFor("local-cache"),

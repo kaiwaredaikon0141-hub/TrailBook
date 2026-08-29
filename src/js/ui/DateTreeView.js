@@ -234,6 +234,7 @@ export default class DateTreeView {
         row.title = entry.relativePath;
         row.innerHTML = `
             <input class="date-tree-checkbox" type="checkbox">
+            <span class="date-tree-color-indicator" aria-hidden="true"></span>
             <span class="date-tree-track-label"></span>
         `;
         row.querySelector(".date-tree-track-label").textContent = entry.displayName;
@@ -462,8 +463,20 @@ export default class DateTreeView {
 
         const display = this.getDisplay(path);
         const checkbox = row.querySelector(".date-tree-checkbox");
+        const colorIndicator = row.querySelector(".date-tree-color-indicator");
 
         checkbox.checked = Boolean(display?.checked);
+        if (display?.color) {
+            colorIndicator.style.backgroundColor = display.color;
+            colorIndicator.removeAttribute("aria-hidden");
+            colorIndicator.setAttribute("role", "img");
+            colorIndicator.setAttribute("aria-label", `表示色: ${display.color}`);
+        } else {
+            colorIndicator.style.removeProperty("background-color");
+            colorIndicator.setAttribute("aria-hidden", "true");
+            colorIndicator.removeAttribute("role");
+            colorIndicator.removeAttribute("aria-label");
+        }
         row.classList.toggle("is-loading", display?.state === "loading");
         row.classList.toggle("is-error", display?.state === "error");
     }

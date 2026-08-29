@@ -135,6 +135,10 @@ function testView() {
     view.root.querySelector(".date-tree-group-row[aria-expanded='true'] + ul .date-tree-group-row").click();
     const trackRow = view.root.querySelector(".date-tree-track-row");
     assert(trackRow, "month expansion did not render Tracks");
+    const colorIndicator = trackRow.querySelector(".date-tree-color-indicator");
+    assert(colorIndicator.style.backgroundColor &&
+        colorIndicator.getAttribute("aria-label").includes("#000000"),
+    "Date Track resolved color indicator missing");
     assert(view.root.querySelectorAll(".date-tree-track-row").length === 1,
         "unexpanded months rendered Tracks");
     assert(![...view.root.querySelectorAll(".date-tree-group-row")]

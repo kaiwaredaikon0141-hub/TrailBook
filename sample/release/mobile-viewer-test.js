@@ -2,6 +2,8 @@ import TrackInfoView from "../../src/js/ui/TrackInfoView.js";
 import ViewStateControls from "../../src/js/ui/ViewStateControls.js";
 import Toolbar from "../../src/js/ui/Toolbar.js";
 import LibraryAccessPanel from "../../src/js/ui/LibraryAccessPanel.js";
+import FolderColorControl from "../../src/js/ui/FolderColorControl.js";
+import DisplayState from "../../src/js/state/DisplayState.js";
 
 const output = document.getElementById("result");
 let assertions = 0;
@@ -119,7 +121,10 @@ function createMobileSidebarProbe(trackCount = 1122) {
             `<span class="tree-label">Long folder label ${index}</span>` +
             '<button class="folder-color-control">' +
             '<span class="folder-color-swatch"></span>' +
-            '<span class="folder-color-mode">Explicit</span></button></div>';
+            '<span class="folder-color-mode">Explicit</span></button>' +
+            '<span class="folder-color-readonly" aria-label="表示色: #123456、Auto">' +
+            '<span class="folder-color-readonly-swatch" style="background:#123456"></span>' +
+            '<span class="folder-color-readonly-mode">Auto</span></span></div>';
         tree.append(item);
     }
     sidebar.append(tree);
@@ -257,7 +262,8 @@ async function run() {
         "mobile build information can shrink out of the sidebar"
     );
     assert(themeCss.includes("grid-column:1 / -1") &&
-        themeCss.includes("flex:0 0 76px") &&
+        themeCss.includes(".folder-color-readonly") &&
+        themeCss.includes("flex:0 0 18px") &&
         themeCss.includes("text-overflow:ellipsis"),
     "mobile controls or Folder rows can overlap horizontally");
     assert(layoutCss.includes(".track-editor") &&
@@ -335,6 +341,78 @@ async function run() {
     assert(!themeCss.includes(".mobile-drive-diagnostic"),
         "obsolete Mobile Drive diagnostic CSS remains");
 
+    const colorTree = document.createElement("aside");
+    const folderRow = document.createElement("div");
+    const fileRow = document.createElement("div");
+    const colorEvents = new FakeEventBus();
+    const colorState = new DisplayState();
+
+    folderRow.className = "tree-row folder-row";
+    folderRow.dataset.treePath = "Trips";
+    folderRow.dataset.nodeKind = "folder";
+    folderRow.innerHTML = '<span class="tree-label">Trips</span>';
+    fileRow.className = "tree-row gpx-file";
+    fileRow.dataset.treePath = "Trips/ride.gpx";
+    fileRow.dataset.nodeKind = "file";
+    fileRow.innerHTML = '<span class="tree-color-indicator"></span>' +
+        '<span class="tree-label">ride.gpx</span>';
+    colorTree.append(folderRow, fileRow);
+    const colorTreeView = {
+        element: colorTree,
+        folderNodes: new Map([["Trips", folderRow]]),
+        fileNodes: new Map([["Trips/ride.gpx", fileRow]]),
+        nodeMetadata: new Map([
+            ["Trips", { kind: "folder", path: "Trips" }],
+            ["Trips/ride.gpx", {
+                kind: "file", path: "Trips/ride.gpx", parentPath: "Trips",
+                color: null
+            }]
+        ])
+    };
+    const colorControl = new FolderColorControl(
+        colorTreeView,
+        colorEvents,
+        colorState,
+        () => "#123456"
+    );
+
+    colorState.setLibrary({});
+    colorState.registerFile("Trips/ride.gpx", {}, "#123456");
+    colorControl.setPresentations(new Map([["Trips", {
+        mode: "auto", explicitColor: null, resolvedColor: null
+    }]]));
+    const readonly = folderRow.querySelector(".folder-color-readonly");
+    const trackSwatch = fileRow.querySelector(".tree-color-indicator");
+
+    assert(readonly?.tagName === "SPAN" &&
+        readonly.querySelector(".folder-color-readonly-mode").textContent === "Auto" &&
+        readonly.getAttribute("aria-label").includes("#123456"),
+    "mobile Auto Folder color is not exposed as a read-only resolved swatch");
+    assert(trackSwatch.getAttribute("aria-label").includes("#123456") &&
+        fileRow.querySelector(".tree-color-mode").textContent === "Auto",
+    "mobile resolved Track color is missing");
+    const eventCount = colorEvents.events.length;
+
+    readonly.click();
+    assert(colorEvents.events.length === eventCount,
+        "read-only mobile color indicator triggered an edit action");
+    folderRow.querySelector(".folder-color-control").click();
+    assert(colorEvents.events.at(-1)?.name === "folder:color-edit-requested",
+        "existing desktop Folder color edit action regressed");
+    colorState.registerFile("Trips/ride.gpx", {}, "#AABBCC");
+    colorControl.setPresentations(new Map([["Trips", {
+        mode: "explicit", explicitColor: "#AABBCC", resolvedColor: "#AABBCC"
+    }]]));
+    assert(readonly.querySelector(".folder-color-readonly-mode").textContent ===
+        "Explicit" && trackSwatch.getAttribute("aria-label").includes("#AABBCC"),
+    "explicit Folder/Track resolved color was not refreshed");
+    colorState.registerFile("Trips/ride.gpx", {}, "#445566");
+    colorControl.setPresentations(new Map([["Trips", {
+        mode: "inherited", explicitColor: null, resolvedColor: "#445566"
+    }]]));
+    assert(fileRow.querySelector(".tree-color-mode").textContent === "Inherited",
+        "inherited Track color mode is not identified");
+
     if (matchMedia("(max-width:768px)").matches) {
         const probe = createMobileSidebarProbe();
         const flow = [probe.close, probe.fixed, probe.sidebar, probe.buildInfo]
@@ -342,7 +420,8 @@ async function run() {
         const row = probe.tree.querySelector(".tree-row");
         const label = row.querySelector(".tree-label").getBoundingClientRect();
         const colorButton = row.querySelector(".folder-color-control");
-        const color = colorButton.getBoundingClientRect();
+        const color = row.querySelector(".folder-color-readonly")
+            .getBoundingClientRect();
 
         assert(flow[0].bottom <= flow[1].top + 1 &&
             flow[1].bottom <= flow[2].top + 1 &&
@@ -353,15 +432,12 @@ async function run() {
         assert(probe.shell.scrollWidth <= probe.shell.clientWidth + 1 &&
             probe.sidebar.scrollWidth <= probe.sidebar.clientWidth + 1,
         "mobile Sidebar introduces horizontal scrolling");
-        assert(label.right <= color.left + 1 && color.width >= 75 &&
-            color.height >= 43,
-        "Folder label and Explicit color control overlap");
-        let colorActivations = 0;
-
-        colorButton.addEventListener("click", () => { colorActivations += 1; });
-        colorButton.click();
-        assert(colorActivations === 1,
-            "Explicit color control is not operable in the mobile row");
+        assert(label.right <= color.left + 1 && color.width >= 18,
+            "Folder label and read-only color indicator overlap");
+        assert(getComputedStyle(colorButton).display === "none" &&
+            getComputedStyle(row.querySelector(".folder-color-readonly")).display ===
+                "inline-flex",
+        "mobile color editor was not replaced by the read-only indicator");
         assert(getComputedStyle(probe.shell).overflowY === "hidden" &&
             getComputedStyle(probe.sidebar).overflowY === "auto",
         "mobile shell or dedicated Tree scrolling contract is inactive");

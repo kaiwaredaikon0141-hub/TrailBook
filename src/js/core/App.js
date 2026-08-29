@@ -142,8 +142,8 @@ export default class App {
             this.displaySettingsStore.getMapMode()
         );
         this.folderColorControl = new FolderColorControl(
-            this.treeView,
-            this.eventBus
+            this.treeView, this.eventBus, this.displayState,
+            path => this.getColor(path)
         );
         this.folderColorDialog = new FolderColorDialog(
             this.eventBus,
