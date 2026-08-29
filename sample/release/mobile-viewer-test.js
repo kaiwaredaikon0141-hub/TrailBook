@@ -137,9 +137,75 @@ function createMobileSidebarProbe(trackCount = 1122) {
     };
 }
 
+async function testLargeColorProjection() {
+    const trackCount = 1050;
+    const element = document.createElement("aside");
+    const folderNodes = new Map();
+    const fileNodes = new Map();
+    const nodeMetadata = new Map([["", {
+        kind: "folder", path: "", parentPath: ""
+    }]]);
+    const presentations = new Map([["", {
+        mode: "auto", explicitColor: null, resolvedColor: null
+    }]]);
+
+    for (let index = 0; index < trackCount; index += 1) {
+        const folderPath = `folder-${index}`;
+        const filePath = `${folderPath}/track.gpx`;
+        const folderRow = document.createElement("div");
+        const fileRow = document.createElement("div");
+
+        folderRow.className = "folder-row";
+        folderRow.dataset.nodeKind = "folder";
+        folderRow.dataset.treePath = folderPath;
+        folderRow.innerHTML = `<span class="tree-label">${folderPath}</span>`;
+        fileRow.className = "gpx-file";
+        fileRow.dataset.nodeKind = "file";
+        fileRow.dataset.treePath = filePath;
+        fileRow.innerHTML = '<span class="tree-color-indicator"></span>';
+        element.append(folderRow, fileRow);
+        folderNodes.set(folderPath, folderRow);
+        fileNodes.set(filePath, fileRow);
+        nodeMetadata.set(folderPath, {
+            kind: "folder", path: folderPath, parentPath: ""
+        });
+        nodeMetadata.set(filePath, {
+            kind: "file", path: filePath, parentPath: folderPath, color: null
+        });
+        presentations.set(folderPath, {
+            mode: "auto", explicitColor: null, resolvedColor: null
+        });
+    }
+    let resolverCalls = 0;
+    const control = new FolderColorControl({
+        element, folderNodes, fileNodes, nodeMetadata
+    }, new FakeEventBus(), null, () => {
+        resolverCalls += 1;
+        return "#123456";
+    });
+
+    control.setPresentations(presentations);
+    assert(resolverCalls === trackCount,
+        "1000+ Track color projection was not linear");
+    assert(element.querySelectorAll(".folder-color-readonly").length ===
+        trackCount,
+    "large Folder projection omitted read-only indicators");
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const callsAfterObserver = resolverCalls;
+
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert(resolverCalls === callsAfterObserver,
+        "color indicator MutationObserver entered a refresh loop");
+    control.setPresentations(presentations);
+    assert(resolverCalls === callsAfterObserver,
+        "unchanged Phase B presentation recalculated Track colors");
+}
+
 async function run() {
     const media = new FakeMedia(false);
     const fixture = createFixture(media);
+
+    await testLargeColorProjection();
     fixture.flushFrames();
 
     assert(!fixture.controls.isMobile(), "desktop layout was not the default");

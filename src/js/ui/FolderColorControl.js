@@ -19,7 +19,11 @@ export default class FolderColorControl {
         this.presentations = new Map();
         this.persistenceStatus = "available";
         this.observer = typeof MutationObserver === "function"
-            ? new MutationObserver(() => this.refresh())
+            ? new MutationObserver(records => {
+                if (records.some(record => !this.#isOwnedMutation(record))) {
+                    this.refresh();
+                }
+            })
             : null;
 
         this.observer?.observe(this.treeElement, {
@@ -31,14 +35,45 @@ export default class FolderColorControl {
                 this.refresh();
             } else {
                 this.#refreshFileRow(path);
+                this.#refreshFolderFallbacks(path);
             }
         });
     }
 
     setPresentations(presentations) {
 
-        this.presentations = new Map(presentations);
-        this.refresh();
+        const previous = this.presentations;
+        const next = new Map(presentations);
+        const changedPaths = new Set([...previous.keys(), ...next.keys()]);
+
+        changedPaths.forEach(path => {
+            if (this.#samePresentation(previous.get(path), next.get(path))) {
+                changedPaths.delete(path);
+            }
+        });
+        this.presentations = next;
+        const folderRows = [...this.treeView.folderNodes.values()].filter(
+            row =>
+                changedPaths.has(row.dataset.treePath) ||
+                !row.querySelector(".folder-color-readonly")
+        );
+        const fileRows = [...this.treeView.fileNodes.values()].filter(row => {
+            const metadata = this.treeView.nodeMetadata.get(row.dataset.treePath);
+
+            return changedPaths.has(metadata?.parentPath) ||
+                !row.querySelector(".tree-color-mode");
+        });
+
+        if (folderRows.length === 0 && fileRows.length === 0) return;
+        const folderColors = folderRows.length > 0
+            ? this.#buildFolderColorMap()
+            : new Map();
+
+        folderRows.forEach(row => this.#refreshRow(
+            row,
+            folderColors.get(row.dataset.treePath) || null
+        ));
+        fileRows.forEach(row => this.#refreshFileRow(row.dataset.treePath));
     }
 
     setPersistenceStatus(status) {
@@ -73,15 +108,20 @@ export default class FolderColorControl {
 
     refresh() {
 
+        const folderColors = this.#buildFolderColorMap();
+
         this.treeElement.querySelectorAll(
             '.folder-row[data-node-kind="folder"]'
-        ).forEach(row => this.#refreshRow(row));
+        ).forEach(row => this.#refreshRow(
+            row,
+            folderColors.get(row.dataset.treePath) || null
+        ));
         this.treeElement.querySelectorAll(
             '.gpx-file[data-node-kind="file"]'
         ).forEach(row => this.#refreshFileRow(row.dataset.treePath));
     }
 
-    #refreshRow(row) {
+    #refreshRow(row, fallbackColor = null) {
 
         const folderPath = row.dataset.treePath;
         const presentation = this.presentations.get(folderPath) || {
@@ -97,7 +137,7 @@ export default class FolderColorControl {
         const mode = button.querySelector(".folder-color-mode");
         const modeLabel = MODE_LABELS[presentation.mode] || MODE_LABELS.auto;
         const resolvedColor = presentation.resolvedColor ||
-            this.#findDescendantColor(folderPath) ||
+            fallbackColor ||
             this.getResolvedColor?.(folderPath) || null;
         const persistenceLabel = this.persistenceStatus === "session-only"
             ? `${modeLabel} (Session only)`
@@ -191,24 +231,106 @@ export default class FolderColorControl {
             mode.setAttribute("aria-hidden", "true");
             swatch?.after(mode);
         }
-        mode.textContent = modeLabel;
+        if (mode.textContent !== modeLabel) mode.textContent = modeLabel;
     }
 
-    #findDescendantColor(folderPath) {
+    #buildFolderColorMap() {
+
+        const directColors = new Map();
+        const childFolders = new Map();
+        const folderPaths = [];
 
         for (const metadata of this.treeView.nodeMetadata.values()) {
-            if (
-                metadata.kind !== "file" ||
-                (folderPath && !metadata.path.startsWith(`${folderPath}/`))
-            ) continue;
+            if (metadata.kind === "folder") {
+                folderPaths.push(metadata.path);
+                if (metadata.path && metadata.parentPath !== metadata.path) {
+                    const children = childFolders.get(metadata.parentPath) || [];
 
+                    children.push(metadata.path);
+                    childFolders.set(metadata.parentPath, children);
+                }
+                continue;
+            }
+            if (metadata.kind !== "file") continue;
             const color = this.displayState?.getDisplay(metadata.path)?.color ||
-                metadata.color || this.getResolvedColor?.(metadata.path);
+                metadata.color || this.getResolvedColor?.(metadata.path) || null;
 
-            if (color) return color;
+            metadata.color = color;
+            if (color && !directColors.has(metadata.parentPath)) {
+                directColors.set(metadata.parentPath, color);
+            }
+        }
+        const resolvedColors = new Map();
+        const resolve = path => {
+            if (resolvedColors.has(path)) return resolvedColors.get(path);
+            let color = directColors.get(path) || null;
+
+            if (!color) {
+                for (const childPath of childFolders.get(path) || []) {
+                    color = resolve(childPath);
+                    if (color) break;
+                }
+            }
+            resolvedColors.set(path, color);
+            return color;
+        };
+
+        folderPaths.forEach(resolve);
+        return resolvedColors;
+    }
+
+    #samePresentation(first, second) {
+
+        const fallback = {
+            mode: "auto",
+            explicitColor: null,
+            resolvedColor: null
+        };
+        const left = first || fallback;
+        const right = second || fallback;
+
+        return left.mode === right.mode &&
+            left.explicitColor === right.explicitColor &&
+            left.resolvedColor === right.resolvedColor;
+    }
+
+    #isOwnedMutation(record) {
+
+        const selector = ".folder-color-control, .folder-color-readonly, " +
+            ".tree-color-mode";
+        const target = record.target?.nodeType === 1
+            ? record.target
+            : record.target?.parentElement;
+
+        if (target?.closest?.(selector)) return true;
+        const added = [...record.addedNodes].filter(node => node.nodeType === 1);
+
+        return added.length > 0 && added.length === record.addedNodes.length &&
+            added.every(node => node.matches?.(selector));
+    }
+
+    #refreshFolderFallbacks(path) {
+
+        const color = this.displayState?.getDisplay(path)?.color ||
+            this.treeView.nodeMetadata.get(path)?.color || null;
+        let folderPath = this.treeView.nodeMetadata.get(path)?.parentPath;
+
+        if (!color || typeof folderPath !== "string") return;
+        while (true) {
+            const row = this.treeView.folderNodes.get(folderPath);
+            const presentation = this.presentations.get(folderPath);
+            const readonly = row?.querySelector(".folder-color-readonly");
+
+            if (
+                row &&
+                !presentation?.resolvedColor &&
+                !readonly?.dataset.resolvedColor
+            ) this.#refreshRow(row, color);
+            if (!folderPath) break;
+            folderPath = this.treeView.nodeMetadata.get(folderPath)?.parentPath;
+            if (typeof folderPath !== "string") break;
         }
 
-        return null;
     }
 
     #refreshReadonly(row, className, color, modeLabel) {
@@ -228,8 +350,10 @@ export default class FolderColorControl {
 
         if (color) swatch.style.backgroundColor = color;
         else swatch.style.removeProperty("background-color");
-        indicator.querySelector(".folder-color-readonly-mode").textContent =
-            modeLabel;
+        const mode = indicator.querySelector(".folder-color-readonly-mode");
+
+        if (mode.textContent !== modeLabel) mode.textContent = modeLabel;
+        indicator.dataset.resolvedColor = color || "";
         indicator.setAttribute(
             "aria-label",
             `表示色: ${color || "未設定"}、${modeLabel}`
