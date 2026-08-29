@@ -153,6 +153,7 @@ export default class LibrarySnapshotService {
         });
         this.provisional = false;
         this.cacheNamespace = null;
+        this.provisionalPaths = new Set();
     }
 
     capture({ libraryIdentity, rootName }) {
@@ -255,6 +256,16 @@ export default class LibrarySnapshotService {
 
     isProvisionalFor(cacheNamespace) {
         return this.provisional && this.cacheNamespace === cacheNamespace;
+    }
+
+    getRefreshContext() {
+
+        return Object.freeze({
+            libraryState: this.provisional ? "provisional" : "none",
+            cachedCount: this.provisional
+                ? this.provisionalPaths.size
+                : null
+        });
     }
 
     reconcileActual() {

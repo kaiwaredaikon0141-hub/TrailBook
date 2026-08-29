@@ -7,6 +7,8 @@ import Library from "../../src/js/models/Library.js";
 import TrackSummaryBuilder from "../../src/js/services/TrackSummaryBuilder.js";
 import TreeMetadataBuilder from "../../src/js/ui/TreeMetadataBuilder.js";
 import FolderScanner from "../../src/js/services/FolderScanner.js";
+import LibrarySnapshotService from "../../src/js/services/LibrarySnapshotService.js";
+import PreviousLibraryCoordinator from "../../src/js/core/PreviousLibraryCoordinator.js";
 
 const output = document.getElementById("result");
 let assertions = 0;
@@ -275,10 +277,145 @@ async function testPromptDoesNotRequestOrScan() {
         "actual/non-provisional state retained manual refresh action");
 }
 
+function createHydrationHarness({
+    previousState = { permission: "unknown", hasHandle: false },
+    snapshotState = { libraryState: "none", cachedCount: null }
+} = {}) {
+    let persistenceListener = null;
+    let previous = { ...previousState };
+    let snapshot = { ...snapshotState };
+    const published = [];
+    const eventBus = new EventBus();
+    const coordinator = new LibraryRefreshCoordinator({
+        eventBus,
+        scanner: {},
+        previousLibraryCoordinator: {
+            isLoading: () => false,
+            getRefreshHandle: () => previous.hasHandle ? {} : null,
+            getRefreshContext: () => ({ ...previous }),
+            setPersistenceStatusListener(listener) {
+                persistenceListener = listener;
+                listener({ ...previous });
+            }
+        },
+        librarySnapshotService: {
+            isProvisional: () => snapshot.libraryState === "provisional",
+            getRefreshContext: () => ({ ...snapshot })
+        },
+        accessPanel: {
+            setLibraryRefreshAction() {},
+            setLibraryRefreshState(state) { published.push(state); }
+        },
+        treeView: {}, discoveryCoordinator: {}, displayState: {},
+        selectionState: {}, repository: {}, getNamespace: () => null,
+        getLibrary: () => null, setLibrary: () => {}, getColor: () => null,
+        removePath: () => {}, reloadVisiblePath: async () => {},
+        onLibraryUpdated: () => {}
+    });
+
+    coordinator.bind();
+    return {
+        coordinator,
+        eventBus,
+        published,
+        setPrevious(value) {
+            previous = { ...value };
+            persistenceListener({ ...previous });
+        },
+        setSnapshot(value) {
+            snapshot = { ...value };
+            eventBus.emit("library:provisional-state-changed", {
+                provisional: snapshot.libraryState === "provisional"
+            });
+        }
+    };
+}
+
+function assertManualRefreshState(state, message) {
+    assert(state.permission === "prompt" && state.hasHandle === true &&
+        state.libraryState === "provisional" &&
+        state.canManualRefresh === true && state.cachedCount === 1123 &&
+        state.reason === "waiting-permission" && state.result === "waiting",
+    message);
+}
+
+function testInitialStateHydrationOrdering() {
+    const existing = createHydrationHarness({
+        previousState: { permission: "prompt", hasHandle: true },
+        snapshotState: { libraryState: "provisional", cachedCount: 1123 }
+    });
+
+    assertManualRefreshState(existing.coordinator.getDiagnostic(),
+        "existing Previous/Fast Restore state was not hydrated at construction");
+    assert(existing.published.length === 1,
+        "unchanged constructor/bind hydration published duplicate state");
+    existing.eventBus.emit("library:provisional-state-changed", {
+        provisional: true
+    });
+    assert(existing.published.length === 1,
+        "unchanged provisional notification published duplicate state");
+
+    const later = createHydrationHarness();
+
+    later.setPrevious({ permission: "prompt", hasHandle: true });
+    assert(later.coordinator.getDiagnostic().libraryState === "none" &&
+        !later.coordinator.getDiagnostic().canManualRefresh,
+    "Previous state alone incorrectly enabled provisional refresh");
+    later.setSnapshot({ libraryState: "provisional", cachedCount: 1123 });
+    assertManualRefreshState(later.coordinator.getDiagnostic(),
+        "late Previous then provisional state did not converge");
+
+    const provisionalFirst = createHydrationHarness({
+        snapshotState: { libraryState: "provisional", cachedCount: 1123 }
+    });
+
+    assert(provisionalFirst.coordinator.getDiagnostic().libraryState ===
+        "provisional",
+    "pre-existing provisional state was not hydrated");
+    provisionalFirst.setPrevious({ permission: "prompt", hasHandle: true });
+    assertManualRefreshState(provisionalFirst.coordinator.getDiagnostic(),
+        "provisional then late Previous state did not converge");
+}
+
+function testRefreshContextGetters() {
+    const handle = {};
+    const previous = new PreviousLibraryCoordinator({
+        store: {}, scanner: {}, toolbar: {},
+        accessPanel: {
+            setPreviousLibraryAction() {}, setManualLibraryAction() {}
+        },
+        statusBar: {}, canSwitchLibrary: () => true,
+        flushViewState() {}, beforeLoad() {}, applyLibrary() {},
+        getCurrentLibrary: () => null
+    });
+
+    previous.previousHandle = handle;
+    previous.previousPermission = "prompt";
+    previous.persistenceStatus = "saved / prompt";
+    const previousContext = previous.getRefreshContext();
+
+    assert(previousContext.handle === handle && previousContext.hasHandle &&
+        previousContext.permission === "prompt" &&
+        Object.isFrozen(previousContext),
+    "Previous Library current refresh context was incomplete");
+
+    const snapshot = new LibrarySnapshotService({});
+
+    snapshot.provisional = true;
+    snapshot.provisionalPaths = new Set(["A.gpx", "B.gpx", "C.gpx"]);
+    const snapshotContext = snapshot.getRefreshContext();
+
+    assert(snapshotContext.libraryState === "provisional" &&
+        snapshotContext.cachedCount === 3 && Object.isFrozen(snapshotContext),
+    "Fast Restore current refresh context was incomplete");
+}
+
 try {
     await testFreshRecursiveScan();
     await testRefreshAndReconciliation();
     await testPromptDoesNotRequestOrScan();
+    testInitialStateHydrationOrdering();
+    testRefreshContextGetters();
     output.textContent = `PASS: ${assertions} assertions`;
     document.documentElement.dataset.testStatus = "pass";
 } catch (error) {

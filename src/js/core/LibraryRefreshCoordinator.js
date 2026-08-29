@@ -36,6 +36,7 @@ export default class LibraryRefreshCoordinator {
             addedCount: null, removedCount: null, modifiedCount: null,
             reason: "none", result: "idle"
         });
+        this.lastPublishedState = null;
         this.refreshActionConnected =
             typeof this.accessPanel?.setLibraryRefreshAction === "function";
         if (this.refreshActionConnected) {
@@ -43,20 +44,24 @@ export default class LibraryRefreshCoordinator {
                 () => void this.refresh({ reason: "manual-refresh", reconnect: true })
             );
         }
+        this.#hydrateCurrentState();
         this.previousLibraryCoordinator.setPersistenceStatusListener?.(
             state => this.#handlePersistenceState(state)
         );
-        this.#publishRefreshState();
     }
 
     bind() {
         this.eventBus.on(
             "library:sidebar-opened",
-            () => void this.refresh({ reason: "sidebar-open" })
+            () => {
+                this.#hydrateCurrentState();
+                void this.refresh({ reason: "sidebar-open" });
+            }
         );
         this.eventBus.on("library:provisional-state-changed", () => {
-            this.#publishRefreshState();
+            this.#hydrateCurrentState();
         });
+        this.#hydrateCurrentState();
     }
 
     getDiagnostic() {
@@ -332,9 +337,35 @@ export default class LibraryRefreshCoordinator {
         });
     }
 
+    #hydrateCurrentState() {
+
+        const previous = this.previousLibraryCoordinator
+            .getRefreshContext?.() || {};
+        const snapshot = this.librarySnapshotService
+            .getRefreshContext?.() || {};
+
+        this.#publishRefreshState({
+            ...(typeof previous.permission === "string"
+                ? { permission: previous.permission }
+                : {}),
+            ...(typeof previous.hasHandle === "boolean"
+                ? { hasHandle: previous.hasHandle }
+                : {}),
+            ...(Object.hasOwn(snapshot, "cachedCount")
+                ? { cachedCount: snapshot.cachedCount }
+                : {}),
+            ...(previous.permission === "prompt" ? {
+                reason: "waiting-permission",
+                result: "waiting"
+            } : {})
+        });
+    }
+
     #publishRefreshState(values = {}) {
 
-        const libraryState = this.librarySnapshotService.isProvisional()
+        const snapshot = this.librarySnapshotService.getRefreshContext?.();
+        const libraryState = snapshot?.libraryState === "provisional" ||
+            this.librarySnapshotService.isProvisional()
             ? "provisional"
             : this.getLibrary()
                 ? "ready"
@@ -344,10 +375,17 @@ export default class LibraryRefreshCoordinator {
             next.hasHandle === true && libraryState === "provisional" &&
             this.refreshActionConnected;
 
-        this.refreshState = Object.freeze({
+        const state = {
             ...next,
             canManualRefresh
-        });
+        };
+
+        if (this.lastPublishedState && Object.keys(state).every(
+            key => this.lastPublishedState[key] === state[key]
+        )) return;
+
+        this.refreshState = Object.freeze(state);
+        this.lastPublishedState = this.refreshState;
         this.accessPanel?.setLibraryRefreshState?.(this.refreshState);
     }
 }

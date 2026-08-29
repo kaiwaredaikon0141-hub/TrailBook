@@ -178,6 +178,23 @@ export default class PreviousLibraryCoordinator {
         return this.getCurrentLibrary()?.rootFolder?.handle || this.previousHandle;
     }
 
+    getRefreshContext() {
+
+        const handle = this.getRefreshHandle();
+        const prefix = "saved / ";
+        const permission = this.persistenceStatus.startsWith(prefix)
+            ? this.persistenceStatus.slice(prefix.length)
+            : handle
+                ? this.previousPermission
+                : "unknown";
+
+        return Object.freeze({
+            handle,
+            hasHandle: Boolean(handle),
+            permission
+        });
+    }
+
     setPersistenceStatusListener(listener) {
 
         this.persistenceStatusListener = listener;
