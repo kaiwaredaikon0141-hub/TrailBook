@@ -279,12 +279,15 @@ async function testPromptDoesNotRequestOrScan() {
 
 function createHydrationHarness({
     previousState = { permission: "unknown", hasHandle: false },
-    snapshotState = { libraryState: "none", cachedCount: null }
+    snapshotState = {
+        provisional: false, libraryState: "none", cachedCount: null
+    }
 } = {}) {
     let persistenceListener = null;
     let previous = { ...previousState };
     let snapshot = { ...snapshotState };
     const published = [];
+    const hydrationDiagnostics = [];
     const eventBus = new EventBus();
     const coordinator = new LibraryRefreshCoordinator({
         eventBus,
@@ -304,13 +307,16 @@ function createHydrationHarness({
         },
         accessPanel: {
             setLibraryRefreshAction() {},
-            setLibraryRefreshState(state) { published.push(state); }
+            setLibraryRefreshState(state) { published.push(state); },
+            setLibraryRefreshHydrationDiagnostic(diagnostic) {
+                hydrationDiagnostics.push(diagnostic);
+            }
         },
         treeView: {}, discoveryCoordinator: {}, displayState: {},
         selectionState: {}, repository: {}, getNamespace: () => null,
         getLibrary: () => null, setLibrary: () => {}, getColor: () => null,
         removePath: () => {}, reloadVisiblePath: async () => {},
-        onLibraryUpdated: () => {}
+        onLibraryUpdated: () => {}, canRefresh: () => false
     });
 
     coordinator.bind();
@@ -318,6 +324,7 @@ function createHydrationHarness({
         coordinator,
         eventBus,
         published,
+        hydrationDiagnostics,
         setPrevious(value) {
             previous = { ...value };
             persistenceListener({ ...previous });
@@ -342,18 +349,45 @@ function assertManualRefreshState(state, message) {
 function testInitialStateHydrationOrdering() {
     const existing = createHydrationHarness({
         previousState: { permission: "prompt", hasHandle: true },
-        snapshotState: { libraryState: "provisional", cachedCount: 1123 }
+        snapshotState: {
+            provisional: true,
+            libraryState: "provisional",
+            cachedCount: 1123
+        }
     });
 
     assertManualRefreshState(existing.coordinator.getDiagnostic(),
         "existing Previous/Fast Restore state was not hydrated at construction");
     assert(existing.published.length === 1,
         "unchanged constructor/bind hydration published duplicate state");
+    assert(existing.hydrationDiagnostics.length === 3 &&
+        existing.hydrationDiagnostics.at(-1).coordinator.reason === "bind",
+    "constructor/listener/bind hydration reasons were not diagnosed");
+    const initialRaw = existing.hydrationDiagnostics.at(-1);
+
+    assert(initialRaw.previous.getterCalled &&
+        initialRaw.previous.hasHandle === true &&
+        initialRaw.previous.permission === "prompt",
+    "raw Previous getter diagnostic lost its returned state");
+    assert(initialRaw.snapshot.getterCalled && initialRaw.snapshot.provisional &&
+        initialRaw.snapshot.cachedCount === 1123,
+    "raw Snapshot getter diagnostic lost its returned state");
+    assert(initialRaw.coordinator.permission === "prompt" &&
+        initialRaw.coordinator.hasHandle === true &&
+        initialRaw.coordinator.libraryState === "provisional",
+    "correct raw getter state was lost during Coordinator hydration");
     existing.eventBus.emit("library:provisional-state-changed", {
         provisional: true
     });
     assert(existing.published.length === 1,
         "unchanged provisional notification published duplicate state");
+    const beforeSidebarHydration = existing.hydrationDiagnostics.length;
+
+    existing.eventBus.emit("library:sidebar-opened");
+    assert(existing.hydrationDiagnostics.length === beforeSidebarHydration + 1 &&
+        existing.hydrationDiagnostics.at(-1).coordinator.reason ===
+            "sidebar-open",
+    "sidebar open did not re-read current hydration sources");
 
     const later = createHydrationHarness();
 
@@ -361,12 +395,18 @@ function testInitialStateHydrationOrdering() {
     assert(later.coordinator.getDiagnostic().libraryState === "none" &&
         !later.coordinator.getDiagnostic().canManualRefresh,
     "Previous state alone incorrectly enabled provisional refresh");
-    later.setSnapshot({ libraryState: "provisional", cachedCount: 1123 });
+    later.setSnapshot({
+        provisional: true, libraryState: "provisional", cachedCount: 1123
+    });
     assertManualRefreshState(later.coordinator.getDiagnostic(),
         "late Previous then provisional state did not converge");
 
     const provisionalFirst = createHydrationHarness({
-        snapshotState: { libraryState: "provisional", cachedCount: 1123 }
+        snapshotState: {
+            provisional: true,
+            libraryState: "provisional",
+            cachedCount: 1123
+        }
     });
 
     assert(provisionalFirst.coordinator.getDiagnostic().libraryState ===
@@ -378,7 +418,7 @@ function testInitialStateHydrationOrdering() {
 }
 
 function testRefreshContextGetters() {
-    const handle = {};
+    const handle = { kind: "directory" };
     const previous = new PreviousLibraryCoordinator({
         store: {}, scanner: {}, toolbar: {},
         accessPanel: {
@@ -392,10 +432,14 @@ function testRefreshContextGetters() {
     previous.previousHandle = handle;
     previous.previousPermission = "prompt";
     previous.persistenceStatus = "saved / prompt";
+    previous.persistenceInitializationStage = "complete";
     const previousContext = previous.getRefreshContext();
 
     assert(previousContext.handle === handle && previousContext.hasHandle &&
         previousContext.permission === "prompt" &&
+        previousContext.handleType === "directory" &&
+        previousContext.initialized &&
+        previousContext.status === "saved / prompt" &&
         Object.isFrozen(previousContext),
     "Previous Library current refresh context was incomplete");
 
@@ -403,10 +447,14 @@ function testRefreshContextGetters() {
 
     snapshot.provisional = true;
     snapshot.provisionalPaths = new Set(["A.gpx", "B.gpx", "C.gpx"]);
+    snapshot.cacheNamespace = "local:test";
     const snapshotContext = snapshot.getRefreshContext();
 
-    assert(snapshotContext.libraryState === "provisional" &&
-        snapshotContext.cachedCount === 3 && Object.isFrozen(snapshotContext),
+    assert(snapshotContext.provisional &&
+        snapshotContext.libraryState === "provisional" &&
+        snapshotContext.cachedCount === 3 &&
+        snapshotContext.libraryIdentity === "local:test" &&
+        Object.isFrozen(snapshotContext),
     "Fast Restore current refresh context was incomplete");
 }
 

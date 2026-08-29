@@ -37,6 +37,8 @@ export default class LibraryRefreshCoordinator {
             reason: "none", result: "idle"
         });
         this.lastPublishedState = null;
+        this.hydrateCallCount = 0;
+        this.hydrationDiagnostic = null;
         this.refreshActionConnected =
             typeof this.accessPanel?.setLibraryRefreshAction === "function";
         if (this.refreshActionConnected) {
@@ -44,7 +46,7 @@ export default class LibraryRefreshCoordinator {
                 () => void this.refresh({ reason: "manual-refresh", reconnect: true })
             );
         }
-        this.#hydrateCurrentState();
+        this.#hydrateCurrentState("constructor");
         this.previousLibraryCoordinator.setPersistenceStatusListener?.(
             state => this.#handlePersistenceState(state)
         );
@@ -54,14 +56,14 @@ export default class LibraryRefreshCoordinator {
         this.eventBus.on(
             "library:sidebar-opened",
             () => {
-                this.#hydrateCurrentState();
+                this.#hydrateCurrentState("sidebar-open");
                 void this.refresh({ reason: "sidebar-open" });
             }
         );
         this.eventBus.on("library:provisional-state-changed", () => {
-            this.#hydrateCurrentState();
+            this.#hydrateCurrentState("provisional-state-notification");
         });
-        this.#hydrateCurrentState();
+        this.#hydrateCurrentState("bind");
     }
 
     getDiagnostic() {
@@ -325,24 +327,24 @@ export default class LibraryRefreshCoordinator {
         );
     }
 
-    #handlePersistenceState({ permission, hasHandle }) {
+    #handlePersistenceState(state) {
 
-        this.#publishRefreshState({
-            permission,
-            hasHandle,
-            ...(permission === "prompt" ? {
-                reason: "waiting-permission",
-                result: "waiting"
-            } : {})
-        });
+        this.#hydrateCurrentState("previous-state-notification", state);
     }
 
-    #hydrateCurrentState() {
+    #hydrateCurrentState(reason, previousFallback = {}) {
 
-        const previous = this.previousLibraryCoordinator
-            .getRefreshContext?.() || {};
-        const snapshot = this.librarySnapshotService
-            .getRefreshContext?.() || {};
+        this.hydrateCallCount += 1;
+        const previousGetterCalled = typeof this.previousLibraryCoordinator
+            .getRefreshContext === "function";
+        const snapshotGetterCalled = typeof this.librarySnapshotService
+            .getRefreshContext === "function";
+        const previous = previousGetterCalled
+            ? this.previousLibraryCoordinator.getRefreshContext()
+            : previousFallback;
+        const snapshot = snapshotGetterCalled
+            ? this.librarySnapshotService.getRefreshContext()
+            : {};
 
         this.#publishRefreshState({
             ...(typeof previous.permission === "string"
@@ -359,6 +361,34 @@ export default class LibraryRefreshCoordinator {
                 result: "waiting"
             } : {})
         });
+        this.hydrationDiagnostic = Object.freeze({
+            previous: Object.freeze({
+                getterCalled: previousGetterCalled,
+                initialized: previous.initialized ?? null,
+                initializationStage: previous.initializationStage ?? null,
+                hasHandle: previous.hasHandle ?? null,
+                permission: previous.permission ?? null,
+                handleType: previous.handleType ?? null,
+                status: previous.status ?? null
+            }),
+            snapshot: Object.freeze({
+                getterCalled: snapshotGetterCalled,
+                provisional: snapshot.provisional ?? null,
+                cachedCount: snapshot.cachedCount ?? null,
+                libraryIdentity: snapshot.libraryIdentity ?? null
+            }),
+            coordinator: Object.freeze({
+                hydrateCallCount: this.hydrateCallCount,
+                reason,
+                permission: this.refreshState.permission,
+                hasHandle: this.refreshState.hasHandle,
+                libraryState: this.refreshState.libraryState,
+                cachedCount: this.refreshState.cachedCount
+            })
+        });
+        this.accessPanel?.setLibraryRefreshHydrationDiagnostic?.(
+            this.hydrationDiagnostic
+        );
     }
 
     #publishRefreshState(values = {}) {

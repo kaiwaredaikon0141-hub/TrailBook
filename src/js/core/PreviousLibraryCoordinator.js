@@ -51,6 +51,7 @@ export default class PreviousLibraryCoordinator {
         this.previousPermission = "prompt";
         this.persistenceStatus = "no persistent handle";
         this.persistenceStatusListener = null;
+        this.persistenceInitializationStage = "not-started";
         this.loading = false;
 
         this.accessPanel.setPreviousLibraryAction(
@@ -63,17 +64,22 @@ export default class PreviousLibraryCoordinator {
 
     async initialize() {
 
+        this.persistenceInitializationStage = "checking-support";
         const support = this.#configureAccess();
 
         if (!support.available) {
+            this.persistenceInitializationStage = "complete";
             this.#setPersistenceStatus("unsupported");
             return false;
         }
 
+        this.persistenceInitializationStage = "loading-handle";
         const handle = await this.store.load();
 
         if (!handle) {
             const storeStatus = this.store.getStatus?.();
+
+            this.persistenceInitializationStage = "complete";
             this.#setPersistenceStatus(
                 storeStatus === "invalid"
                     ? "invalid"
@@ -85,8 +91,10 @@ export default class PreviousLibraryCoordinator {
         }
 
         this.previousHandle = handle;
+        this.persistenceInitializationStage = "querying-permission";
         const permission = await this.#queryReadPermission(handle);
         this.previousPermission = permission;
+        this.persistenceInitializationStage = "complete";
         this.#setPersistenceStatus(`saved / ${permission}`);
 
         if (permission === "granted") {
@@ -191,7 +199,11 @@ export default class PreviousLibraryCoordinator {
         return Object.freeze({
             handle,
             hasHandle: Boolean(handle),
-            permission
+            permission,
+            handleType: handle?.kind || "unknown",
+            initialized: this.persistenceInitializationStage === "complete",
+            initializationStage: this.persistenceInitializationStage,
+            status: this.persistenceStatus
         });
     }
 

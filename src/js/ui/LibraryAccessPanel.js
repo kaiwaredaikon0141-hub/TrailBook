@@ -30,6 +30,9 @@ export default class LibraryAccessPanel {
         this.libraryRefreshDiagnostic = this.element.querySelector(
             ".library-refresh-diagnostic"
         );
+        this.libraryRefreshHydrationOutput = this.element.querySelector(
+            ".library-refresh-hydration-source"
+        );
         this.previousLibraryAction = null;
         this.manualLibraryAction = null;
         this.libraryRefreshAction = null;
@@ -169,6 +172,42 @@ export default class LibraryAccessPanel {
         this.#renderLibraryRefreshState();
     }
 
+    setLibraryRefreshHydrationDiagnostic(diagnostic) {
+
+        const value = candidate => candidate ?? "-";
+        const yesNo = candidate => candidate === null || candidate === undefined
+            ? "-"
+            : candidate ? "yes" : "no";
+        const text = [
+            "Previous Refresh Context",
+            `getter called: ${yesNo(diagnostic.previous.getterCalled)}`,
+            `initialized: ${yesNo(diagnostic.previous.initialized)}`,
+            `initialization stage: ${value(diagnostic.previous.initializationStage)}`,
+            `hasHandle: ${yesNo(diagnostic.previous.hasHandle)}`,
+            `permission: ${value(diagnostic.previous.permission)}`,
+            `handle type: ${value(diagnostic.previous.handleType)}`,
+            `status: ${value(diagnostic.previous.status)}`,
+            "",
+            "Snapshot Refresh Context",
+            `getter called: ${yesNo(diagnostic.snapshot.getterCalled)}`,
+            `provisional: ${yesNo(diagnostic.snapshot.provisional)}`,
+            `cachedCount: ${value(diagnostic.snapshot.cachedCount)}`,
+            `libraryIdentity: ${value(diagnostic.snapshot.libraryIdentity)}`,
+            "",
+            "Coordinator Hydration",
+            `hydrate called count: ${diagnostic.coordinator.hydrateCallCount}`,
+            `last hydrate reason: ${diagnostic.coordinator.reason}`,
+            `resulting permission: ${diagnostic.coordinator.permission}`,
+            `resulting hasHandle: ${yesNo(diagnostic.coordinator.hasHandle)}`,
+            `resulting libraryState: ${diagnostic.coordinator.libraryState}`,
+            `resulting cachedCount: ${value(diagnostic.coordinator.cachedCount)}`
+        ].join("\n");
+
+        if (this.libraryRefreshHydrationOutput.textContent !== text) {
+            this.libraryRefreshHydrationOutput.textContent = text;
+        }
+    }
+
     setFolderPickerState({ disabled, descriptionId, disabledReason = "" }) {
 
         this.manualLibraryButtons.forEach(button => {
@@ -294,6 +333,7 @@ export default class LibraryAccessPanel {
             <details class="fast-restore-diagnostic library-refresh-diagnostic" open>
                 <summary>Library Refresh</summary>
                 <pre></pre>
+                <pre class="library-refresh-hydration-source"></pre>
             </details>
         `;
 

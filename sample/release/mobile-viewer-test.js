@@ -433,6 +433,45 @@ async function run() {
         refreshDiagnostic.textContent.includes("scanned: -") &&
         refreshDiagnostic.textContent.includes("manual refresh: yes"),
     "Library refresh diagnostic is not visible with prompt counts");
+    accessCopy.setLibraryRefreshHydrationDiagnostic({
+        previous: {
+            getterCalled: true,
+            initialized: true,
+            initializationStage: "complete",
+            hasHandle: true,
+            permission: "prompt",
+            handleType: "directory",
+            status: "saved / prompt"
+        },
+        snapshot: {
+            getterCalled: true,
+            provisional: true,
+            cachedCount: 1123,
+            libraryIdentity: "local:test"
+        },
+        coordinator: {
+            hydrateCallCount: 4,
+            reason: "sidebar-open",
+            permission: "prompt",
+            hasHandle: true,
+            libraryState: "provisional",
+            cachedCount: 1123
+        }
+    });
+    const hydrationDiagnostic = accessCopy.element.querySelector(
+        ".library-refresh-hydration-source"
+    );
+
+    assert(hydrationDiagnostic.textContent.includes("getter called: yes") &&
+        hydrationDiagnostic.textContent.includes("permission: prompt") &&
+        hydrationDiagnostic.textContent.includes("provisional: yes") &&
+        hydrationDiagnostic.textContent.includes("cachedCount: 1123") &&
+        hydrationDiagnostic.textContent.includes(
+            "last hydrate reason: sidebar-open"
+        ) && hydrationDiagnostic.textContent.includes(
+            "resulting libraryState: provisional"
+        ),
+    "raw refresh hydration sources were not rendered without reconstruction");
     let diagnosticMutations = 0;
     const diagnosticObserver = new MutationObserver(records => {
         diagnosticMutations += records.length;

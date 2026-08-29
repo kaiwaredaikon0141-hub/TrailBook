@@ -261,10 +261,12 @@ export default class LibrarySnapshotService {
     getRefreshContext() {
 
         return Object.freeze({
+            provisional: this.provisional,
             libraryState: this.provisional ? "provisional" : "none",
             cachedCount: this.provisional
                 ? this.provisionalPaths.size
-                : null
+                : null,
+            libraryIdentity: this.cacheNamespace
         });
     }
 
