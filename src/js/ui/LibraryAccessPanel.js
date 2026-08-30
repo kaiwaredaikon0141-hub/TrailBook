@@ -452,7 +452,15 @@ export default class LibraryAccessPanel {
                 `reconcile input: ${state.entryTrace.reconcileInput ? "yes" : "no"}`,
                 `runtime Library: ${state.entryTrace.runtimeLibrary ? "yes" : "no"}`,
                 `Tree metadata: ${state.entryTrace.treeMetadata ? "yes" : "no"}`,
-                `rendered DOM: ${state.entryTrace.renderedDom ? "yes" : "no"}`
+                `rendered DOM: ${state.entryTrace.renderedDom ? "yes" : "no"}`,
+                `Folder resolved color: ${state.entryTrace.folderResolvedColor || "-"}`,
+                `Display/Tree color: ${state.entryTrace.displayColor || "-"} / ${state.entryTrace.treeColor || "-"}`,
+                `Display state: ${state.entryTrace.displayState || "-"}`,
+                `checked: ${state.entryTrace.checked ? "yes" : "no"}`,
+                `Discovery status: ${state.entryTrace.discoveryStatus || "-"}`,
+                `error: ${state.entryTrace.errorName || "none"}`,
+                `error message: ${state.entryTrace.errorMessage || "-"}`,
+                `FileHandle provisional: ${state.entryTrace.fileHandleProvisional ? "yes" : "no"}`
             ] : []),
             "",
             "Refresh Perf",

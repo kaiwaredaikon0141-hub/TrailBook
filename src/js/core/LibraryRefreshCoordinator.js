@@ -100,6 +100,21 @@ export default class LibraryRefreshCoordinator {
         this.previousLibraryCoordinator.setPersistenceStatusListener?.(
             state => this.#handlePersistenceState(state)
         );
+        this.displayState.subscribe?.(({ path, display }) => {
+            if (!path || path !== this.refreshState.entryTrace?.path) return;
+            this.#publishRefreshState({
+                entryTrace: Object.freeze({
+                    ...this.refreshState.entryTrace,
+                    checked: Boolean(display?.checked),
+                    displayState: display?.state || null,
+                    errorName: display?.error?.name || null,
+                    errorMessage: display?.error?.message || null,
+                    fileHandleProvisional: Boolean(
+                        display?.fileHandle?.provisional
+                    )
+                })
+            });
+        });
     }
 
     bind() {
@@ -313,10 +328,22 @@ export default class LibraryRefreshCoordinator {
                 normalizeRelativePath(display.path),
                 {
                     checked: display.checked,
-                    color: display.color
+                    color: display.color,
+                    state: display.state,
+                    error: display.error,
+                    fileHandle: display.fileHandle
                 }
             ])
         );
+        const reboundErrorPaths = new Set(fileEntries
+            .map(({ path }) => normalizeRelativePath(path))
+            .filter(path => {
+                const previous = previousDisplays.get(path);
+
+                return previous?.fileHandle?.provisional === true &&
+                    previous.state === "error";
+            }));
+        const normalizedPaths = new Set([...addedPaths, ...reboundErrorPaths]);
         const folderColors = new Map();
         const resolveAddedColor = path => {
             const folderPath = normalizedFolderPath(path);
@@ -359,7 +386,7 @@ export default class LibraryRefreshCoordinator {
             this.displayState.registerFile(
                 path,
                 fileHandle,
-                addedPaths.has(key)
+                normalizedPaths.has(key)
                     ? resolveAddedColor(path)
                     : previous?.color ?? this.getColor(path)
             );
@@ -367,6 +394,10 @@ export default class LibraryRefreshCoordinator {
                 this.displayState.setChecked(path, false);
             } else if (previous) {
                 this.displayState.setChecked(path, previous.checked);
+            }
+            if (normalizedPaths.has(key)) {
+                this.displayState.setChecked(path, false);
+                this.displayState.setIdle(path);
             }
         });
         removed.forEach(path => this.displayState.unregisterFile(path));
@@ -454,7 +485,9 @@ export default class LibraryRefreshCoordinator {
             modified: changed.length,
             snapshotCommitted
         });
-        const tracedEntry = added[0];
+        const tracedEntry = added[0] || fileEntries.find(({ path }) =>
+            reboundErrorPaths.has(normalizeRelativePath(path))
+        );
 
         if (tracedEntry) {
             const tracePath = normalizeRelativePath(tracedEntry.path);
@@ -465,7 +498,9 @@ export default class LibraryRefreshCoordinator {
                     path: tracePath,
                     classification: recoveredPaths.has(tracePath)
                         ? "recovered"
-                        : "new",
+                        : addedPaths.has(tracePath)
+                            ? "new"
+                            : "rebound-error",
                     scanned: newPaths.has(tracePath),
                     reconcileInput: affectedPaths.some(path =>
                         normalizeRelativePath(path) === tracePath
@@ -478,7 +513,30 @@ export default class LibraryRefreshCoordinator {
                     ) ?? this.treeView.hasFile(tracePath),
                     renderedDom: treeResult?.renderedPaths?.some(path =>
                         normalizeRelativePath(path) === tracePath
-                    ) ?? false
+                    ) ?? false,
+                    folderResolvedColor: folderColors.get(
+                        normalizedFolderPath(tracePath)
+                    ) || null,
+                    displayColor: this.displayState.getDisplay(tracePath)?.color ||
+                        null,
+                    treeColor: this.treeView.nodeMetadata.get(tracePath)?.color ||
+                        null,
+                    displayState: this.displayState.getDisplay(tracePath)?.state ||
+                        null,
+                    checked: Boolean(
+                        this.displayState.getDisplay(tracePath)?.checked
+                    ),
+                    errorName: this.displayState.getDisplay(tracePath)?.error
+                        ?.name || null,
+                    errorMessage: this.displayState.getDisplay(tracePath)?.error
+                        ?.message || null,
+                    discoveryStatus: discoveryEntries.find(entry =>
+                        normalizeRelativePath(entry.relativePath) === tracePath
+                    )?.status || null,
+                    fileHandleProvisional: Boolean(
+                        this.displayState.getDisplay(tracePath)?.fileHandle
+                            ?.provisional
+                    )
                 })
             });
         } else {

@@ -14,6 +14,7 @@ import PreviousLibraryCoordinator from "../../src/js/core/PreviousLibraryCoordin
 import TreeView from "../../src/js/ui/TreeView.js";
 import TreeIncrementalReconciler from "../../src/js/ui/TreeIncrementalReconciler.js";
 import LibraryAccessPanel from "../../src/js/ui/LibraryAccessPanel.js";
+import GPXGeometryLoader from "../../src/js/services/GPXGeometryLoader.js";
 
 const output = document.getElementById("result");
 const focusedIncremental = new URLSearchParams(
@@ -28,7 +29,10 @@ const assert = (condition, message) => {
 function fileHandle(name, size, lastModified) {
     return {
         kind: "file", name,
-        getFile: async () => ({ name, size, lastModified })
+        getFile: async () => ({
+            name, size, lastModified,
+            text: async () => "<gpx></gpx>"
+        })
     };
 }
 
@@ -177,6 +181,11 @@ async function testRefreshAndReconciliation() {
     displayState.setChecked("A.gpx", true);
     displayState.setChecked("B.gpx", true);
     displayState.setChecked("F.gpx", false);
+    oldF.provisional = true;
+    displayState.setError("F.gpx", new DOMException(
+        "Cached handle cannot load",
+        "NotAllowedError"
+    ));
     displayState.registerFile("E.gpx", staleE, "#999999");
     displayState.setChecked("E.gpx", true);
     selectionState.select("B.gpx", "test");
@@ -280,8 +289,13 @@ async function testRefreshAndReconciliation() {
         "existing hidden state was not preserved");
     assert(displayState.getDisplay("A.gpx")?.color === "#111111" &&
         displayState.getDisplay("B.gpx")?.color === "#222222" &&
-        displayState.getDisplay("F.gpx")?.color === "#333333",
+        displayState.getDisplay("F.gpx")?.color === "#f08000",
     "existing colors were reassigned after scan-order changes");
+    assert(displayState.getDisplay("F.gpx")?.state === "idle" &&
+        displayState.getDisplay("F.gpx")?.error === null &&
+        displayState.getDisplay("F.gpx")?.fileHandle === newF &&
+        tree.nodeMetadata.get("F.gpx")?.state === "idle",
+    "cached-handle error was not normalized after actual FileHandle rebinding");
     assert(displayState.getDisplay("C.gpx")?.color === "#f08000" &&
         displayState.getDisplay("E.gpx")?.color === "#f08000",
     "new Tracks did not inherit the existing Folder presentation color");
@@ -293,6 +307,21 @@ async function testRefreshAndReconciliation() {
         "fast refresh performed blocking modified-file validation/reload");
     assert(discoveryCalls[0].entries.some(entry => entry.relativePath === "C.gpx"),
         "new GPX was not added to Discovery/Date/Search metadata");
+    const incrementalEntry = discoveryCalls[0].entries.find(
+        entry => entry.relativePath === "C.gpx"
+    );
+    const fullEntry = summaryBuilder.build("C.gpx", {
+        name: "C.gpx", size: 30, lastModified: 3
+    }, { tracks: [], metadata: {} });
+
+    assert(incrementalEntry.status === "ready" &&
+        Object.keys(incrementalEntry.toRecord()).join("|") ===
+            Object.keys(fullEntry.toRecord()).join("|") &&
+        incrementalEntry.relativePath === "C.gpx" &&
+        incrementalEntry.folderPath === "" &&
+        incrementalEntry.fileSize === 30 &&
+        incrementalEntry.lastModified === 3,
+    "incremental discovery entry schema/status differs from full-open entry");
     assert(snapshotUpdates === 1,
         "reconciled Tree metadata was not offered to Snapshot persistence");
     assert(updateContext?.preserveExistingPresentation === true,
@@ -382,7 +411,8 @@ async function testIncrementalTreeDomReconcile() {
         fileHandle("A.gpx", 1, 1),
         fileHandle("NEW.gpx", 2, 2)
     ]);
-    const tree = new TreeView(new EventBus());
+    const eventBus = new EventBus();
+    const tree = new TreeView(eventBus);
 
     await tree.render(before);
     tree.expandFolder("Trips");
@@ -414,6 +444,30 @@ async function testIncrementalTreeDomReconcile() {
         recoveredResult.metadataPaths.includes("Trips/RECOVERED.gpx") &&
         recoveredResult.renderedPaths.includes("Trips/RECOVERED.gpx"),
     "recovered Track was applied to a detached row instead of the live Tree DOM");
+    let loadReached = false;
+    let toggledPath = null;
+    const loader = new GPXGeometryLoader({
+        parser: { parse: () => ({ tracks: [], metadata: {} }) },
+        repository: {}
+    });
+
+    eventBus.on("gpx:display-toggled", ({ path, fileHandle, checked }) => {
+        toggledPath = path;
+        if (checked) {
+            void loader.load(path, fileHandle).then(() => {
+                loadReached = true;
+            });
+        }
+    });
+    const recoveredCheckbox = tree.fileNodes.get("Trips/RECOVERED.gpx")
+        .querySelector(".gpx-display-toggle");
+
+    recoveredCheckbox.checked = true;
+    recoveredCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert(toggledPath === "Trips/RECOVERED.gpx" && loadReached &&
+        tree.fileHandlesByPath.get(toggledPath)?.provisional !== true,
+    "checkbox did not resolve the incremental relativePath to an actual FileHandle");
 }
 
 async function testFastRefreshScale() {

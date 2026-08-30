@@ -17,6 +17,7 @@ export default class FolderColorControl {
         this.displayState = displayState;
         this.getResolvedColor = getResolvedColor;
         this.presentations = new Map();
+        this.resolvedFolderColors = new Map();
         this.persistenceStatus = "available";
         this.observer = typeof MutationObserver === "function"
             ? new MutationObserver(records => {
@@ -126,6 +127,7 @@ export default class FolderColorControl {
         const presentation = this.presentations.get(folderPath);
 
         return presentation?.resolvedColor ||
+            this.resolvedFolderColors.get(folderPath) ||
             this.#buildFolderColorMap().get(folderPath) ||
             this.getResolvedColor?.(folderPath) || null;
     }
@@ -164,8 +166,10 @@ export default class FolderColorControl {
         }
 
         if (resolvedColor) {
+            this.resolvedFolderColors.set(folderPath, resolvedColor);
             swatch.style.backgroundColor = resolvedColor;
         } else {
+            this.resolvedFolderColors.delete(folderPath);
             swatch.style.removeProperty("background-color");
         }
         this.#refreshReadonly(

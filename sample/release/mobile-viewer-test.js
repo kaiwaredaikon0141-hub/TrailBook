@@ -607,6 +607,12 @@ async function run() {
     "mobile Auto Folder color is not exposed as a read-only resolved swatch");
     assert(colorControl.getResolvedFolderColor("Trips") === "#123456",
         "Auto Folder presentation color is not available to incremental refresh");
+    colorState.getDisplay("Trips/ride.gpx").color = "#008080";
+    colorTreeView.nodeMetadata.get("Trips/ride.gpx").color = "#008080";
+    assert(colorControl.getResolvedFolderColor("Trips") === "#123456",
+        "Folder color getter recomputed a different sibling Track color");
+    colorState.getDisplay("Trips/ride.gpx").color = "#123456";
+    colorTreeView.nodeMetadata.get("Trips/ride.gpx").color = "#123456";
     assert(trackSwatch.getAttribute("aria-label").includes("#123456") &&
         fileRow.querySelector(".tree-color-mode").textContent === "Auto",
     "mobile resolved Track color is missing");
