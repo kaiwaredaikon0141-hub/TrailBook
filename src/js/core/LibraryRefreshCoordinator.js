@@ -1,6 +1,5 @@
 import TreeMetadataBuilder from "../ui/TreeMetadataBuilder.js";
 import TrackSummaryBuilder from "../services/TrackSummaryBuilder.js";
-import TrackDiscoveryEntry from "../models/TrackDiscoveryEntry.js";
 import { RUNTIME_BUILD_ID } from "../runtime/RuntimeBuild.js";
 import TreeIncrementalReconciler from "../ui/TreeIncrementalReconciler.js";
 
@@ -47,6 +46,7 @@ export default class LibraryRefreshCoordinator {
         eventBus, scanner, previousLibraryCoordinator, librarySnapshotService,
         treeView, discoveryCoordinator, displayState, selectionState, accessPanel,
         repository, getNamespace, getLibrary, setLibrary, getColor,
+        getFolderColor = () => null,
         removePath, reloadVisiblePath, onLibraryUpdated,
         canRefresh = () => true,
         now = () => Date.now(),
@@ -60,7 +60,8 @@ export default class LibraryRefreshCoordinator {
             eventBus, scanner, previousLibraryCoordinator,
             librarySnapshotService, treeView, discoveryCoordinator,
             displayState, selectionState, accessPanel, repository, getNamespace,
-            getLibrary, setLibrary, getColor, removePath, reloadVisiblePath,
+            getLibrary, setLibrary, getColor, getFolderColor,
+            removePath, reloadVisiblePath,
             onLibraryUpdated, canRefresh, now, performanceNow, minimumIntervalMs,
             metadataBuilder, summaryBuilder, treeReconciler
         });
@@ -316,49 +317,27 @@ export default class LibraryRefreshCoordinator {
                 }
             ])
         );
+        const folderColors = new Map();
         const resolveAddedColor = path => {
             const folderPath = normalizedFolderPath(path);
-            const sibling = [...previousDisplays.entries()].find(
-                ([candidatePath, display]) =>
-                    !addedPaths.has(candidatePath) &&
-                    normalizedFolderPath(candidatePath) === folderPath &&
-                    typeof display.color === "string" && display.color
-            );
 
-            return sibling?.[1].color ?? this.getColor(path);
+            if (!folderColors.has(folderPath)) {
+                folderColors.set(
+                    folderPath,
+                    this.getFolderColor(folderPath) || this.getColor(path)
+                );
+            }
+            return folderColors.get(folderPath);
         };
         const diffMs = this.performanceNow() - diffStartedAt;
-        const validationStartedAt = this.performanceNow();
-        const metadata = await this.#readMetadata(fileEntries, oldPaths);
-        const checked = new Set(this.displayState.getCheckedPaths());
-        const checkedPaths = new Set([...checked].map(normalizeRelativePath));
         const namespace = this.getNamespace();
-        const previousIdentities = await this.#readPreviousIdentities(
-            checked,
-            oldEntries,
-            namespace
-        );
-        const validationMs = this.performanceNow() - validationStartedAt;
-        if (this.getLibrary() !== expectedLibrary) return false;
-        const changed = fileEntries.filter(({ path }) => {
-            const key = normalizeRelativePath(path);
-            const previous = previousIdentities.get(key);
-            const current = metadata.get(path);
 
-            return oldPaths.has(key) && !addedPaths.has(key) &&
-                current && previous && (
-                previous.size !== current.size ||
-                previous.lastModified !== current.lastModified
-            );
-        });
-        const changedPaths = new Set(changed.map(({ path }) =>
-            normalizeRelativePath(path)
-        ));
-        const unchangedCount = fileEntries.filter(({ path }) =>
-            oldPaths.has(normalizeRelativePath(path)) &&
-            !addedPaths.has(normalizeRelativePath(path)) &&
-            !changedPaths.has(normalizeRelativePath(path))
-        ).length;
+        // The normal refresh is path-discovery-first. Existing file identity
+        // validation is reserved for a separate complete/background refresh.
+        const validationMs = 0;
+        if (this.getLibrary() !== expectedLibrary) return false;
+        const changed = [];
+        const unchangedCount = fileEntries.length - added.length;
         const selectedPath = this.selectionState.getSelectedPath();
 
         this.#updateRefreshPerformance({
@@ -390,13 +369,8 @@ export default class LibraryRefreshCoordinator {
                 this.displayState.setChecked(path, previous.checked);
             }
         });
-        for (const { path } of changed) {
-            await this.repository.invalidate(namespace, path);
-            this.displayState.invalidateCachedResult(path);
-            this.displayState.setIdle(path);
-        }
         removed.forEach(path => this.displayState.unregisterFile(path));
-        let modifiedProcessingMs = this.performanceNow() - modifiedStartedAt;
+        const modifiedProcessingMs = this.performanceNow() - modifiedStartedAt;
 
         const reconcileStartedAt = this.performanceNow();
         const affectedPaths = [
@@ -413,17 +387,13 @@ export default class LibraryRefreshCoordinator {
 
         let metadataExtractionCount = 0;
         const addedProcessingStartedAt = this.performanceNow();
+        const metadata = await this.#readMetadata(added);
         const discoveryEntries = fileEntries.map(({ path, fileHandle }) => {
             const key = normalizeRelativePath(path);
             const previous = oldEntries.get(key);
             const file = metadata.get(path);
 
-            if (previous && !changedPaths.has(key)) return previous;
-            if (previous && file) return TrackDiscoveryEntry.fromRecord({
-                ...previous.toRecord(),
-                fileSize: file.size,
-                lastModified: file.lastModified
-            });
+            if (previous) return previous;
             metadataExtractionCount += 1;
             return this.summaryBuilder.build(path, file || {
                 name: fileHandle.name
@@ -448,16 +418,7 @@ export default class LibraryRefreshCoordinator {
             this.treeView.setDisplayChecked(path, false);
         });
 
-        let delegatedVisibleReloadCount = 0;
-        for (const { path, fileHandle } of changed) {
-            if (checkedPaths.has(normalizeRelativePath(path))) {
-                const reloadStartedAt = this.performanceNow();
-
-                delegatedVisibleReloadCount += 1;
-                await this.reloadVisiblePath({ path, fileHandle });
-                modifiedProcessingMs += this.performanceNow() - reloadStartedAt;
-            }
-        }
+        const delegatedVisibleReloadCount = 0;
         const snapshotStartedAt = this.performanceNow();
         const performanceRunStartedAt = this.refreshPerformance?.startedAt;
         const snapshotUpdate = this.onLibraryUpdated(library, {
@@ -529,7 +490,7 @@ export default class LibraryRefreshCoordinator {
         return this.lastResult;
     }
 
-    async #readMetadata(entries, existingPaths) {
+    async #readMetadata(entries) {
 
         const result = new Map();
         let nextIndex = 0;
@@ -541,11 +502,7 @@ export default class LibraryRefreshCoordinator {
                 const entry = entries[nextIndex++];
                 try {
                     getFileCount += 1;
-                    if (existingPaths.has(normalizeRelativePath(entry.path))) {
-                        existingGetFileCount += 1;
-                    } else {
-                        addedGetFileCount += 1;
-                    }
+                    addedGetFileCount += 1;
                     result.set(entry.path, await entry.fileHandle.getFile());
                 } catch {
                     // An unreadable entry stays in the Tree and is loaded on demand.

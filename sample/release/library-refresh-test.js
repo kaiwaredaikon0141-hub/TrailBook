@@ -235,6 +235,7 @@ async function testRefreshAndReconciliation() {
         getLibrary: () => currentLibrary,
         setLibrary: value => { currentLibrary = value; },
         getColor: path => path === "C.gpx" ? "#555555" : "#666666",
+        getFolderColor: () => "#f08000",
         removePath: path => removed.push(path),
         reloadVisiblePath: async value => reloaded.push(value.path),
         onLibraryUpdated: (value, context) => {
@@ -268,7 +269,7 @@ async function testRefreshAndReconciliation() {
     assert(currentLibrary === actualLibrary,
         "incremental refresh did not promote the scanned actual Library");
     assert(result.added === 1 && result.recovered === 1 &&
-        result.removed === 1 && result.modified === 1,
+        result.removed === 1 && result.modified === 0,
         "Library diff counts were incorrect");
     assert(displayState.getDisplay("C.gpx")?.checked === false &&
         displayState.getDisplay("E.gpx")?.checked === false,
@@ -281,17 +282,15 @@ async function testRefreshAndReconciliation() {
         displayState.getDisplay("B.gpx")?.color === "#222222" &&
         displayState.getDisplay("F.gpx")?.color === "#333333",
     "existing colors were reassigned after scan-order changes");
-    assert(displayState.getDisplay("C.gpx")?.color === "#111111" &&
-        displayState.getDisplay("E.gpx")?.color === "#111111",
+    assert(displayState.getDisplay("C.gpx")?.color === "#f08000" &&
+        displayState.getDisplay("E.gpx")?.color === "#f08000",
     "new Tracks did not inherit the existing Folder presentation color");
     assert(selectionState.getSelectedPath() === "B.gpx" && tree.selected === "B.gpx",
         "selected Track was not preserved");
     assert(removed.includes("D.gpx") && !displayState.getDisplay("D.gpx"),
         "removed GPX was not reconciled");
-    assert(invalidated.some(([, path]) => path === "B.gpx"),
-        "modified GPX cache was not invalidated");
-    assert(reloaded.includes("B.gpx") && !reloaded.includes("C.gpx"),
-        "only a visible modified GPX should reload");
+    assert(invalidated.length === 0 && reloaded.length === 0,
+        "fast refresh performed blocking modified-file validation/reload");
     assert(discoveryCalls[0].entries.some(entry => entry.relativePath === "C.gpx"),
         "new GPX was not added to Discovery/Date/Search metadata");
     assert(snapshotUpdates === 1,
@@ -330,15 +329,15 @@ async function testRefreshAndReconciliation() {
 
     assert(performance.mode === "incremental" &&
         performance.scannedCount === 5 &&
-        performance.unchangedCount === 2 &&
+        performance.unchangedCount === 3 &&
         performance.addedCount === 2 &&
         performance.removedCount === 1 &&
-        performance.modifiedCount === 1,
+        performance.modifiedCount === 0,
     "incremental refresh performance counters lost diff results");
-    assert(performance.getFileCount === 5 &&
-        performance.existingGetFileCount === 3 &&
+    assert(performance.getFileCount === 2 &&
+        performance.existingGetFileCount === 0 &&
         performance.addedGetFileCount === 2 &&
-        performance.existingMetadataValidationCount === 3 &&
+        performance.existingMetadataValidationCount === 0 &&
         performance.addedMetadataValidationCount === 2 &&
         performance.bodyReadCount === 0 && performance.parseCount === 0 &&
         performance.metadataExtractionCount === 1 &&
@@ -415,6 +414,118 @@ async function testIncrementalTreeDomReconcile() {
         recoveredResult.metadataPaths.includes("Trips/RECOVERED.gpx") &&
         recoveredResult.renderedPaths.includes("Trips/RECOVERED.gpx"),
     "recovered Track was applied to a detached row instead of the live Tree DOM");
+}
+
+async function testFastRefreshScale() {
+    const existingCount = 1123;
+    let existingGetFileCount = 0;
+    let addedGetFileCount = 0;
+    const oldFiles = Array.from({ length: existingCount }, (_, index) => ({
+        kind: "file",
+        name: `Track-${index}.gpx`,
+        getFile: async () => {
+            existingGetFileCount += 1;
+            return { name: `Track-${index}.gpx`, size: 1, lastModified: 1 };
+        }
+    }));
+    const scannedExisting = oldFiles.map(({ name }) => ({
+        kind: "file", name,
+        getFile: async () => {
+            existingGetFileCount += 1;
+            return { name, size: 1, lastModified: 1 };
+        }
+    }));
+    const addedFiles = ["New-A.gpx", "New-B.gpx"].map(name => ({
+        kind: "file", name,
+        getFile: async () => {
+            addedGetFileCount += 1;
+            return { name, size: 2, lastModified: 2 };
+        }
+    }));
+    const before = library("Scale", oldFiles);
+    const after = library("Scale", [...scannedExisting, ...addedFiles]);
+    const tree = await createTree(before);
+    const displayState = new DisplayState();
+    const selectionState = new SelectionState();
+    let currentLibrary = before;
+
+    tree.getFileEntries().forEach(({ path, fileHandle: handle }) => {
+        displayState.registerFile(path, handle, "#f08000");
+    });
+    selectionState.select("Track-100.gpx", "test");
+    const discoveryEntries = oldFiles.map(({ name }) => ({
+        relativePath: name
+    }));
+    const coordinator = new LibraryRefreshCoordinator({
+        eventBus: new EventBus(),
+        scanner: { scan: async () => after },
+        previousLibraryCoordinator: {
+            isLoading: () => false,
+            getRefreshHandle: () => before.rootFolder.handle,
+            requestRefreshPermission: async () => "granted"
+        },
+        librarySnapshotService: {
+            isProvisional: () => true,
+            hasProvisionalPath: path => path.startsWith("Track-"),
+            getRefreshContext: () => ({
+                provisional: true,
+                libraryState: "provisional",
+                cachedCount: existingCount
+            })
+        },
+        treeView: tree,
+        treeReconciler: {
+            reconcile: (view, value) => view.reconcileLibrary(value)
+        },
+        discoveryCoordinator: {
+            getSnapshotState: () => ({ entries: discoveryEntries }),
+            reconcileLibrary() { return true; }
+        },
+        displayState,
+        selectionState,
+        repository: {},
+        getNamespace: () => "local:scale",
+        getLibrary: () => currentLibrary,
+        setLibrary: value => { currentLibrary = value; },
+        getColor: () => "#008080",
+        getFolderColor: () => "#f08000",
+        removePath() {},
+        reloadVisiblePath() {},
+        onLibraryUpdated: () => true,
+        now: () => 100
+    });
+
+    const result = await coordinator.refresh({
+        reason: "manual-refresh",
+        reconnect: true
+    });
+    const performance = coordinator.getDiagnostic().performance;
+
+    globalThis.__libraryRefreshScale = Object.freeze({
+        totalMs: performance.totalMs,
+        enumerationMs: performance.enumerationMs,
+        diffMs: performance.diffMs,
+        addedProcessingMs: performance.addedProcessingMs,
+        reconcileMs: performance.reconcileMs,
+        existingGetFileCount,
+        addedGetFileCount
+    });
+
+    assert(result.added === 2 && result.removed === 0 &&
+        result.modified === 0 && performance.mode === "incremental",
+    "1123+2 fixture did not use path-only incremental diff");
+    assert(existingGetFileCount === 0 && addedGetFileCount === 2 &&
+        performance.existingGetFileCount === 0 &&
+        performance.existingMetadataValidationCount === 0,
+    "fast refresh called getFile/metadata validation for existing Tracks");
+    assert(displayState.getDisplay("New-A.gpx")?.color === "#f08000" &&
+        displayState.getDisplay("New-B.gpx")?.color === "#f08000" &&
+        !displayState.getDisplay("New-A.gpx")?.checked &&
+        !displayState.getDisplay("New-B.gpx")?.checked,
+    "new Tracks did not preserve Folder presentation and unchecked state");
+    assert(selectionState.getSelectedPath() === "Track-100.gpx" &&
+        tree.renderCount === 1 && tree.reconcileCount === 1,
+    "fast refresh lost selection or used a full Tree apply");
 }
 
 function testRefreshCompletionFeedback() {
@@ -729,6 +840,7 @@ try {
     await testFreshRecursiveScan();
     await testRefreshAndReconciliation();
     await testIncrementalTreeDomReconcile();
+    await testFastRefreshScale();
     testRefreshCompletionFeedback();
     if (!focusedIncremental) {
         await testPromptDoesNotRequestOrScan();

@@ -121,6 +121,8 @@ window.addEventListener("DOMContentLoaded", () => {
         getLibrary: () => app.currentLibrary,
         setLibrary: library => { app.currentLibrary = library; },
         getColor: path => app.getColor(path),
+        getFolderColor: folderPath =>
+            app.folderColorControl.getResolvedFolderColor(folderPath),
         removePath: path => app.stopDisplay(path, { refocus: false }),
         reloadVisiblePath: async ({ path, fileHandle }) => {
             app.stopDisplay(path, { refocus: false, preserveSelection: true });

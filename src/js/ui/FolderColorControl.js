@@ -121,6 +121,15 @@ export default class FolderColorControl {
         ).forEach(row => this.#refreshFileRow(row.dataset.treePath));
     }
 
+    getResolvedFolderColor(folderPath) {
+
+        const presentation = this.presentations.get(folderPath);
+
+        return presentation?.resolvedColor ||
+            this.#buildFolderColorMap().get(folderPath) ||
+            this.getResolvedColor?.(folderPath) || null;
+    }
+
     #refreshRow(row, fallbackColor = null) {
 
         const folderPath = row.dataset.treePath;

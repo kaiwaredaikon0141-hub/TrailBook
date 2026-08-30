@@ -605,6 +605,8 @@ async function run() {
         readonly.querySelector(".folder-color-readonly-mode").textContent === "Auto" &&
         readonly.getAttribute("aria-label").includes("#123456"),
     "mobile Auto Folder color is not exposed as a read-only resolved swatch");
+    assert(colorControl.getResolvedFolderColor("Trips") === "#123456",
+        "Auto Folder presentation color is not available to incremental refresh");
     assert(trackSwatch.getAttribute("aria-label").includes("#123456") &&
         fileRow.querySelector(".tree-color-mode").textContent === "Auto",
     "mobile resolved Track color is missing");
@@ -623,12 +625,16 @@ async function run() {
     assert(readonly.querySelector(".folder-color-readonly-mode").textContent ===
         "Explicit" && trackSwatch.getAttribute("aria-label").includes("#AABBCC"),
     "explicit Folder/Track resolved color was not refreshed");
+    assert(colorControl.getResolvedFolderColor("Trips") === "#AABBCC",
+        "explicit Folder presentation color is not authoritative");
     colorState.registerFile("Trips/ride.gpx", {}, "#445566");
     colorControl.setPresentations(new Map([["Trips", {
         mode: "inherited", explicitColor: null, resolvedColor: "#445566"
     }]]));
     assert(fileRow.querySelector(".tree-color-mode").textContent === "Inherited",
         "inherited Track color mode is not identified");
+    assert(colorControl.getResolvedFolderColor("Trips") === "#445566",
+        "inherited Folder presentation color is not authoritative");
 
     if (matchMedia("(max-width:768px)").matches) {
         const probe = createMobileSidebarProbe();
