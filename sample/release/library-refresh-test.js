@@ -88,6 +88,11 @@ function createTree(initialLibrary) {
         hasFile(path) { return this.nodeMetadata.get(path)?.kind === "file"; },
         refreshAllFileRows() {},
         refreshAllFolderRows() {},
+        setDisplayChecked(path, checked) {
+            const metadata = this.nodeMetadata.get(path);
+
+            if (metadata) metadata.checked = checked;
+        },
         setSelectedPath(path) { this.selected = path; }
     };
 
@@ -98,19 +103,25 @@ async function testRefreshAndReconciliation() {
     const oldA = fileHandle("A.gpx", 10, 1);
     const oldB = fileHandle("B.gpx", 20, 1);
     const oldD = fileHandle("D.gpx", 40, 1);
-    const oldLibrary = library("GPX", [oldA, oldB, oldD]);
+    const oldF = fileHandle("F.gpx", 50, 1);
+    const oldLibrary = library("GPX", [oldA, oldB, oldD, oldF]);
     const newA = fileHandle("A.gpx", 10, 1);
     const newB = fileHandle("B.gpx", 21, 2);
     const newC = fileHandle("C.gpx", 30, 3);
-    const actualLibrary = library("GPX", [newA, newB, newC]);
+    const newE = fileHandle("E.gpx", 45, 4);
+    const newF = fileHandle("F.gpx", 50, 1);
+    const actualLibrary = library(
+        "GPX",
+        [newE, newB, newF, newA, newC]
+    );
     const tree = await createTree(oldLibrary);
     const displayState = new DisplayState();
     const selectionState = new SelectionState();
     const summaryBuilder = new TrackSummaryBuilder();
-    const summaries = [oldA, oldB, oldD].map((handle, index) =>
+    const summaries = [oldA, oldB, oldD, oldF].map((handle, index) =>
         summaryBuilder.build(handle.name, {
             name: handle.name,
-            size: [10, 20, 40][index],
+            size: [10, 20, 40, 50][index],
             lastModified: 1
         }, null)
     );
@@ -121,11 +132,19 @@ async function testRefreshAndReconciliation() {
     };
 
     displayState.setLibrary(oldLibrary.rootFolder.handle);
+    const previousColors = new Map([
+        ["A.gpx", "#111111"],
+        ["B.gpx", "#222222"],
+        ["D.gpx", "#444444"],
+        ["F.gpx", "#333333"]
+    ]);
+
     tree.getFileEntries().forEach(({ path, fileHandle: handle }) =>
-        displayState.registerFile(path, handle, "#123456")
+        displayState.registerFile(path, handle, previousColors.get(path))
     );
     displayState.setChecked("A.gpx", true);
     displayState.setChecked("B.gpx", true);
+    displayState.setChecked("F.gpx", false);
     selectionState.select("B.gpx", "test");
     const removed = [];
     const reloaded = [];
@@ -134,6 +153,7 @@ async function testRefreshAndReconciliation() {
     let scanCount = 0;
     let previousOpenCount = 0;
     let snapshotUpdates = 0;
+    let updateContext = null;
     let now = 100;
     const eventBus = new EventBus();
     const previous = {
@@ -162,10 +182,13 @@ async function testRefreshAndReconciliation() {
         getNamespace: () => "local:GPX",
         getLibrary: () => currentLibrary,
         setLibrary: value => { currentLibrary = value; },
-        getColor: () => "#123456",
+        getColor: path => path === "C.gpx" ? "#555555" : "#666666",
         removePath: path => removed.push(path),
         reloadVisiblePath: async value => reloaded.push(value.path),
-        onLibraryUpdated: () => { snapshotUpdates += 1; },
+        onLibraryUpdated: (value, context) => {
+            snapshotUpdates += 1;
+            updateContext = context;
+        },
         now: () => now
     });
 
@@ -186,12 +209,22 @@ async function testRefreshAndReconciliation() {
         "manual refresh called the full previous-Library reopen path");
     assert(currentLibrary === actualLibrary,
         "incremental refresh did not promote the scanned actual Library");
-    assert(result.added === 1 && result.removed === 1 && result.modified === 1,
+    assert(result.added === 2 && result.removed === 1 && result.modified === 1,
         "Library diff counts were incorrect");
-    assert(displayState.getDisplay("C.gpx")?.checked === false,
-        "new GPX was not registered unchecked");
+    assert(displayState.getDisplay("C.gpx")?.checked === false &&
+        displayState.getDisplay("E.gpx")?.checked === false,
+    "new GPX files were not both registered unchecked");
     assert(displayState.getDisplay("A.gpx")?.checked === true,
         "existing visibility was not preserved");
+    assert(displayState.getDisplay("F.gpx")?.checked === false,
+        "existing hidden state was not preserved");
+    assert(displayState.getDisplay("A.gpx")?.color === "#111111" &&
+        displayState.getDisplay("B.gpx")?.color === "#222222" &&
+        displayState.getDisplay("F.gpx")?.color === "#333333",
+    "existing colors were reassigned after scan-order changes");
+    assert(displayState.getDisplay("C.gpx")?.color === "#555555" &&
+        displayState.getDisplay("E.gpx")?.color === "#666666",
+    "new Tracks did not receive newly resolved colors");
     assert(selectionState.getSelectedPath() === "B.gpx" && tree.selected === "B.gpx",
         "selected Track was not preserved");
     assert(removed.includes("D.gpx") && !displayState.getDisplay("D.gpx"),
@@ -204,25 +237,27 @@ async function testRefreshAndReconciliation() {
         "new GPX was not added to Discovery/Date/Search metadata");
     assert(snapshotUpdates === 1,
         "reconciled Tree metadata was not offered to Snapshot persistence");
-    assert(coordinator.getDiagnostic().scannedCount === 3 &&
-        coordinator.getDiagnostic().addedCount === 1,
+    assert(updateContext?.preserveExistingPresentation === true,
+        "incremental refresh allowed Folder color presentation reassignment");
+    assert(coordinator.getDiagnostic().scannedCount === 5 &&
+        coordinator.getDiagnostic().addedCount === 2,
     "refresh diagnostic did not report actual/cached diff counts");
     const performance = coordinator.getDiagnostic().performance;
 
     assert(performance.mode === "incremental" &&
-        performance.scannedCount === 3 &&
-        performance.unchangedCount === 1 &&
-        performance.addedCount === 1 &&
+        performance.scannedCount === 5 &&
+        performance.unchangedCount === 2 &&
+        performance.addedCount === 2 &&
         performance.removedCount === 1 &&
         performance.modifiedCount === 1,
     "incremental refresh performance counters lost diff results");
-    assert(performance.getFileCount === 3 &&
-        performance.existingGetFileCount === 2 &&
-        performance.addedGetFileCount === 1 &&
-        performance.existingMetadataValidationCount === 2 &&
-        performance.addedMetadataValidationCount === 1 &&
+    assert(performance.getFileCount === 5 &&
+        performance.existingGetFileCount === 3 &&
+        performance.addedGetFileCount === 2 &&
+        performance.existingMetadataValidationCount === 3 &&
+        performance.addedMetadataValidationCount === 2 &&
         performance.bodyReadCount === 0 && performance.parseCount === 0 &&
-        performance.metadataExtractionCount === 1 &&
+        performance.metadataExtractionCount === 2 &&
         performance.cacheLookupCount === 0 &&
         performance.geometryGenerationCount === 0,
     "incremental refresh performance counters changed observed work");

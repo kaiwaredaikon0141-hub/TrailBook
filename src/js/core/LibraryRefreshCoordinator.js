@@ -5,6 +5,11 @@ import { RUNTIME_BUILD_ID } from "../runtime/RuntimeBuild.js";
 
 const METADATA_CONCURRENCY = 8;
 
+function normalizeRelativePath(path) {
+
+    return typeof path === "string" ? path.replaceAll("\\", "/") : "";
+}
+
 function emptyRefreshPerformance(reason, startedAt) {
 
     return Object.freeze({
@@ -249,18 +254,40 @@ export default class LibraryRefreshCoordinator {
         );
         const oldEntries = new Map(
             this.discoveryCoordinator.getSnapshotState().entries.map(entry => [
-                entry.relativePath,
+                normalizeRelativePath(entry.relativePath),
                 entry
             ])
         );
-        const oldPaths = new Set(this.treeView.getFileEntries().map(({ path }) => path));
-        const newPaths = new Set(fileEntries.map(({ path }) => path));
-        const removed = [...oldPaths].filter(path => !newPaths.has(path));
-        const added = fileEntries.filter(({ path }) => !oldPaths.has(path));
+        const oldFileEntries = this.treeView.getFileEntries();
+        const oldPaths = new Set(oldFileEntries.map(({ path }) =>
+            normalizeRelativePath(path)
+        ));
+        const newPaths = new Set(fileEntries.map(({ path }) =>
+            normalizeRelativePath(path)
+        ));
+        const removed = oldFileEntries
+            .filter(({ path }) => !newPaths.has(normalizeRelativePath(path)))
+            .map(({ path }) => path);
+        const added = fileEntries.filter(({ path }) =>
+            !oldPaths.has(normalizeRelativePath(path))
+        );
+        const addedPaths = new Set(added.map(({ path }) =>
+            normalizeRelativePath(path)
+        ));
+        const previousDisplays = new Map(
+            [...this.displayState.getDisplays().values()].map(display => [
+                normalizeRelativePath(display.path),
+                {
+                    checked: display.checked,
+                    color: display.color
+                }
+            ])
+        );
         const diffMs = this.performanceNow() - diffStartedAt;
         const validationStartedAt = this.performanceNow();
         const metadata = await this.#readMetadata(fileEntries, oldPaths);
         const checked = new Set(this.displayState.getCheckedPaths());
+        const checkedPaths = new Set([...checked].map(normalizeRelativePath));
         const namespace = this.getNamespace();
         const previousIdentities = await this.#readPreviousIdentities(
             checked,
@@ -270,17 +297,21 @@ export default class LibraryRefreshCoordinator {
         const validationMs = this.performanceNow() - validationStartedAt;
         if (this.getLibrary() !== expectedLibrary) return false;
         const changed = fileEntries.filter(({ path }) => {
-            const previous = previousIdentities.get(path);
+            const key = normalizeRelativePath(path);
+            const previous = previousIdentities.get(key);
             const current = metadata.get(path);
 
-            return oldPaths.has(path) && current && previous && (
+            return oldPaths.has(key) && current && previous && (
                 previous.size !== current.size ||
                 previous.lastModified !== current.lastModified
             );
         });
-        const changedPaths = new Set(changed.map(({ path }) => path));
+        const changedPaths = new Set(changed.map(({ path }) =>
+            normalizeRelativePath(path)
+        ));
         const unchangedCount = fileEntries.filter(({ path }) =>
-            oldPaths.has(path) && !changedPaths.has(path)
+            oldPaths.has(normalizeRelativePath(path)) &&
+            !changedPaths.has(normalizeRelativePath(path))
         ).length;
         const selectedPath = this.selectionState.getSelectedPath();
 
@@ -297,7 +328,19 @@ export default class LibraryRefreshCoordinator {
         const modifiedStartedAt = this.performanceNow();
         removed.forEach(path => this.removePath(path));
         fileEntries.forEach(({ path, fileHandle }) => {
-            this.displayState.registerFile(path, fileHandle, this.getColor(path));
+            const key = normalizeRelativePath(path);
+            const previous = previousDisplays.get(key);
+
+            this.displayState.registerFile(
+                path,
+                fileHandle,
+                previous?.color ?? this.getColor(path)
+            );
+            if (previous) {
+                this.displayState.setChecked(path, previous.checked);
+            } else if (addedPaths.has(key)) {
+                this.displayState.setChecked(path, false);
+            }
         });
         for (const { path } of changed) {
             await this.repository.invalidate(namespace, path);
@@ -314,10 +357,11 @@ export default class LibraryRefreshCoordinator {
         let metadataExtractionCount = 0;
         const addedProcessingStartedAt = this.performanceNow();
         const discoveryEntries = fileEntries.map(({ path, fileHandle }) => {
-            const previous = oldEntries.get(path);
+            const key = normalizeRelativePath(path);
+            const previous = oldEntries.get(key);
             const file = metadata.get(path);
 
-            if (previous && !changedPaths.has(path)) return previous;
+            if (previous && !changedPaths.has(key)) return previous;
             if (previous && file) return TrackDiscoveryEntry.fromRecord({
                 ...previous.toRecord(),
                 fileSize: file.size,
@@ -336,11 +380,20 @@ export default class LibraryRefreshCoordinator {
             fileEntries,
             entries: discoveryEntries
         });
-        this.#restoreTreePresentation(selectedPath);
+        const selectedKey = normalizeRelativePath(selectedPath);
+        const reconciledSelectedPath = fileEntries.find(({ path }) =>
+            normalizeRelativePath(path) === selectedKey
+        )?.path || selectedPath;
+
+        this.#restoreTreePresentation(reconciledSelectedPath);
+        added.forEach(({ path }) => {
+            this.displayState.setChecked(path, false);
+            this.treeView.setDisplayChecked(path, false);
+        });
 
         let delegatedVisibleReloadCount = 0;
         for (const { path, fileHandle } of changed) {
-            if (checked.has(path)) {
+            if (checkedPaths.has(normalizeRelativePath(path))) {
                 const reloadStartedAt = this.performanceNow();
 
                 delegatedVisibleReloadCount += 1;
@@ -350,7 +403,9 @@ export default class LibraryRefreshCoordinator {
         }
         const snapshotStartedAt = this.performanceNow();
         const performanceRunStartedAt = this.refreshPerformance?.startedAt;
-        const snapshotUpdate = this.onLibraryUpdated(library);
+        const snapshotUpdate = this.onLibraryUpdated(library, {
+            preserveExistingPresentation: true
+        });
         const reconcileMs = this.performanceNow() - reconcileStartedAt;
 
         this.#updateRefreshPerformance({
@@ -396,7 +451,7 @@ export default class LibraryRefreshCoordinator {
                 const entry = entries[nextIndex++];
                 try {
                     getFileCount += 1;
-                    if (existingPaths.has(entry.path)) {
+                    if (existingPaths.has(normalizeRelativePath(entry.path))) {
                         existingGetFileCount += 1;
                     } else {
                         addedGetFileCount += 1;
@@ -430,21 +485,23 @@ export default class LibraryRefreshCoordinator {
         entries.forEach((entry, path) => {
             if (Number.isFinite(entry.fileSize) &&
                 Number.isFinite(entry.lastModified)) {
-                identities.set(path, {
+                identities.set(normalizeRelativePath(path), {
                     size: entry.fileSize,
                     lastModified: entry.lastModified
                 });
             }
         });
         await Promise.all([...checkedPaths].map(async path => {
-            if (identities.has(path)) return;
+            const key = normalizeRelativePath(path);
+
+            if (identities.has(key)) return;
             cacheLookupCount += 1;
             const cached = await this.repository.getDisplaySnapshot?.(
                 namespace,
                 path
             );
 
-            if (cached?.fileIdentity) identities.set(path, cached.fileIdentity);
+            if (cached?.fileIdentity) identities.set(key, cached.fileIdentity);
         }));
         this.#updateRefreshPerformance({ cacheLookupCount });
         return identities;

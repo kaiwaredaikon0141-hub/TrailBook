@@ -129,12 +129,16 @@ window.addEventListener("DOMContentLoaded", () => {
                 preserveMapView: true, preserveSelection: true
             });
         },
-        onLibraryUpdated: library => {
-            app.librarySettingsCoordinator.reconcileFolderPaths(
-                app.treeView.getSearchSourceEntries()
-                    .filter(entry => entry.kind === "folder")
-                    .map(entry => entry.path)
-            );
+        onLibraryUpdated: (library, {
+            preserveExistingPresentation = false
+        } = {}) => {
+            if (!preserveExistingPresentation) {
+                app.librarySettingsCoordinator.reconcileFolderPaths(
+                    app.treeView.getSearchSourceEntries()
+                        .filter(entry => entry.kind === "folder")
+                        .map(entry => entry.path)
+                );
+            }
             app.updateFolderColorPresentation();
             app.statusBar.showLibraryLoaded(library);
             app.libraryAccessPanel.hide();
