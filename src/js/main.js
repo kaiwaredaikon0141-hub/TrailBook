@@ -141,6 +141,9 @@ window.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+    app.libraryAccessPanel.setLibraryRefreshRuntimeBuild(
+        libraryRefresh.getDiagnostic()
+    );
     libraryRefresh.bind();
 
     let batchSimplification = null;

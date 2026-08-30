@@ -173,6 +173,19 @@ export default class LibraryAccessPanel {
         this.#renderLibraryRefreshState();
     }
 
+    setLibraryRefreshRuntimeBuild({
+        runtimeBuildId = null,
+        runtimeMarkerSource = "missing"
+    } = {}) {
+
+        this.libraryRefreshState = Object.freeze({
+            ...this.libraryRefreshState,
+            runtimeBuildId,
+            runtimeMarkerSource
+        });
+        this.#renderLibraryRefreshState();
+    }
+
     setLibraryRefreshHydrationDiagnostic(diagnostic) {
 
         const value = candidate => candidate ?? "-";
