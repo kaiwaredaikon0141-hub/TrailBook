@@ -269,6 +269,10 @@ async function testManifestAndAssets() {
 
     assert(deployedRuntime.includes('DEPLOYED_BUILD_ID = "431fb68c"'),
         "production runtime module marker was not generated");
+    assert(deployedWorker.includes('APP_SHELL_BUILD_ID = "431fb68c"') &&
+        deployedRuntime.includes('DEPLOYED_BUILD_ID = "431fb68c"') &&
+        getBuildIdentifier({ commit: "431fb68c" }) === "431fb68c",
+        "BuildInfo, Service Worker, and runtime module use different builds");
 
     const mobileCss = await fetch(new URL(
         "../../src/css/theme.css", location.href

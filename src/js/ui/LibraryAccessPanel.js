@@ -38,6 +38,7 @@ export default class LibraryAccessPanel {
         this.libraryRefreshAction = null;
         this.provisionalLibrary = false;
         this.libraryRefreshState = Object.freeze({
+            runtimeBuildId: null, runtimeMarkerSource: "missing",
             permission: "unknown", hasHandle: false, libraryState: "none",
             canManualRefresh: false,
             cachedCount: null, scannedCount: null,
@@ -376,6 +377,8 @@ export default class LibraryAccessPanel {
         if (!output) return;
         const value = key => state[key] ?? "-";
         const text = [
+            `runtime module: ${value("runtimeBuildId")}`,
+            `runtime marker source: ${value("runtimeMarkerSource")}`,
             `permission: ${value("permission")}`,
             `handle: ${state.hasHandle ? "yes" : "no"}`,
             `cached: ${value("cachedCount")}`,

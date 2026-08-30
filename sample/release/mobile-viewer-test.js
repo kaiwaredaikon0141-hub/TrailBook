@@ -388,6 +388,8 @@ async function run() {
     assert(accessCopy.libraryRefreshButton.hidden,
         "Panel inferred refresh visibility before Coordinator state arrived");
     const promptRefreshState = Object.freeze({
+        runtimeBuildId: "test-build",
+        runtimeMarkerSource: "loaded",
         permission: "prompt",
         hasHandle: true,
         libraryState: "provisional",
@@ -428,6 +430,8 @@ async function run() {
     );
 
     assert(refreshDiagnostic.open &&
+        refreshDiagnostic.textContent.includes("runtime module: test-build") &&
+        refreshDiagnostic.textContent.includes("runtime marker source: loaded") &&
         refreshDiagnostic.textContent.includes("permission: prompt") &&
         refreshDiagnostic.textContent.includes("cached: 1123") &&
         refreshDiagnostic.textContent.includes("scanned: -") &&

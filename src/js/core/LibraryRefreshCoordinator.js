@@ -31,6 +31,8 @@ export default class LibraryRefreshCoordinator {
         this.lastResult = null;
         this.lastCompletedAt = -Infinity;
         this.refreshState = Object.freeze({
+            runtimeBuildId: RUNTIME_BUILD_ID,
+            runtimeMarkerSource: "loaded",
             permission: "unknown", hasHandle: false, libraryState: "none",
             canManualRefresh: false,
             cachedCount: null, scannedCount: null,
@@ -47,6 +49,8 @@ export default class LibraryRefreshCoordinator {
                 () => void this.refresh({ reason: "manual-refresh", reconnect: true })
             );
         }
+        this.accessPanel?.setLibraryRefreshState?.(this.refreshState);
+        this.lastPublishedState = this.refreshState;
         this.#hydrateCurrentState("constructor");
         this.previousLibraryCoordinator.setPersistenceStatusListener?.(
             state => this.#handlePersistenceState(state)

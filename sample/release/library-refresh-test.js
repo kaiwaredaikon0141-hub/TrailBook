@@ -377,6 +377,9 @@ function testInitialStateHydrationOrdering() {
         initialRaw.coordinator.libraryState === "provisional" &&
         initialRaw.coordinator.runtimeBuildId === "local",
     "correct raw getter state was lost during Coordinator hydration");
+    assert(existing.coordinator.getDiagnostic().runtimeBuildId === "local" &&
+        existing.coordinator.getDiagnostic().runtimeMarkerSource === "loaded",
+    "runtime module marker was not published independently of hydration output");
     existing.eventBus.emit("library:provisional-state-changed", {
         provisional: true
     });
