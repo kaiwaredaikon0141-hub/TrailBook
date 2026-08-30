@@ -73,8 +73,10 @@ export default class LibraryRefreshCoordinator {
             permission: "unknown", hasHandle: false, libraryState: "none",
             canManualRefresh: false,
             cachedCount: null, scannedCount: null,
-            addedCount: null, removedCount: null, modifiedCount: null,
-            reason: "none", result: "idle", performance: null
+            addedCount: null, recoveredCount: null,
+            removedCount: null, modifiedCount: null,
+            reason: "none", result: "idle", performance: null,
+            entryTrace: null
         });
         this.refreshPerformance = null;
         this.refreshPerformanceActive = false;
@@ -135,6 +137,11 @@ export default class LibraryRefreshCoordinator {
         this.#publishRefreshState({ performance: this.refreshPerformance });
         this.#publishRefreshState({ reason, result: "checking" });
         this.activeRefresh = (reconnect ? this.#reconnect() : this.#refresh())
+            .catch(error => {
+                console.error("Library refresh failed.", error);
+                this.#publishRefreshState({ result: "failure" });
+                return false;
+            })
             .finally(() => {
                 this.#updateRefreshPerformance({
                     status: "complete",
@@ -248,6 +255,7 @@ export default class LibraryRefreshCoordinator {
         this.#publishRefreshState({
             scannedCount: scanned,
             addedCount: result?.added ?? null,
+            recoveredCount: result?.recovered ?? null,
             removedCount: result?.removed ?? null,
             modifiedCount: result?.modified ?? null,
             result: result
@@ -293,6 +301,9 @@ export default class LibraryRefreshCoordinator {
 
             return missingTreeEntry || missingSnapshotEntry;
         });
+        const recoveredPaths = new Set(added
+            .filter(({ path }) => oldEntries.has(normalizeRelativePath(path)))
+            .map(({ path }) => normalizeRelativePath(path)));
         const addedPaths = new Set(added.map(({ path }) =>
             normalizeRelativePath(path)
         ));
@@ -393,7 +404,7 @@ export default class LibraryRefreshCoordinator {
             ...removed
         ];
 
-        await this.treeReconciler.reconcile(
+        const treeResult = await this.treeReconciler.reconcile(
             this.treeView,
             library,
             { affectedPaths }
@@ -476,11 +487,45 @@ export default class LibraryRefreshCoordinator {
             });
         }
         this.lastResult = Object.freeze({
-            added: added.length,
+            added: added.length - recoveredPaths.size,
+            recovered: recoveredPaths.size,
             removed: removed.length,
             modified: changed.length,
             snapshotCommitted
         });
+        const tracedEntry = added[0];
+
+        if (tracedEntry) {
+            const tracePath = normalizeRelativePath(tracedEntry.path);
+
+            this.#publishRefreshState({
+                recoveredCount: recoveredPaths.size,
+                entryTrace: Object.freeze({
+                    path: tracePath,
+                    classification: recoveredPaths.has(tracePath)
+                        ? "recovered"
+                        : "new",
+                    scanned: newPaths.has(tracePath),
+                    reconcileInput: affectedPaths.some(path =>
+                        normalizeRelativePath(path) === tracePath
+                    ),
+                    runtimeLibrary: fileEntries.some(({ path }) =>
+                        normalizeRelativePath(path) === tracePath
+                    ),
+                    treeMetadata: treeResult?.metadataPaths?.some(path =>
+                        normalizeRelativePath(path) === tracePath
+                    ) ?? this.treeView.hasFile(tracePath),
+                    renderedDom: treeResult?.renderedPaths?.some(path =>
+                        normalizeRelativePath(path) === tracePath
+                    ) ?? false
+                })
+            });
+        } else {
+            this.#publishRefreshState({
+                recoveredCount: 0,
+                entryTrace: null
+            });
+        }
         return this.lastResult;
     }
 

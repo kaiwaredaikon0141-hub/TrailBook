@@ -499,22 +499,36 @@ async function run() {
         permission: "granted", canManualRefresh: false,
         reason: "manual-refresh", result: "checking"
     });
-    assert(accessCopy.libraryRefreshButton.hidden,
-        "granted state retained the prompt-only refresh action");
+    assert(!accessCopy.libraryRefreshButton.hidden &&
+        accessCopy.libraryRefreshButton.disabled &&
+        accessCopy.libraryRefreshButton.textContent === "確認中…",
+    "running refresh did not expose disabled progress feedback");
     accessCopy.setLibraryRefreshState({
         ...promptRefreshState,
         permission: "denied", canManualRefresh: false,
         reason: "manual-refresh", result: "permission-denied"
     });
-    assert(accessCopy.libraryRefreshButton.hidden,
-        "denied state exposed the prompt-only refresh action");
+    assert(!accessCopy.libraryRefreshButton.hidden &&
+        !accessCopy.libraryRefreshButton.disabled &&
+        accessCopy.libraryRefreshButton.textContent === "更新失敗",
+    "failed refresh did not expose failure feedback");
     accessCopy.setLibraryRefreshState({
         ...promptRefreshState,
         libraryState: "ready", canManualRefresh: false,
+        addedCount: 1, recoveredCount: 1,
         reason: "manual-refresh", result: "success"
     });
-    assert(accessCopy.libraryRefreshButton.hidden,
-        "actual ready Library retained provisional refresh action");
+    assert(!accessCopy.libraryRefreshButton.hidden &&
+        accessCopy.libraryRefreshButton.textContent === "更新完了（+2件）",
+    "successful refresh did not expose added/recovered feedback");
+    accessCopy.setLibraryRefreshState({
+        ...promptRefreshState,
+        libraryState: "ready", canManualRefresh: false,
+        addedCount: 0, recoveredCount: 0,
+        reason: "manual-refresh", result: "success"
+    });
+    assert(accessCopy.libraryRefreshButton.textContent === "更新完了（変更なし）",
+        "no-change refresh did not expose completion feedback");
     accessCopy.showPreviousLibrary("Previous", "denied");
     assert(accessCopy.primaryContent.hidden &&
         !accessCopy.libraryChange.hidden &&

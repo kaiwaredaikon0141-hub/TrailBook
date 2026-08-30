@@ -13,6 +13,7 @@ import LibrarySnapshotService, {
 import PreviousLibraryCoordinator from "../../src/js/core/PreviousLibraryCoordinator.js";
 import TreeView from "../../src/js/ui/TreeView.js";
 import TreeIncrementalReconciler from "../../src/js/ui/TreeIncrementalReconciler.js";
+import LibraryAccessPanel from "../../src/js/ui/LibraryAccessPanel.js";
 
 const output = document.getElementById("result");
 const focusedIncremental = new URLSearchParams(
@@ -266,7 +267,8 @@ async function testRefreshAndReconciliation() {
         "manual refresh called the full previous-Library reopen path");
     assert(currentLibrary === actualLibrary,
         "incremental refresh did not promote the scanned actual Library");
-    assert(result.added === 2 && result.removed === 1 && result.modified === 1,
+    assert(result.added === 1 && result.recovered === 1 &&
+        result.removed === 1 && result.modified === 1,
         "Library diff counts were incorrect");
     assert(displayState.getDisplay("C.gpx")?.checked === false &&
         displayState.getDisplay("E.gpx")?.checked === false,
@@ -314,8 +316,16 @@ async function testRefreshAndReconciliation() {
     assert(tree.reconcileCount === 1 && tree.renderCount === 1,
         "incremental refresh used full Tree apply instead of DOM reconcile");
     assert(coordinator.getDiagnostic().scannedCount === 5 &&
-        coordinator.getDiagnostic().addedCount === 2,
+        coordinator.getDiagnostic().addedCount === 1 &&
+        coordinator.getDiagnostic().recoveredCount === 1,
     "refresh diagnostic did not report actual/cached diff counts");
+    const entryTrace = coordinator.getDiagnostic().entryTrace;
+
+    assert(entryTrace?.path === "E.gpx" &&
+        entryTrace.classification === "recovered" && entryTrace.scanned &&
+        entryTrace.reconcileInput && entryTrace.runtimeLibrary &&
+        entryTrace.treeMetadata,
+    "new Track path was lost between scan, reconcile, and Tree metadata");
     const performance = coordinator.getDiagnostic().performance;
 
     assert(performance.mode === "incremental" &&
@@ -386,6 +396,55 @@ async function testIncrementalTreeDomReconcile() {
         "new Track was not inserted into the currently opened Folder DOM");
     assert(tree.folderNodes.get("Other") === unaffectedFolderRow,
         "incremental DOM reconcile rebuilt an unaffected Folder");
+
+    const detachedTripsRow = document.createElement("div");
+
+    tree.folderNodes.set("Trips", detachedTripsRow);
+    const recovered = createNestedLibrary([
+        fileHandle("A.gpx", 1, 1),
+        fileHandle("RECOVERED.gpx", 4, 4)
+    ]);
+    const recoveredResult = await new TreeIncrementalReconciler().reconcile(
+        tree,
+        recovered,
+        { affectedPaths: ["Trips/RECOVERED.gpx"] }
+    );
+
+    assert(tree.fileNodes.has("Trips/RECOVERED.gpx") &&
+        tree.element.contains(tree.folderNodes.get("Trips")) &&
+        recoveredResult.metadataPaths.includes("Trips/RECOVERED.gpx") &&
+        recoveredResult.renderedPaths.includes("Trips/RECOVERED.gpx"),
+    "recovered Track was applied to a detached row instead of the live Tree DOM");
+}
+
+function testRefreshCompletionFeedback() {
+    const panel = new LibraryAccessPanel();
+    const base = {
+        permission: "granted", hasHandle: true,
+        libraryState: "ready", canManualRefresh: false,
+        reason: "manual-refresh"
+    };
+
+    panel.setLibraryRefreshAction(() => {});
+    panel.setLibraryRefreshState({ ...base, result: "checking" });
+    assert(!panel.libraryRefreshButton.hidden &&
+        panel.libraryRefreshButton.disabled &&
+        panel.libraryRefreshButton.textContent === "確認中…",
+    "running refresh feedback was not visible and disabled");
+    panel.setLibraryRefreshState({
+        ...base, result: "success", addedCount: 1, recoveredCount: 1
+    });
+    assert(panel.libraryRefreshButton.textContent === "更新完了（+2件）",
+        "refresh completion did not include added and recovered counts");
+    panel.setLibraryRefreshState({
+        ...base, result: "success", addedCount: 0, recoveredCount: 0
+    });
+    assert(panel.libraryRefreshButton.textContent === "更新完了（変更なし）",
+        "no-change refresh completion feedback was incorrect");
+    panel.setLibraryRefreshState({ ...base, result: "failure" });
+    assert(panel.libraryRefreshButton.textContent === "更新失敗",
+        "refresh failure feedback was not visible");
+    clearTimeout(panel.libraryRefreshFeedbackTimer);
 }
 
 async function testPromptDoesNotRequestOrScan() {
@@ -670,6 +729,7 @@ try {
     await testFreshRecursiveScan();
     await testRefreshAndReconciliation();
     await testIncrementalTreeDomReconcile();
+    testRefreshCompletionFeedback();
     if (!focusedIncremental) {
         await testPromptDoesNotRequestOrScan();
         testInitialStateHydrationOrdering();

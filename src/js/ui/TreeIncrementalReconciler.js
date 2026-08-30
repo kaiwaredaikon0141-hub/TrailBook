@@ -43,7 +43,7 @@ export default class TreeIncrementalReconciler {
             let folderPath = treeView.parentPath(path);
 
             while (folderPath && (
-                !treeView.folderNodes.has(folderPath) ||
+                !this.#hasLiveFolderRow(treeView, folderPath) ||
                 treeView.nodeMetadata.get(folderPath)?.kind !== "folder"
             )) {
                 folderPath = treeView.parentPath(folderPath);
@@ -63,6 +63,14 @@ export default class TreeIncrementalReconciler {
         treeView.applyFocusState();
         treeView.element.scrollTop = previousScrollTop;
         treeView.scrollTop = previousScrollTop;
+
+        return Object.freeze({
+            affectedPaths: [...affectedPaths],
+            metadataPaths: affectedPaths.filter(path => treeView.hasFile(path)),
+            renderedPaths: affectedPaths.filter(path =>
+                this.#hasLiveFileRow(treeView, path)
+            )
+        });
     }
 
     #rebuildFolder(treeView, path) {
@@ -73,7 +81,7 @@ export default class TreeIncrementalReconciler {
 
         if (!row || !item || !folder) return;
         item.querySelector(":scope > .tree-group")?.remove();
-        treeView.removeRenderedDescendants(path);
+        this.#removeRenderedDescendants(treeView, path);
         if (path === ROOT_PATH || treeView.expandedPaths.has(path)) {
             treeView.appendFolderChildren(item, folder, path);
         }
@@ -82,5 +90,31 @@ export default class TreeIncrementalReconciler {
             path === ROOT_PATH || treeView.expandedPaths.has(path)
         );
         treeView.refreshFolderRow(path);
+    }
+
+    #removeRenderedDescendants(treeView, path) {
+
+        if (path !== ROOT_PATH) {
+            treeView.removeRenderedDescendants(path);
+            return;
+        }
+        [...treeView.folderNodes.keys()].forEach(candidate => {
+            if (candidate !== ROOT_PATH) treeView.folderNodes.delete(candidate);
+        });
+        treeView.fileNodes.clear();
+    }
+
+    #hasLiveFolderRow(treeView, path) {
+
+        const row = treeView.folderNodes.get(path);
+
+        return Boolean(row && treeView.element.contains(row));
+    }
+
+    #hasLiveFileRow(treeView, path) {
+
+        const row = treeView.fileNodes.get(path);
+
+        return Boolean(row && treeView.element.contains(row));
     }
 }

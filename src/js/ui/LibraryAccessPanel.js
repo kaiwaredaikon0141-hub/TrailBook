@@ -42,9 +42,11 @@ export default class LibraryAccessPanel {
             permission: "unknown", hasHandle: false, libraryState: "none",
             canManualRefresh: false,
             cachedCount: null, scannedCount: null,
-            addedCount: null, removedCount: null, modifiedCount: null,
+            addedCount: null, recoveredCount: null,
+            removedCount: null, modifiedCount: null,
             reason: "none", result: "idle"
         });
+        this.libraryRefreshFeedbackTimer = null;
         this.previousLibraryButton.addEventListener("click", () => {
             this.previousLibraryAction?.();
         });
@@ -382,9 +384,41 @@ export default class LibraryAccessPanel {
     #renderLibraryRefreshState() {
 
         const state = this.libraryRefreshState;
+        const manualResult = state.reason === "manual-refresh";
+        const running = manualResult && state.result === "checking";
+        const success = manualResult && state.result === "success";
+        const failureResults = new Set([
+            "permission-denied", "no-handle", "not-ready",
+            "stale-context", "snapshot-pending", "failure"
+        ]);
+        const failure = manualResult && failureResults.has(state.result);
+        const changedCount = Number(state.addedCount || 0) +
+            Number(state.recoveredCount || 0);
 
         this.libraryRefreshButton.hidden =
-            state.canManualRefresh !== true;
+            state.canManualRefresh !== true && !running && !success && !failure;
+        this.libraryRefreshButton.disabled = running;
+        this.libraryRefreshButton.textContent = running
+            ? "確認中…"
+            : success
+                ? changedCount > 0
+                    ? `更新完了（+${changedCount}件）`
+                    : "更新完了（変更なし）"
+                : failure
+                    ? "更新失敗"
+                    : "更新を確認";
+        if (success || failure) {
+            clearTimeout(this.libraryRefreshFeedbackTimer);
+            this.libraryRefreshFeedbackTimer = setTimeout(() => {
+                this.libraryRefreshFeedbackTimer = null;
+                this.libraryRefreshButton.textContent = "更新を確認";
+                this.libraryRefreshButton.hidden =
+                    this.libraryRefreshState.canManualRefresh !== true;
+            }, 2500);
+        } else if (running) {
+            clearTimeout(this.libraryRefreshFeedbackTimer);
+            this.libraryRefreshFeedbackTimer = null;
+        }
         const output = this.libraryRefreshDiagnostic?.querySelector("pre");
 
         if (!output) return;
@@ -402,12 +436,24 @@ export default class LibraryAccessPanel {
             `cached: ${value("cachedCount")}`,
             `scanned: ${value("scannedCount")}`,
             `added: ${value("addedCount")}`,
+            `recovered: ${value("recoveredCount")}`,
             `removed: ${value("removedCount")}`,
             `modified: ${value("modifiedCount")}`,
             `reason: ${value("reason")}`,
             `result: ${value("result")}`,
             `library: ${value("libraryState")}`,
             `manual refresh: ${state.canManualRefresh ? "yes" : "no"}`,
+            ...(state.entryTrace ? [
+                "",
+                "Refresh Entry Trace",
+                `path: ${state.entryTrace.path}`,
+                `classification: ${state.entryTrace.classification}`,
+                `scanned: ${state.entryTrace.scanned ? "yes" : "no"}`,
+                `reconcile input: ${state.entryTrace.reconcileInput ? "yes" : "no"}`,
+                `runtime Library: ${state.entryTrace.runtimeLibrary ? "yes" : "no"}`,
+                `Tree metadata: ${state.entryTrace.treeMetadata ? "yes" : "no"}`,
+                `rendered DOM: ${state.entryTrace.renderedDom ? "yes" : "no"}`
+            ] : []),
             "",
             "Refresh Perf",
             `mode: ${perfValue("mode")}`,
