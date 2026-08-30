@@ -2,12 +2,21 @@ import TreeMetadataBuilder from "../ui/TreeMetadataBuilder.js";
 import TrackSummaryBuilder from "../services/TrackSummaryBuilder.js";
 import TrackDiscoveryEntry from "../models/TrackDiscoveryEntry.js";
 import { RUNTIME_BUILD_ID } from "../runtime/RuntimeBuild.js";
+import TreeIncrementalReconciler from "../ui/TreeIncrementalReconciler.js";
 
 const METADATA_CONCURRENCY = 8;
 
 function normalizeRelativePath(path) {
 
     return typeof path === "string" ? path.replaceAll("\\", "/") : "";
+}
+
+function normalizedFolderPath(path) {
+
+    const normalized = normalizeRelativePath(path);
+    const separator = normalized.lastIndexOf("/");
+
+    return separator < 0 ? "" : normalized.slice(0, separator);
 }
 
 function emptyRefreshPerformance(reason, startedAt) {
@@ -44,7 +53,8 @@ export default class LibraryRefreshCoordinator {
         performanceNow = () => globalThis.performance?.now?.() ?? Date.now(),
         minimumIntervalMs = 2000,
         metadataBuilder = new TreeMetadataBuilder(),
-        summaryBuilder = new TrackSummaryBuilder()
+        summaryBuilder = new TrackSummaryBuilder(),
+        treeReconciler = new TreeIncrementalReconciler()
     }) {
         Object.assign(this, {
             eventBus, scanner, previousLibraryCoordinator,
@@ -52,7 +62,7 @@ export default class LibraryRefreshCoordinator {
             displayState, selectionState, accessPanel, repository, getNamespace,
             getLibrary, setLibrary, getColor, removePath, reloadVisiblePath,
             onLibraryUpdated, canRefresh, now, performanceNow, minimumIntervalMs,
-            metadataBuilder, summaryBuilder
+            metadataBuilder, summaryBuilder, treeReconciler
         });
         this.activeRefresh = null;
         this.lastResult = null;
@@ -240,7 +250,11 @@ export default class LibraryRefreshCoordinator {
             addedCount: result?.added ?? null,
             removedCount: result?.removed ?? null,
             modifiedCount: result?.modified ?? null,
-            result: result ? "success" : "stale-context"
+            result: result
+                ? result.snapshotCommitted === false
+                    ? "snapshot-pending"
+                    : "success"
+                : "stale-context"
         });
         return result;
     }
@@ -268,9 +282,17 @@ export default class LibraryRefreshCoordinator {
         const removed = oldFileEntries
             .filter(({ path }) => !newPaths.has(normalizeRelativePath(path)))
             .map(({ path }) => path);
-        const added = fileEntries.filter(({ path }) =>
-            !oldPaths.has(normalizeRelativePath(path))
-        );
+        const provisional = this.librarySnapshotService.isProvisional();
+        const added = fileEntries.filter(({ path }) => {
+            const key = normalizeRelativePath(path);
+            const missingTreeEntry = !oldPaths.has(key);
+            const missingSnapshotEntry = provisional &&
+                typeof this.librarySnapshotService.hasProvisionalPath ===
+                    "function" &&
+                !this.librarySnapshotService.hasProvisionalPath(key);
+
+            return missingTreeEntry || missingSnapshotEntry;
+        });
         const addedPaths = new Set(added.map(({ path }) =>
             normalizeRelativePath(path)
         ));
@@ -283,6 +305,17 @@ export default class LibraryRefreshCoordinator {
                 }
             ])
         );
+        const resolveAddedColor = path => {
+            const folderPath = normalizedFolderPath(path);
+            const sibling = [...previousDisplays.entries()].find(
+                ([candidatePath, display]) =>
+                    !addedPaths.has(candidatePath) &&
+                    normalizedFolderPath(candidatePath) === folderPath &&
+                    typeof display.color === "string" && display.color
+            );
+
+            return sibling?.[1].color ?? this.getColor(path);
+        };
         const diffMs = this.performanceNow() - diffStartedAt;
         const validationStartedAt = this.performanceNow();
         const metadata = await this.#readMetadata(fileEntries, oldPaths);
@@ -301,7 +334,8 @@ export default class LibraryRefreshCoordinator {
             const previous = previousIdentities.get(key);
             const current = metadata.get(path);
 
-            return oldPaths.has(key) && current && previous && (
+            return oldPaths.has(key) && !addedPaths.has(key) &&
+                current && previous && (
                 previous.size !== current.size ||
                 previous.lastModified !== current.lastModified
             );
@@ -311,6 +345,7 @@ export default class LibraryRefreshCoordinator {
         ));
         const unchangedCount = fileEntries.filter(({ path }) =>
             oldPaths.has(normalizeRelativePath(path)) &&
+            !addedPaths.has(normalizeRelativePath(path)) &&
             !changedPaths.has(normalizeRelativePath(path))
         ).length;
         const selectedPath = this.selectionState.getSelectedPath();
@@ -334,12 +369,14 @@ export default class LibraryRefreshCoordinator {
             this.displayState.registerFile(
                 path,
                 fileHandle,
-                previous?.color ?? this.getColor(path)
+                addedPaths.has(key)
+                    ? resolveAddedColor(path)
+                    : previous?.color ?? this.getColor(path)
             );
-            if (previous) {
-                this.displayState.setChecked(path, previous.checked);
-            } else if (addedPaths.has(key)) {
+            if (addedPaths.has(key)) {
                 this.displayState.setChecked(path, false);
+            } else if (previous) {
+                this.displayState.setChecked(path, previous.checked);
             }
         });
         for (const { path } of changed) {
@@ -351,7 +388,16 @@ export default class LibraryRefreshCoordinator {
         let modifiedProcessingMs = this.performanceNow() - modifiedStartedAt;
 
         const reconcileStartedAt = this.performanceNow();
-        await this.treeView.render(library, { preserveNavigation: true });
+        const affectedPaths = [
+            ...added.map(({ path }) => path),
+            ...removed
+        ];
+
+        await this.treeReconciler.reconcile(
+            this.treeView,
+            library,
+            { affectedPaths }
+        );
         this.setLibrary(library);
 
         let metadataExtractionCount = 0;
@@ -415,26 +461,25 @@ export default class LibraryRefreshCoordinator {
             delegatedVisibleReloadCount,
             reconcileMs
         });
-        const publishSnapshotTiming = () => {
-            if (this.refreshPerformance?.startedAt !== performanceRunStartedAt) {
-                return;
-            }
+        let snapshotCommitted = true;
+
+        try {
+            const saved = await Promise.resolve(snapshotUpdate);
+
+            snapshotCommitted = saved !== false;
+        } catch {
+            snapshotCommitted = false;
+        }
+        if (this.refreshPerformance?.startedAt === performanceRunStartedAt) {
             this.#updateRefreshPerformance({
                 snapshotUpdateMs: this.performanceNow() - snapshotStartedAt
             });
-        };
-        if (snapshotUpdate?.then) {
-            Promise.resolve(snapshotUpdate).then(
-                publishSnapshotTiming,
-                publishSnapshotTiming
-            );
-        } else {
-            publishSnapshotTiming();
         }
         this.lastResult = Object.freeze({
             added: added.length,
             removed: removed.length,
-            modified: changed.length
+            modified: changed.length,
+            snapshotCommitted
         });
         return this.lastResult;
     }

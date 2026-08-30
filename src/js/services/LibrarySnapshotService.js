@@ -258,6 +258,11 @@ export default class LibrarySnapshotService {
         return this.provisional && this.cacheNamespace === cacheNamespace;
     }
 
+    hasProvisionalPath(relativePath) {
+
+        return this.provisional && this.provisionalPaths.has(relativePath);
+    }
+
     getRefreshContext() {
 
         return Object.freeze({

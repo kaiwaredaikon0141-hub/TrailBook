@@ -142,6 +142,12 @@ window.addEventListener("DOMContentLoaded", () => {
             app.updateFolderColorPresentation();
             app.statusBar.showLibraryLoaded(library);
             app.libraryAccessPanel.hide();
+            if (app.displaySnapshotCoordinator.getStatus().restoreState ===
+                "phaseB") {
+                return app.displaySnapshotCoordinator.completePhaseB({
+                    restored: true
+                });
+            }
             return app.displaySnapshotCoordinator.flush("library-refresh");
         }
     });
