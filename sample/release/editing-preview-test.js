@@ -1,4 +1,5 @@
 import EventBus from "../../src/js/core/EventBus.js";
+import PreviousLibraryCoordinator from "../../src/js/core/PreviousLibraryCoordinator.js";
 import TrackEditingCoordinator from "../../src/js/core/TrackEditingCoordinator.js";
 import EditingPreviewLayerManager, {
     AFTER_POINT_STYLE,
@@ -8,6 +9,7 @@ import EditingPreviewLayerManager, {
 } from "../../src/js/map/EditingPreviewLayerManager.js";
 import LayerManager from "../../src/js/map/LayerManager.js";
 import TrackSimplificationService from "../../src/js/services/TrackSimplificationService.js";
+import SelectedTrackFileResolver from "../../src/js/services/SelectedTrackFileResolver.js";
 import SelectionState from "../../src/js/state/SelectionState.js";
 import TrackEditingInteractionGuard from "../../src/js/ui/TrackEditingInteractionGuard.js";
 import TrackEditingPanel from "../../src/js/ui/TrackEditingPanel.js";
@@ -172,6 +174,12 @@ async function testCoordinatorLifecycle() {
     const saveBusy = [];
     const saved = [];
     const refreshed = [];
+    const actualEntry = {
+        path: "trip.gpx",
+        parentPath: "",
+        parentFolderHandle: {},
+        fileHandle: { name: "trip.gpx", async createWritable() {} }
+    };
 
     selectionState.select("trip.gpx", "system");
 
@@ -183,11 +191,15 @@ async function testCoordinatorLifecycle() {
         getFileEntry: path => path === "trip.gpx"
             ? {
                 path,
-                parentPath: "",
-                parentFolderHandle: {},
-                fileHandle: { name: "trip.gpx" }
+                fileHandle: { name: "trip.gpx", provisional: true }
             }
             : null,
+        resolveEditableEntry: async path => path === "trip.gpx"
+            ? actualEntry
+            : null,
+        getAvailabilityContext: () => ({
+            directoryHandle: {}, permission: "granted"
+        }),
         sourceLoader: {
             async load(handle, path) {
                 loadCount += 1;
@@ -442,11 +454,13 @@ async function testSelectionAndSourceGuards() {
         "selection change was not projected to Edit action");
     assert(!await coordinator.start(), "Edit started without FileHandle");
     eventBus.emit("library:provisional-state-changed", { provisional: true });
+    await Promise.resolve();
     assert(panel.editingAvailable === false && panel.editDisabled,
-        "provisional Library did not disable Desktop editing");
+        "missing selected source did not disable Desktop editing");
     eventBus.emit("library:provisional-state-changed", { provisional: false });
-    assert(panel.editingAvailable === true && !panel.editDisabled,
-        "actual Library readiness did not re-enable Desktop editing");
+    await Promise.resolve();
+    assert(panel.editingAvailable === false && panel.editDisabled,
+        "whole-Library readiness enabled editing without a selected source");
 }
 
 async function testPreviewAbort() {
@@ -478,7 +492,13 @@ async function testPreviewAbort() {
         eventBus,
         selectionState,
         mapView,
-        getFileEntry: () => ({ fileHandle: {} }),
+        getFileEntry: () => ({
+            parentFolderHandle: {},
+            fileHandle: { async createWritable() {} }
+        }),
+        getAvailabilityContext: () => ({
+            directoryHandle: {}, permission: "granted"
+        }),
         sourceLoader: { async load() { return source; } },
         simplification: service,
         panel,
@@ -497,6 +517,376 @@ async function testPreviewAbort() {
     resolvePending?.(null);
     await pending;
     assert(coordinator.session === null, "stale preview revived cancelled session");
+}
+
+async function testSelectedTrackFileResolver() {
+    const calls = [];
+    const fileHandle = {
+        kind: "file",
+        name: "day.gpx",
+        async createWritable() {}
+    };
+    const nested = {
+        kind: "directory",
+        async getDirectoryHandle(name, options) {
+            calls.push(["directory", name, options.create]);
+            return this;
+        },
+        async getFileHandle(name, options) {
+            calls.push(["file", name, options.create]);
+            return fileHandle;
+        }
+    };
+    const resolved = await new SelectedTrackFileResolver().resolve(
+        nested,
+        "folder/sub/day.gpx"
+    );
+
+    assert(resolved.fileHandle === fileHandle &&
+        resolved.parentFolderHandle === nested,
+    "selected Track did not resolve to its actual writable handles");
+    assert(calls.map(call => call.slice(0, 2).join(":" )).join(",") ===
+        "directory:folder,directory:sub,file:day.gpx",
+    "selected Track resolution did not traverse only its relative path");
+    assert(calls.every(call => call[2] === false),
+        "selected Track resolution attempted to create filesystem entries");
+    assert(await new SelectedTrackFileResolver().resolve(nested, "../day.gpx") ===
+        null,
+    "selected Track resolution accepted parent traversal");
+
+    const unicode = await new SelectedTrackFileResolver().resolve(
+        nested,
+        "プジョー106\\2009_04_29-05_08.gpx"
+    );
+    assert(unicode?.fileHandle === fileHandle,
+        "selected Track resolver did not normalize a Windows-style path");
+}
+
+async function testAvailabilityGeneration() {
+    const eventBus = new EventBus();
+    const selectionState = new SelectionState();
+    const panel = new PanelFake();
+    const pending = [];
+    let notifyAvailabilityChange = null;
+    const actualEntry = {
+        path: "trip.gpx",
+        parentFolderHandle: {},
+        fileHandle: { async createWritable() {} }
+    };
+
+    selectionState.select("trip.gpx", "system");
+    const coordinator = new TrackEditingCoordinator({
+        eventBus,
+        selectionState,
+        mapView: new MapViewFake(),
+        getFileEntry: () => null,
+        getAvailabilityContext: () => ({
+            mobile: false,
+            libraryProvisional: true,
+            phaseBStatus: "started",
+            directoryHandle: { kind: "directory", name: "Library" },
+            directoryHandleSource: "previous-library",
+            permission: "granted",
+            treeEntryPath: "trip.gpx",
+            treeSelectedPath: "trip.gpx"
+        }),
+        resolveEditableEntry: () => new Promise(resolve => pending.push(resolve)),
+        subscribeAvailabilityChanges: listener => {
+            notifyAvailabilityChange = listener;
+            return () => { notifyAvailabilityChange = null; };
+        },
+        panel,
+        previewLayers: new PreviewLayersFake(),
+        interactionGuard: new InteractionGuardFake(),
+        saveDialog: new SaveDialogFake()
+    });
+
+    coordinator.attach({});
+    assert(pending.length === 1,
+        "startup availability evaluation did not start the resolver");
+    notifyAvailabilityChange({ permission: "granted", hasHandle: true });
+    assert(pending.length === 2,
+        "permission change did not create a new evaluation generation");
+    pending[1](actualEntry);
+    await Promise.resolve();
+    await Promise.resolve();
+    assert(panel.editingAvailable && !panel.editDisabled,
+        "latest successful generation did not enable editing");
+    pending[0](null);
+    await Promise.resolve();
+    await Promise.resolve();
+    assert(panel.editingAvailable && !panel.editDisabled,
+        "stale resolver completion overwrote the latest Panel state");
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    assert(panel.editingAvailable && !panel.editDisabled,
+        "editing availability did not remain stable for five seconds");
+}
+
+async function testPermissionAvailabilityPropagation() {
+    const eventBus = new EventBus();
+    const selectionState = new SelectionState();
+    const panel = new PanelFake();
+    let permission = "unknown";
+    let directoryHandle = null;
+    let notifyAvailabilityChange = null;
+    const resolvedRoots = [];
+    const actualEntry = {
+        path: "trip.gpx",
+        parentFolderHandle: {},
+        fileHandle: { async createWritable() {} }
+    };
+
+    selectionState.select("trip.gpx", "system");
+    const coordinator = new TrackEditingCoordinator({
+        eventBus,
+        selectionState,
+        mapView: new MapViewFake(),
+        getFileEntry: () => null,
+        getAvailabilityContext: () => ({
+            mobile: false,
+            libraryProvisional: true,
+            phaseBStatus: "started",
+            directoryHandle,
+            directoryHandleSource: "previous-library",
+            permission,
+            treeEntryPath: "trip.gpx",
+            treeSelectedPath: "trip.gpx"
+        }),
+        resolveEditableEntry: async (_path, root) => {
+            resolvedRoots.push(root);
+            return actualEntry;
+        },
+        subscribeAvailabilityChanges: listener => {
+            notifyAvailabilityChange = listener;
+            return () => { notifyAvailabilityChange = null; };
+        },
+        panel,
+        previewLayers: new PreviewLayersFake(),
+        interactionGuard: new InteractionGuardFake(),
+        saveDialog: new SaveDialogFake()
+    });
+
+    coordinator.attach({});
+    await Promise.resolve();
+    assert(!panel.editingAvailable,
+        "startup without permission/Handle enabled editing");
+    directoryHandle = { kind: "directory", name: "Library A" };
+    permission = "granted";
+    notifyAvailabilityChange({ permission, hasHandle: true });
+    await Promise.resolve();
+    await Promise.resolve();
+    assert(panel.editingAvailable && !panel.editDisabled,
+    "permission/Handle notification did not enable the selected actual Track");
+    assert(resolvedRoots.at(-1) === directoryHandle,
+        "permission-triggered evaluation did not use the notified DirectoryHandle");
+
+    permission = "prompt";
+    notifyAvailabilityChange({ permission, hasHandle: true });
+    await Promise.resolve();
+    assert(!panel.editingAvailable,
+    "prompt permission did not disable editing");
+    permission = "denied";
+    notifyAvailabilityChange({ permission, hasHandle: true });
+    await Promise.resolve();
+    assert(!panel.editingAvailable,
+    "denied permission did not disable editing");
+    permission = "granted";
+    directoryHandle = null;
+    notifyAvailabilityChange({ permission, hasHandle: false });
+    await Promise.resolve();
+    assert(!panel.editingAvailable,
+    "granted permission without a DirectoryHandle enabled editing");
+    const reopenedHandle = { kind: "directory", name: "Library B" };
+
+    directoryHandle = reopenedHandle;
+    notifyAvailabilityChange({ permission, hasHandle: true });
+    await Promise.resolve();
+    await Promise.resolve();
+    assert(panel.editingAvailable && resolvedRoots.at(-1) === reopenedHandle,
+        "late/reopened DirectoryHandle did not re-evaluate the selected Track");
+    selectionState.clear("system");
+    eventBus.emit("selection:changed", { path: null });
+    await Promise.resolve();
+    assert(!panel.editingAvailable,
+    "permission notification enabled editing without a selected Track");
+}
+
+async function testCurrentPermissionHydration() {
+    const eventBus = new EventBus();
+    const selectionState = new SelectionState();
+    const panel = new PanelFake();
+    const handle = { kind: "directory", name: "Library" };
+    const actualEntry = {
+        path: "trip.gpx",
+        parentFolderHandle: handle,
+        fileHandle: { async createWritable() {} }
+    };
+    let listener = null;
+
+    selectionState.select("trip.gpx", "system");
+    const coordinator = new TrackEditingCoordinator({
+        eventBus,
+        selectionState,
+        mapView: new MapViewFake(),
+        getFileEntry: () => null,
+        getAvailabilityContext: () => ({
+            mobile: false,
+            libraryProvisional: true,
+            phaseBStatus: "started",
+            directoryHandle: handle,
+            directoryHandleSource: "previous-library",
+            permission: "granted",
+            treeEntryPath: "trip.gpx",
+            treeSelectedPath: "trip.gpx"
+        }),
+        resolveEditableEntry: async () => actualEntry,
+        subscribeAvailabilityChanges: callback => {
+            listener = callback;
+            callback({
+                permission: "granted",
+                hasHandle: true,
+                handle,
+                status: "saved / granted"
+            }, { reason: "hydrated" });
+            return () => { listener = null; };
+        },
+        panel,
+        previewLayers: new PreviewLayersFake(),
+        interactionGuard: new InteractionGuardFake(),
+        saveDialog: new SaveDialogFake()
+    });
+
+    coordinator.attach({});
+    await Promise.resolve();
+    await Promise.resolve();
+    assert(panel.editingAvailable && !panel.editDisabled,
+        "Previous-first initialization did not enable the selected Track");
+    listener({ permission: "granted", hasHandle: true, handle }, {
+        reason: "changed"
+    });
+    listener({ permission: "granted", hasHandle: true, handle }, {
+        reason: "changed"
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    assert(panel.editingAvailable && !panel.editDisabled,
+        "duplicate current-state notifications corrupted availability");
+
+    const laterSelection = new SelectionState();
+    const laterPanel = new PanelFake();
+    const laterEventBus = new EventBus();
+    const laterCoordinator = new TrackEditingCoordinator({
+        eventBus: laterEventBus,
+        selectionState: laterSelection,
+        mapView: new MapViewFake(),
+        getFileEntry: () => null,
+        getAvailabilityContext: () => ({
+            mobile: false,
+            directoryHandle: handle,
+            directoryHandleSource: "previous-library",
+            permission: "granted"
+        }),
+        resolveEditableEntry: async () => actualEntry,
+        subscribeAvailabilityChanges: callback => {
+            callback({ permission: "granted", hasHandle: true, handle }, {
+                reason: "hydrated"
+            });
+            return () => {};
+        },
+        panel: laterPanel,
+        previewLayers: new PreviewLayersFake(),
+        interactionGuard: new InteractionGuardFake(),
+        saveDialog: new SaveDialogFake()
+    });
+
+    laterCoordinator.attach({});
+    await Promise.resolve();
+    assert(!laterPanel.editingAvailable,
+        "hydrated permission enabled editing without a selection");
+    laterSelection.select("trip.gpx", "system");
+    laterEventBus.emit("selection:changed", { path: "trip.gpx" });
+    await Promise.resolve();
+    await Promise.resolve();
+    assert(laterPanel.editingAvailable && !laterPanel.editDisabled,
+        "Track selected after permission hydration did not enable editing");
+}
+
+async function testPreviousLibraryAvailabilityNotification() {
+    let permission = "prompt";
+    const handle = {
+        kind: "directory",
+        name: "Library",
+        async queryPermission() { return permission; },
+        async requestPermission() {
+            permission = "granted";
+            return permission;
+        }
+    };
+    const states = [];
+    const noOp = () => {};
+    const previous = new PreviousLibraryCoordinator({
+        store: {
+            async load() { return handle; },
+            getStatus() { return "ready"; },
+            async resolveCacheNamespace() { return "local:test"; }
+        },
+        scanner: { async scan(root) { return { rootFolder: { handle: root } }; } },
+        toolbar: { setFolderPickerState: noOp },
+        accessPanel: {
+            setPreviousLibraryAction: noOp,
+            setManualLibraryAction: noOp,
+            setPreviousLibraryStatus: noOp,
+            setFolderPickerState: noOp,
+            showInitial: noOp,
+            showPreviousLibrary: noOp,
+            showLoading: noOp,
+            hide: noOp
+        },
+        statusBar: {
+            showInitial: noOp,
+            showLibraryLoading: noOp,
+            showError: noOp
+        },
+        canSwitchLibrary: () => true,
+        flushViewState: noOp,
+        beforeLoad: noOp,
+        applyLibrary: async () => true,
+        getCurrentLibrary: () => null,
+        getSupport: () => ({ available: true, isMobile: false })
+    });
+    const unsubscribe = previous.subscribePersistenceStatus(
+        (state, context) => states.push({ state, context })
+    );
+
+    assert(states.length === 0,
+        "default pre-initialization state caused a duplicate hydration");
+    await previous.initialize();
+    assert(states.at(-1).context.reason === "changed" &&
+        states.at(-1).state.permission === "prompt" &&
+        states.at(-1).state.hasHandle &&
+        states.at(-1).state.handle === handle,
+    "Previous Library prompt/Handle state was not published to subscribers");
+    const hydratedStates = [];
+    const unsubscribeHydrated = previous.subscribePersistenceStatus(
+        (state, context) => hydratedStates.push({ state, context })
+    );
+
+    assert(hydratedStates.length === 1 &&
+        hydratedStates[0].context.reason === "hydrated" &&
+        hydratedStates[0].state.permission === "prompt" &&
+        hydratedStates[0].state.handle === handle,
+    "subscriber registered after initialization did not receive current state");
+    await previous.openPrevious();
+    assert(states.at(-1).state.permission === "granted" &&
+        states.at(-1).state.hasHandle,
+    "Previous Library granted state was not published to subscribers");
+    const count = states.length;
+
+    unsubscribe();
+    unsubscribeHydrated();
+    await previous.openPrevious();
+    assert(states.length === count,
+        "Previous Library availability subscriber could not be removed");
 }
 
 function createLeafletFakes() {
@@ -948,6 +1338,11 @@ async function run() {
     await testCoordinatorLifecycle();
     await testSelectionAndSourceGuards();
     await testPreviewAbort();
+    await testSelectedTrackFileResolver();
+    await testAvailabilityGeneration();
+    await testPermissionAvailabilityPropagation();
+    await testCurrentPermissionHydration();
+    await testPreviousLibraryAvailabilityNotification();
     testPreviewLayers();
     testNormalTrackSuppression();
     testPanelAccessibility();

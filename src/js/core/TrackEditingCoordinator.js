@@ -18,7 +18,10 @@ export default class TrackEditingCoordinator {
         selectionState,
         mapView,
         getFileEntry,
+        resolveEditableEntry = async path => getFileEntry(path),
         getLibraryToken = () => null,
+        getAvailabilityContext = () => ({}),
+        subscribeAvailabilityChanges = () => () => {},
         refreshEditedFile = async () => true,
         setSaveBusy = () => {},
         isExternalBusy = () => false,
@@ -43,7 +46,10 @@ export default class TrackEditingCoordinator {
         this.selectionState = selectionState;
         this.mapView = mapView;
         this.getFileEntry = getFileEntry;
+        this.resolveEditableEntry = resolveEditableEntry;
         this.getLibraryToken = getLibraryToken;
+        this.getAvailabilityContext = getAvailabilityContext;
+        this.subscribeAvailabilityChanges = subscribeAvailabilityChanges;
         this.refreshEditedFile = refreshEditedFile;
         this.setSaveBusy = setSaveBusy;
         this.isExternalBusy = isExternalBusy;
@@ -72,6 +78,9 @@ export default class TrackEditingCoordinator {
         this.fileNameCandidateOffsetMs = null;
         this.pointEditingPreviousPreviewMode = null;
         this.pointAddMode = false;
+        this.editabilityRequestId = 0;
+        this.editableEntry = null;
+        this.editablePath = null;
         this.previewLayers.setTranslationPreviewHandler?.(
             translation => this.#handleTranslationPreview(translation)
         );
@@ -96,6 +105,15 @@ export default class TrackEditingCoordinator {
         this.panel.setSelectedTrack(this.selectionState.getSelectedPath());
         this.#bindPanel();
         this.#bindEvents();
+        void this.#refreshEditingAvailability("startup");
+        this.unsubscribeAvailabilityChanges =
+            this.subscribeAvailabilityChanges((state = {}, context = {}) => {
+                const trigger = context.reason === "hydrated"
+                    ? "permission-hydrated"
+                    : "permission-changed";
+
+                void this.#refreshEditingAvailability(trigger);
+            });
     }
 
     async start() {
@@ -106,7 +124,10 @@ export default class TrackEditingCoordinator {
         ) return false;
 
         const path = this.selectionState.getSelectedPath();
-        const entry = path ? this.getFileEntry(path) : null;
+        if (!this.#getEditableEntry(path)) {
+            await this.#refreshEditingAvailability("edit-request");
+        }
+        const entry = this.#getEditableEntry(path);
 
         if (!entry?.fileHandle) return false;
 
@@ -342,7 +363,7 @@ export default class TrackEditingCoordinator {
             const renameEnabled = this.panel.isDateRenameEnabled?.();
 
             this.panel.updateFileNameCandidate?.(candidate, renameEnabled);
-            const entry = this.getFileEntry(this.sourcePath);
+            const entry = this.#getEditableEntry(this.sourcePath);
             const resolvedCandidate = candidate
                 ? await this.#resolveDateFileName(
                     candidate,
@@ -387,7 +408,7 @@ export default class TrackEditingCoordinator {
 
         const session = this.session;
         const sourcePath = this.sourcePath;
-        const entry = this.getFileEntry(sourcePath);
+        const entry = this.#getEditableEntry(sourcePath);
 
         if (!entry?.parentFolderHandle) {
             this.panel.showSaveError("The source Folder is unavailable.");
@@ -480,6 +501,14 @@ export default class TrackEditingCoordinator {
                     );
                 }
                 this.sourcePath = saved.relativePath;
+                this.editablePath = saved.relativePath;
+                this.editableEntry = {
+                    path: saved.relativePath,
+                    relativePath: saved.relativePath,
+                    parentPath: entry.parentPath,
+                    parentFolderHandle: entry.parentFolderHandle,
+                    fileHandle: saved.fileHandle
+                };
                 this.session = new GPXEditingSession(saved.source);
                 this.lastSavedMasks = this.session.getRetainedPointMasks();
                 this.previewLayers.setSource(saved.source);
@@ -644,7 +673,7 @@ export default class TrackEditingCoordinator {
     #bindEvents() {
 
         this.eventBus.on("library:provisional-state-changed", ({ provisional }) => {
-            this.panel.setEditingAvailable?.(!provisional);
+            void this.#refreshEditingAvailability("provisional-changed");
         });
         this.eventBus.on("selection:changed", ({ path }) => {
             if ((this.session || this.loading) && path !== this.sourcePath) {
@@ -657,8 +686,66 @@ export default class TrackEditingCoordinator {
                 this.#discardDraft();
             }
             this.panel.setSelectedTrack(path);
+            void this.#refreshEditingAvailability("selected-track-changed");
         });
     }
+
+    async #refreshEditingAvailability(reason) {
+
+        const requestId = ++this.editabilityRequestId;
+        const selectedPath = this.selectionState.getSelectedPath();
+        const context = this.getAvailabilityContext(selectedPath) || {};
+        const mobile = Boolean(context.mobile);
+        const permission = context.permission || "unknown";
+        let entry = null;
+
+        if (!this.session && !this.loading) {
+            this.editableEntry = null;
+            this.editablePath = null;
+        }
+        this.panel.setEditingAvailable?.(false);
+
+        if (
+            !mobile && selectedPath && context.directoryHandle &&
+            permission === "granted"
+        ) {
+            entry = await this.resolveEditableEntry(
+                selectedPath,
+                context.directoryHandle
+            );
+        }
+
+        if (
+            requestId !== this.editabilityRequestId ||
+            selectedPath !== this.selectionState.getSelectedPath()
+        ) {
+            return false;
+        }
+
+        const writeCapability = Boolean(
+            entry?.fileHandle &&
+            typeof entry.fileHandle.createWritable === "function"
+        );
+        const editingAvailable = !mobile && Boolean(selectedPath) &&
+            permission === "granted" && Boolean(context.directoryHandle) &&
+            Boolean(entry?.fileHandle) && writeCapability;
+
+        if (editingAvailable) {
+            this.editableEntry = entry;
+            this.editablePath = selectedPath;
+        } else if (!this.session && !this.loading) {
+            this.editableEntry = null;
+            this.editablePath = null;
+        }
+        this.panel.setEditingAvailable?.(editingAvailable);
+        return editingAvailable;
+    }
+
+    #getEditableEntry(path) {
+
+        return path && path === this.editablePath ? this.editableEntry : null;
+    }
+
 
     #abortPreview() {
 
@@ -853,7 +940,7 @@ export default class TrackEditingCoordinator {
             session.getTimeOffsetMs()
         );
         this.panel.updateFileNameCandidate?.(candidate, checked);
-        const entry = this.getFileEntry(this.sourcePath);
+        const entry = this.#getEditableEntry(this.sourcePath);
         const resolvedCandidate = checked && candidate
             ? await this.#resolveDateFileName(
                 candidate,

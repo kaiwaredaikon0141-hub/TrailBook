@@ -8,6 +8,7 @@ import BatchSimplificationCoordinator, {
 import EditedGPXLibraryRefreshCoordinator from "./core/EditedGPXLibraryRefreshCoordinator.js";
 import LibraryRefreshCoordinator from "./core/LibraryRefreshCoordinator.js";
 import TrackEditingCoordinator from "./core/TrackEditingCoordinator.js";
+import SelectedTrackFileResolver from "./services/SelectedTrackFileResolver.js";
 import { registerTrailBookServiceWorker } from "./services/PWAServiceWorker.js";
 import { folderPathFromFilePath } from "./utils/PathUtils.js";
 import {
@@ -144,15 +145,32 @@ window.addEventListener("DOMContentLoaded", () => {
 
     let batchSimplification = null;
     let driveLibrary = null;
+    const selectedTrackFileResolver = new SelectedTrackFileResolver();
     const editor = new TrackEditingCoordinator({
         eventBus: app.eventBus,
         selectionState: app.selectionState,
         mapView: app.mapView,
         getLibraryToken: () => app.currentLibrary,
+        getAvailabilityContext: () => {
+            const library = app.currentLibrary;
+            const previous = app.previousLibraryCoordinator.getRefreshContext();
+            const currentHandle = library?.rootFolder?.handle || null;
+            const directoryHandle = previous.handle || currentHandle;
+
+            return {
+                mobile: matchMedia("(max-width: 768px)").matches,
+                directoryHandle,
+                permission: previous.permission
+            };
+        },
+        resolveEditableEntry: (path, directoryHandle) =>
+            selectedTrackFileResolver.resolve(directoryHandle, path),
+        subscribeAvailabilityChanges: listener =>
+            app.previousLibraryCoordinator.subscribePersistenceStatus(listener),
         refreshEditedFile: saved => editedFileRefresh.refreshVerifiedFile(saved),
         setSaveBusy: busy => app.toolbar.setFolderPickerBusy(busy),
         isExternalBusy: () => Boolean(batchSimplification?.isBusy()) ||
-            Boolean(driveLibrary?.isReadOnlyActive()) || !app.currentLibrary,
+            Boolean(driveLibrary?.isReadOnlyActive()),
         interactionRoot: app.workspace.querySelector(".sidebar-shell"),
         getFileEntry: path => {
             const entry = app.treeView.getFileEntries()

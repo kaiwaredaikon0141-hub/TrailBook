@@ -51,6 +51,7 @@ export default class PreviousLibraryCoordinator {
         this.previousPermission = "prompt";
         this.persistenceStatus = "no persistent handle";
         this.persistenceStatusListener = null;
+        this.persistenceStatusSubscribers = new Set();
         this.persistenceInitializationStage = "not-started";
         this.loading = false;
 
@@ -211,6 +212,26 @@ export default class PreviousLibraryCoordinator {
 
         this.persistenceStatusListener = listener;
         this.#notifyPersistenceStatus();
+    }
+
+    subscribePersistenceStatus(listener, { emitCurrent = true } = {}) {
+
+        if (typeof listener !== "function") return () => {};
+
+        this.persistenceStatusSubscribers.add(listener);
+        if (emitCurrent) {
+            const current = this.getRefreshContext();
+
+            if (
+                current.initialized || current.hasHandle ||
+                current.permission !== "unknown"
+            ) {
+                listener(current, {
+                    reason: "hydrated"
+                });
+            }
+        }
+        return () => this.persistenceStatusSubscribers.delete(listener);
     }
 
     async queryRefreshPermission(handle = this.getRefreshHandle()) {
@@ -380,15 +401,15 @@ export default class PreviousLibraryCoordinator {
 
     #notifyPersistenceStatus() {
 
-        const prefix = "saved / ";
+        const state = this.getRefreshContext();
 
-        this.persistenceStatusListener?.({
-            status: this.persistenceStatus,
-            permission: this.persistenceStatus.startsWith(prefix)
-                ? this.persistenceStatus.slice(prefix.length)
-                : "unknown",
-            hasHandle: Boolean(this.getRefreshHandle())
-        });
+        this.persistenceStatusListener?.(state);
+        this.persistenceStatusSubscribers.forEach(listener => listener(
+            state,
+            {
+                reason: "changed"
+            }
+        ));
     }
 
     #showLoadFailure(error) {
