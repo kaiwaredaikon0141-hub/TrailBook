@@ -295,9 +295,12 @@ export default class LibrarySnapshotService {
                 reason: "library-reconciliation"
             });
         }
+        this.markReady();
     }
 
     markReady() {
+        if (!this.provisional) return false;
+
         this.provisional = false;
         this.cacheNamespace = null;
         this.provisionalPaths = new Set();
@@ -305,6 +308,7 @@ export default class LibrarySnapshotService {
         this.eventBus?.emit("library:provisional-state-changed", {
             provisional: false
         });
+        return true;
     }
 
     #createLibrary(state) {

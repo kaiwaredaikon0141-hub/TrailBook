@@ -63,7 +63,14 @@ class PanelFake {
 
     on(action, handler) { this.handlers.set(action, handler); }
     attach(container) { this.container = container; }
-    setSelectedTrack(path) { this.selectedPath = path; }
+    setSelectedTrack(path) {
+        this.selectedPath = path;
+        this.editDisabled = !path || this.editingAvailable === false;
+    }
+    setEditingAvailable(value) {
+        this.editingAvailable = Boolean(value);
+        this.setSelectedTrack(this.selectedPath);
+    }
     getTolerance() { return this.tolerance; }
     getMode() { return this.mode; }
     setMode(value) { this.mode = value; }
@@ -434,6 +441,12 @@ async function testSelectionAndSourceGuards() {
     assert(panel.selectedPath === "missing.gpx",
         "selection change was not projected to Edit action");
     assert(!await coordinator.start(), "Edit started without FileHandle");
+    eventBus.emit("library:provisional-state-changed", { provisional: true });
+    assert(panel.editingAvailable === false && panel.editDisabled,
+        "provisional Library did not disable Desktop editing");
+    eventBus.emit("library:provisional-state-changed", { provisional: false });
+    assert(panel.editingAvailable === true && !panel.editDisabled,
+        "actual Library readiness did not re-enable Desktop editing");
 }
 
 async function testPreviewAbort() {

@@ -419,9 +419,11 @@ async function testLibrarySnapshotService() {
     assert(removed[0] === "Trips/one.gpx" &&
         selectionState.getSelectedPath() === null,
     "removed actual file left stale geometry or selection");
-    service.markReady();
     assert(!service.isProvisional() && accessStates.at(-1) === false,
-        "actual Library did not replace provisional availability");
+        "actual Library reconciliation did not restore write availability");
+    assert(events.at(-1).name === "library:provisional-state-changed" &&
+        events.at(-1).value.provisional === false,
+    "actual Library reconciliation did not announce ready availability");
 }
 
 async function testLastKnownGoodAcrossRestarts() {
