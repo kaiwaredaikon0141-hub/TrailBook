@@ -109,6 +109,7 @@ window.addEventListener("DOMContentLoaded", () => {
         scanner: app.folderScanner,
         previousLibraryCoordinator: app.previousLibraryCoordinator,
         librarySnapshotService: app.librarySnapshotService,
+        accessPanel: app.libraryAccessPanel,
         treeView: app.treeView,
         discoveryCoordinator: app.trackDiscoveryCoordinator,
         displayState: app.displayState,
