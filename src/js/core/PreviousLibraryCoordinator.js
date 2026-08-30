@@ -29,6 +29,7 @@ export default class PreviousLibraryCoordinator {
         hasUsableLibrary = () => Boolean(getCurrentLibrary()),
         getSupport = getFolderPickerSupport,
         pickDirectory = pickFolder,
+        performanceNow = () => globalThis.performance?.now?.() ?? Date.now(),
         reportError = (message, error) => console.error(message, error)
     }) {
 
@@ -45,6 +46,7 @@ export default class PreviousLibraryCoordinator {
         this.hasUsableLibrary = hasUsableLibrary;
         this.getSupport = getSupport;
         this.pickDirectory = pickDirectory;
+        this.performanceNow = performanceNow;
         this.reportError = reportError;
         this.generation = 0;
         this.previousHandle = null;
@@ -54,6 +56,7 @@ export default class PreviousLibraryCoordinator {
         this.persistenceStatusSubscribers = new Set();
         this.persistenceInitializationStage = "not-started";
         this.loading = false;
+        this.refreshPerformanceObserver = null;
 
         this.accessPanel.setPreviousLibraryAction(
             () => void this.openPrevious()
@@ -162,13 +165,7 @@ export default class PreviousLibraryCoordinator {
             return false;
         }
 
-        let permission = await this.#queryReadPermission(handle);
-
-        if (permission !== "granted") {
-            permission = await this.#requestReadPermission(handle);
-        }
-        this.previousPermission = permission;
-        this.#setPersistenceStatus(`saved / ${permission}`);
+        const permission = await this.requestRefreshPermission(handle);
 
         if (permission !== "granted") {
             this.accessPanel.showPreviousLibrary(handle.name, "denied");
@@ -179,8 +176,29 @@ export default class PreviousLibraryCoordinator {
         return this.#openHandle(handle, { remember: false });
     }
 
+    async requestRefreshPermission(handle = this.getRefreshHandle()) {
+
+        if (!handle) return "denied";
+        let permission = await this.#queryReadPermission(handle);
+
+        if (permission !== "granted") {
+            permission = await this.#requestReadPermission(handle);
+        }
+        this.previousHandle = handle;
+        this.previousPermission = permission;
+        this.#setPersistenceStatus(`saved / ${permission}`);
+        return permission;
+    }
+
     isLoading() {
         return this.loading;
+    }
+
+    setRefreshPerformanceObserver(observer) {
+
+        this.refreshPerformanceObserver = typeof observer === "function"
+            ? observer
+            : null;
     }
 
     getRefreshHandle() {
@@ -301,16 +319,30 @@ export default class PreviousLibraryCoordinator {
         this.statusBar.showLibraryLoading(handle.name);
 
         try {
+            const enumerationStartedAt = this.performanceNow();
             const library = await this.scanner.scan(handle);
+            const enumerationMs = this.performanceNow() - enumerationStartedAt;
+            const scanDiagnostic = this.scanner.getLastScanDiagnostic?.();
 
             if (!isCurrent()) {
                 return false;
             }
 
+            const applyStartedAt = this.performanceNow();
             const applied = await this.applyLibrary(library, {
                 generation,
                 isCurrent,
                 cacheNamespace
+            });
+            const applyLibraryMs = this.performanceNow() - applyStartedAt;
+
+            this.#reportRefreshPerformance({
+                enumerationMs,
+                applyLibraryMs,
+                directoryEntryCount: scanDiagnostic?.directoryEntryCount ??
+                    library.folderCount + library.gpxFileCount,
+                gpxCandidateCount: scanDiagnostic?.gpxCandidateCount ??
+                    library.gpxFileCount
             });
 
             if (!applied || !isCurrent()) {
@@ -410,6 +442,15 @@ export default class PreviousLibraryCoordinator {
                 reason: "changed"
             }
         ));
+    }
+
+    #reportRefreshPerformance(metrics) {
+
+        try {
+            this.refreshPerformanceObserver?.(Object.freeze({ ...metrics }));
+        } catch {
+            // Performance diagnostics must not affect Library loading.
+        }
     }
 
     #showLoadFailure(error) {

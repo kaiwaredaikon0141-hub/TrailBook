@@ -81,6 +81,19 @@ export async function pickFolder(browserWindow = window) {
  */
 export default class FolderScanner {
 
+    constructor() {
+
+        this.lastScanDiagnostic = Object.freeze({
+            directoryEntryCount: 0,
+            gpxCandidateCount: 0
+        });
+    }
+
+    getLastScanDiagnostic() {
+
+        return this.lastScanDiagnostic;
+    }
+
     /**
      * Scans the selected directory recursively.
      *
@@ -89,13 +102,19 @@ export default class FolderScanner {
      */
     async scan(rootHandle) {
 
+        const diagnostic = {
+            directoryEntryCount: 0,
+            gpxCandidateCount: 0
+        };
         const rootFolder = await this.#scanFolder(
             rootHandle.name,
-            rootHandle
+            rootHandle,
+            diagnostic
         );
 
         const counts = this.#countFolder(rootFolder);
 
+        this.lastScanDiagnostic = Object.freeze({ ...diagnostic });
         return new Library(
             rootFolder.name,
             rootFolder,
@@ -104,11 +123,13 @@ export default class FolderScanner {
         );
     }
 
-    async #scanFolder(name, handle) {
+    async #scanFolder(name, handle, diagnostic) {
 
         const folder = new Folder(name, handle);
 
         for await (const entry of handle.values()) {
+
+            diagnostic.directoryEntryCount += 1;
 
             if (entry.kind === "directory") {
 
@@ -117,7 +138,7 @@ export default class FolderScanner {
                 }
 
                 folder.folders.push(
-                    await this.#scanFolder(entry.name, entry)
+                    await this.#scanFolder(entry.name, entry, diagnostic)
                 );
 
                 continue;
@@ -127,6 +148,7 @@ export default class FolderScanner {
                 entry.kind === "file" &&
                 entry.name.toLowerCase().endsWith(GPX_EXTENSION)
             ) {
+                diagnostic.gpxCandidateCount += 1;
                 folder.gpxFiles.push(entry);
             }
         }

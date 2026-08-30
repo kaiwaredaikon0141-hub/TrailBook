@@ -389,6 +389,11 @@ export default class LibraryAccessPanel {
 
         if (!output) return;
         const value = key => state[key] ?? "-";
+        const performance = state.performance;
+        const perfValue = key => performance?.[key] ?? "-";
+        const milliseconds = key => Number.isFinite(performance?.[key])
+            ? `${performance[key].toFixed(1)} ms`
+            : "-";
         const text = [
             `runtime module: ${value("runtimeBuildId")}`,
             `runtime marker source: ${value("runtimeMarkerSource")}`,
@@ -402,7 +407,41 @@ export default class LibraryAccessPanel {
             `reason: ${value("reason")}`,
             `result: ${value("result")}`,
             `library: ${value("libraryState")}`,
-            `manual refresh: ${state.canManualRefresh ? "yes" : "no"}`
+            `manual refresh: ${state.canManualRefresh ? "yes" : "no"}`,
+            "",
+            "Refresh Perf",
+            `mode: ${perfValue("mode")}`,
+            `total: ${milliseconds("totalMs")}`,
+            `enumeration: ${milliseconds("enumerationMs")}`,
+            `diff: ${milliseconds("diffMs")}`,
+            `validation: ${milliseconds("validationMs")}`,
+            `added processing: ${milliseconds("addedProcessingMs")}`,
+            `modified processing: ${milliseconds("modifiedProcessingMs")}`,
+            `reconcile: ${milliseconds("reconcileMs")}`,
+            `snapshot update: ${milliseconds("snapshotUpdateMs")}`,
+            `entries: ${perfValue("directoryEntryCount")}`,
+            `GPX candidates: ${perfValue("gpxCandidateCount")}`,
+            `cached lookups: ${perfValue("cachedPathLookupCount")}`,
+            `scanned: ${perfValue("scannedCount")}`,
+            `unchanged: ${perfValue("unchangedCount")}`,
+            `added: ${perfValue("addedCount")}`,
+            `removed: ${perfValue("removedCount")}`,
+            `modified: ${perfValue("modifiedCount")}`,
+            `getFile: ${perfValue("getFileCount")}`,
+            `getFile existing/new: ${perfValue(
+                "existingGetFileCount"
+            )} / ${perfValue("addedGetFileCount")}`,
+            `metadata validation existing/new: ${perfValue(
+                "existingMetadataValidationCount"
+            )} / ${perfValue("addedMetadataValidationCount")}`,
+            `body reads: ${perfValue("bodyReadCount")}`,
+            `parse: ${perfValue("parseCount")}`,
+            `metadata: ${perfValue("metadataExtractionCount")}`,
+            `cache lookup: ${perfValue("cacheLookupCount")}`,
+            `geometry: ${perfValue("geometryGenerationCount")}`,
+            `delegated visible reloads: ${perfValue(
+                "delegatedVisibleReloadCount"
+            )}`
         ].join("\n");
 
         if (output.textContent !== text) output.textContent = text;

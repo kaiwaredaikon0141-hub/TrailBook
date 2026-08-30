@@ -60,6 +60,17 @@ async function testFreshRecursiveScan() {
     assert(paths.includes("Trips/nested.gpx"), "fresh scan missed a nested GPX");
     assert(!paths.some(path => path.includes("TrailBook_Backup")),
         "fresh scan included the reserved Backup folder");
+    const diagnostic = new FolderScanner();
+    const diagnosticRoot = directoryHandle("GPX", [
+        rootFile,
+        directoryHandle("Trips", [nestedFile]),
+        directoryHandle("TrailBook_Backup", [ignoredFile])
+    ]);
+
+    await diagnostic.scan(diagnosticRoot);
+    assert(diagnostic.getLastScanDiagnostic().directoryEntryCount === 4 &&
+        diagnostic.getLastScanDiagnostic().gpxCandidateCount === 2,
+    "recursive enumeration diagnostic did not count actual yielded entries");
 }
 
 function createTree(initialLibrary) {
@@ -119,22 +130,28 @@ async function testRefreshAndReconciliation() {
     const removed = [];
     const reloaded = [];
     const invalidated = [];
-    let currentLibrary = oldLibrary;
+    let currentLibrary = null;
     let scanCount = 0;
+    let previousOpenCount = 0;
     let snapshotUpdates = 0;
     let now = 100;
     const eventBus = new EventBus();
     const previous = {
         isLoading: () => false,
-        getRefreshHandle: () => currentLibrary.rootFolder.handle,
+        getRefreshHandle: () => oldLibrary.rootFolder.handle,
         queryRefreshPermission: async () => "granted",
-        refreshPreviousIfGranted: async () => false
+        requestRefreshPermission: async () => "granted",
+        refreshPreviousIfGranted: async () => false,
+        openPrevious: async () => {
+            previousOpenCount += 1;
+            return false;
+        }
     };
     const coordinator = new LibraryRefreshCoordinator({
         eventBus,
         scanner: { scan: async () => { scanCount += 1; return actualLibrary; } },
         previousLibraryCoordinator: previous,
-        librarySnapshotService: { isProvisional: () => false },
+        librarySnapshotService: { isProvisional: () => true },
         treeView: tree,
         discoveryCoordinator: discovery,
         displayState,
@@ -153,12 +170,22 @@ async function testRefreshAndReconciliation() {
     });
 
     coordinator.bind();
-    const first = coordinator.refresh();
-    const duplicate = coordinator.refresh();
+    const first = coordinator.refresh({
+        reason: "manual-refresh",
+        reconnect: true
+    });
+    const duplicate = coordinator.refresh({
+        reason: "manual-refresh",
+        reconnect: true
+    });
 
     assert(first === duplicate, "simultaneous sidebar refresh was duplicated");
     const result = await first;
     assert(scanCount === 1, "sidebar open did not run exactly one scan");
+    assert(previousOpenCount === 0,
+        "manual refresh called the full previous-Library reopen path");
+    assert(currentLibrary === actualLibrary,
+        "incremental refresh did not promote the scanned actual Library");
     assert(result.added === 1 && result.removed === 1 && result.modified === 1,
         "Library diff counts were incorrect");
     assert(displayState.getDisplay("C.gpx")?.checked === false,
@@ -180,6 +207,36 @@ async function testRefreshAndReconciliation() {
     assert(coordinator.getDiagnostic().scannedCount === 3 &&
         coordinator.getDiagnostic().addedCount === 1,
     "refresh diagnostic did not report actual/cached diff counts");
+    const performance = coordinator.getDiagnostic().performance;
+
+    assert(performance.mode === "incremental" &&
+        performance.scannedCount === 3 &&
+        performance.unchangedCount === 1 &&
+        performance.addedCount === 1 &&
+        performance.removedCount === 1 &&
+        performance.modifiedCount === 1,
+    "incremental refresh performance counters lost diff results");
+    assert(performance.getFileCount === 3 &&
+        performance.existingGetFileCount === 2 &&
+        performance.addedGetFileCount === 1 &&
+        performance.existingMetadataValidationCount === 2 &&
+        performance.addedMetadataValidationCount === 1 &&
+        performance.bodyReadCount === 0 && performance.parseCount === 0 &&
+        performance.metadataExtractionCount === 1 &&
+        performance.cacheLookupCount === 0 &&
+        performance.geometryGenerationCount === 0,
+    "incremental refresh performance counters changed observed work");
+    assert([
+        performance.totalMs,
+        performance.enumerationMs,
+        performance.diffMs,
+        performance.validationMs,
+        performance.addedProcessingMs,
+        performance.modifiedProcessingMs,
+        performance.reconcileMs,
+        performance.snapshotUpdateMs
+    ].every(Number.isFinite),
+    "incremental refresh stage timings were incomplete");
     now += 100;
     assert(await coordinator.refresh() === false && scanCount === 1,
         "rapid sidebar reopen bypassed refresh throttling");
@@ -207,7 +264,13 @@ async function testPromptDoesNotRequestOrScan() {
             getRefreshHandle: () => ({}),
             queryRefreshPermission: async () => "prompt",
             refreshPreviousIfGranted: async () => false,
-            openPrevious: async () => { requests += 1; return true; },
+            requestRefreshPermission: async () => {
+                requests += 1;
+                return "denied";
+            },
+            openPrevious: async () => {
+                throw new Error("manual refresh must not reopen the Library");
+            },
             setPersistenceStatusListener(listener) {
                 persistenceListener = listener;
             }
@@ -257,16 +320,16 @@ async function testPromptDoesNotRequestOrScan() {
     assert(refreshState.permission === "prompt" && refreshState.hasHandle &&
         refreshState.cachedCount === 0 && refreshState.scannedCount === null,
     "initial prompt diagnostic was not wired to the Library panel");
-    assert(await coordinator.refresh({
+    assert(!await coordinator.refresh({
         reason: "manual-refresh",
         reconnect: true
-    }), "explicit refresh action did not reconnect the saved Handle");
+    }), "denied explicit refresh unexpectedly changed the cached Library");
     assert(scans === 0 && requests === 1,
-        "explicit refresh action did not use the existing previous-Library action");
+        "explicit refresh did not limit denied access to permission request");
     assert(!refreshState.canManualRefresh &&
-        refreshState.permission === "granted" &&
-        refreshState.result === "success",
-    "successful refresh did not update action visibility and diagnostic state");
+        refreshState.permission === "denied" &&
+        refreshState.result === "permission-denied",
+    "denied refresh did not preserve cached state and update diagnostics");
     persistenceListener({ permission: "denied", hasHandle: true });
     assert(!refreshState.canManualRefresh,
         "denied permission exposed the prompt-only refresh action");

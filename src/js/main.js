@@ -138,7 +138,7 @@ window.addEventListener("DOMContentLoaded", () => {
             app.updateFolderColorPresentation();
             app.statusBar.showLibraryLoaded(library);
             app.libraryAccessPanel.hide();
-            void app.displaySnapshotCoordinator.flush("library-refresh");
+            return app.displaySnapshotCoordinator.flush("library-refresh");
         }
     });
 
