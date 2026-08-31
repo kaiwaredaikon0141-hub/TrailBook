@@ -108,7 +108,11 @@ function createMobileSidebarProbe(trackCount = 1122) {
     drive.innerHTML = "<button>別のGoogle Drive Libraryに直接接続</button>" +
         '<p class="drive-library-description">TrailBookからGoogle Driveへ接続</p>' +
         '<p class="drive-library-status">Drive Library: 1122 GPX</p>';
-    fixed.append(search, modes, drive);
+    const diagnostic = document.createElement("details");
+
+    diagnostic.className = "library-refresh-diagnostic";
+    diagnostic.innerHTML = "<summary>Library Refresh</summary><pre>diagnostic</pre>";
+    fixed.append(search, modes, drive, diagnostic);
     sidebar.className = "sidebar";
     tree.className = "tree-root";
 
@@ -133,7 +137,8 @@ function createMobileSidebarProbe(trackCount = 1122) {
     shell.append(close, fixed, sidebar, buildInfo);
     document.body.append(shell);
     return {
-        shell, close, fixed, search, modes, drive, sidebar, tree, buildInfo
+        shell, close, fixed, search, modes, drive, diagnostic,
+        sidebar, tree, buildInfo
     };
 }
 
@@ -285,6 +290,9 @@ async function run() {
     const layoutCss = await fetch("../../src/css/layout.css").then(r => r.text());
     const themeCss = await fetch("../../src/css/theme.css").then(r => r.text());
     const indexHtml = await fetch("../../src/index.html").then(r => r.text());
+    const accessPanelSource = await fetch(
+        "../../src/js/ui/LibraryAccessPanel.js"
+    ).then(r => r.text());
     assert(layoutCss.includes("@media (max-width:768px)") &&
         layoutCss.includes("(pointer:coarse)") &&
         layoutCss.includes("height:100dvh") &&
@@ -322,11 +330,18 @@ async function run() {
         themeCss.includes(".search-view.has-active-filter") &&
         themeCss.includes("max-height:28dvh"),
     "mobile Search disclosure or active-filter presentation is missing");
-    assert(themeCss.includes(".library-refresh-diagnostic[open]") &&
-        themeCss.includes("max-height:min(42dvh, 360px)") &&
-        themeCss.includes("overscroll-behavior:contain") &&
-        themeCss.includes("touch-action:pan-y"),
-    "mobile Library refresh diagnostic is not independently scrollable");
+    assert(themeCss.includes(
+        ".sidebar-shell:has(.library-refresh-diagnostic[open])"
+    ) && themeCss.includes("overflow-y:visible") &&
+        !themeCss.includes("max-height:min(42dvh, 360px)") &&
+        !themeCss.includes("overscroll-behavior:contain") &&
+        !themeCss.includes("touch-action:pan-y"),
+    "mobile Library refresh diagnostic still owns a nested scroll area");
+    assert(accessPanelSource.includes(
+        'matchMedia?.("(max-width:768px)").matches !== true'
+    ) && accessPanelSource.includes(
+        '<details class="fast-restore-diagnostic library-refresh-diagnostic">'
+    ), "mobile Library refresh diagnostic is not collapsed by default");
     assert(themeCss.includes("body.is-driving-mode .map-toolbar") &&
         !themeCss.includes("body.is-driving-mode .mobile-map-controls"),
     "driving mode hides the required mobile Map toggles");
@@ -434,7 +449,8 @@ async function run() {
         ".library-refresh-diagnostic"
     );
 
-    assert(refreshDiagnostic.open &&
+    assert(refreshDiagnostic.open ===
+        (matchMedia("(max-width:768px)").matches !== true) &&
         refreshDiagnostic.textContent.includes("runtime module: test-build") &&
         refreshDiagnostic.textContent.includes("runtime marker source: loaded") &&
         refreshDiagnostic.textContent.includes("permission: prompt") &&
@@ -752,6 +768,13 @@ async function run() {
         assert(getComputedStyle(probe.shell).overflowY === "hidden" &&
             getComputedStyle(probe.sidebar).overflowY === "auto",
         "mobile shell or dedicated Tree scrolling contract is inactive");
+        assert(!probe.diagnostic.open,
+            "mobile Library refresh diagnostic is not collapsed by default");
+        probe.diagnostic.open = true;
+        assert(getComputedStyle(probe.shell).overflowY === "auto" &&
+            getComputedStyle(probe.sidebar).overflowY === "visible",
+        "expanded diagnostic did not move scrolling to the mobile sidebar");
+        probe.diagnostic.open = false;
         assert(!probe.search.querySelector(".search-disclosure").open,
             "mobile Search probe was not collapsed by default");
         assert(probe.buildInfo.getBoundingClientRect().top >=

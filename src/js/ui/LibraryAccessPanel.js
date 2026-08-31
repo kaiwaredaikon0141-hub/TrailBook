@@ -30,6 +30,8 @@ export default class LibraryAccessPanel {
         this.libraryRefreshDiagnostic = this.element.querySelector(
             ".library-refresh-diagnostic"
         );
+        this.libraryRefreshDiagnostic.open =
+            globalThis.matchMedia?.("(max-width:768px)").matches !== true;
         this.libraryRefreshHydrationOutput = this.element.querySelector(
             ".library-refresh-hydration-source"
         );
@@ -347,7 +349,7 @@ export default class LibraryAccessPanel {
             <small class="previous-library-status">
                 Previous Library: no persistent handle
             </small>
-            <details class="fast-restore-diagnostic library-refresh-diagnostic" open>
+            <details class="fast-restore-diagnostic library-refresh-diagnostic">
                 <summary>Library Refresh</summary>
                 <pre></pre>
                 <pre class="library-refresh-hydration-source"></pre>

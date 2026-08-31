@@ -1916,15 +1916,18 @@ body.is-track-info-resizing{
 
     }
 
-    .library-refresh-diagnostic[open]{
-
-        max-height:min(42dvh, 360px);
+    .sidebar-shell:has(.library-refresh-diagnostic[open]){
 
         overflow-y:auto;
+    }
 
-        overscroll-behavior:contain;
+    .sidebar-shell:has(.library-refresh-diagnostic[open]) > .sidebar{
 
-        touch-action:pan-y;
+        flex:0 0 auto;
+
+        min-height:auto;
+
+        overflow-y:visible;
     }
 
     .mobile-sidebar-display-controls{
