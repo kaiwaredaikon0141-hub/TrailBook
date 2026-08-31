@@ -245,6 +245,11 @@ async function testRefreshAndReconciliation() {
         setLibrary: value => { currentLibrary = value; },
         getColor: path => path === "C.gpx" ? "#555555" : "#666666",
         getFolderColor: () => "#f08000",
+        getEntryPresentationDiagnostic: () => ({
+            folderResolvedColor: "#f08000",
+            folderDomColor: "rgb(240, 128, 0)",
+            trackDomColor: "rgb(240, 128, 0)"
+        }),
         removePath: path => removed.push(path),
         reloadVisiblePath: async value => reloaded.push(value.path),
         onLibraryUpdated: (value, context) => {
@@ -354,6 +359,40 @@ async function testRefreshAndReconciliation() {
         entryTrace.reconcileInput && entryTrace.runtimeLibrary &&
         entryTrace.treeMetadata,
     "new Track path was lost between scan, reconcile, and Tree metadata");
+    assert(entryTrace.folderResolvedColor === "#F08000" &&
+        entryTrace.folderDomColor === "#F08000" &&
+        entryTrace.trackDomColor === "#F08000",
+    `entry color diagnostics were not normalized: ${JSON.stringify(entryTrace)}`);
+    assert(entryTrace.fileHandleActual && !entryTrace.fileHandleProvisional,
+        "entry FileHandle diagnostic did not report the actual handle");
+    eventBus.emit("library-refresh:entry-diagnostic", {
+        path: "E.gpx", stage: "click", status: "received-on"
+    });
+    eventBus.emit("library-refresh:entry-diagnostic", {
+        path: "E.gpx", stage: "resolver", status: "actual",
+        fileHandleKind: "file", fileHandleActual: true,
+        fileHandleProvisional: false
+    });
+    eventBus.emit("library-refresh:entry-diagnostic", {
+        path: "E.gpx", stage: "getFile", status: "success"
+    });
+    const checkboxTrace = coordinator.getDiagnostic().entryTrace;
+
+    assert(checkboxTrace.resolverResult === "actual" &&
+        checkboxTrace.getFileResult === "success" &&
+        checkboxTrace.checkboxStage === "getFile: success" &&
+        checkboxTrace.checkboxTrace.join("|").includes("click: received-on"),
+    "runtime checkbox diagnostics did not retain the observed stage path");
+    eventBus.emit("library-refresh:entry-diagnostic", {
+        path: "E.gpx", stage: "getFile", status: "failure",
+        errorName: "NotAllowedError", errorMessage: "permission required"
+    });
+    const failedTrace = coordinator.getDiagnostic().entryTrace;
+
+    assert(failedTrace.getFileResult === "failure" &&
+        failedTrace.getFileErrorName === "NotAllowedError" &&
+        failedTrace.getFileErrorMessage === "permission required",
+    "runtime getFile failure diagnostics lost the actual error");
     const performance = coordinator.getDiagnostic().performance;
 
     assert(performance.mode === "incremental" &&
@@ -446,9 +485,11 @@ async function testIncrementalTreeDomReconcile() {
     "recovered Track was applied to a detached row instead of the live Tree DOM");
     let loadReached = false;
     let toggledPath = null;
+    const loaderDiagnostics = [];
     const loader = new GPXGeometryLoader({
         parser: { parse: () => ({ tracks: [], metadata: {} }) },
-        repository: {}
+        repository: {},
+        diagnosticObserver: value => loaderDiagnostics.push(value)
     });
 
     eventBus.on("gpx:display-toggled", ({ path, fileHandle, checked }) => {
@@ -468,6 +509,34 @@ async function testIncrementalTreeDomReconcile() {
     assert(toggledPath === "Trips/RECOVERED.gpx" && loadReached &&
         tree.fileHandlesByPath.get(toggledPath)?.provisional !== true,
     "checkbox did not resolve the incremental relativePath to an actual FileHandle");
+    assert(loaderDiagnostics.some(value =>
+        value.stage === "getFile" && value.status === "success"
+    ) && loaderDiagnostics.some(value =>
+        value.stage === "parser" && value.status === "success"
+    ), "GPX loader diagnostics did not observe getFile/parser success");
+    const failedLoaderDiagnostics = [];
+    const failedLoader = new GPXGeometryLoader({
+        parser: { parse: () => ({ tracks: [], metadata: {} }) },
+        repository: {},
+        diagnosticObserver: value => failedLoaderDiagnostics.push(value)
+    });
+    const deniedHandle = {
+        kind: "file", name: "Denied.gpx", provisional: true,
+        async getFile() {
+            throw new DOMException("permission required", "NotAllowedError");
+        }
+    };
+
+    try {
+        await failedLoader.load("Trips/Denied.gpx", deniedHandle);
+    } catch {
+        // The unchanged loader contract rejects; diagnostics only observe it.
+    }
+    assert(failedLoaderDiagnostics.some(value =>
+        value.stage === "getFile" && value.status === "failure" &&
+        value.errorName === "NotAllowedError" &&
+        value.fileHandleProvisional === true
+    ), "GPX loader diagnostics lost the getFile failure/provisional identity");
 }
 
 async function testFastRefreshScale() {

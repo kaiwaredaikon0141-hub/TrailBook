@@ -200,6 +200,11 @@ export default class MapView {
 
         try {
             this.layerManager.displayGPX(path, result, style, options);
+            this.eventBus.emit("library-refresh:entry-diagnostic", {
+                path,
+                stage: "map layer",
+                status: "created"
+            });
         } finally {
             endLayer();
         }
@@ -243,6 +248,11 @@ export default class MapView {
 
         if (this.layerManager) {
             this.layerManager.removeGPX(path);
+            this.eventBus.emit("library-refresh:entry-diagnostic", {
+                path,
+                stage: "map layer",
+                status: "removed"
+            });
 
             if (!this.layerManager.hasDisplay()) {
                 this.showEmpty();

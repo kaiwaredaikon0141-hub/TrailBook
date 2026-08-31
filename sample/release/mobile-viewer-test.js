@@ -437,6 +437,47 @@ async function run() {
         refreshDiagnostic.textContent.includes("scanned: -") &&
         refreshDiagnostic.textContent.includes("manual refresh: yes"),
     "Library refresh diagnostic is not visible with prompt counts");
+    accessCopy.setLibraryRefreshState(Object.freeze({
+        ...promptRefreshState,
+        entryTrace: Object.freeze({
+            path: "Trips/New.gpx",
+            classification: "new",
+            discoveryStatus: "ready",
+            displayState: "idle",
+            errorName: null,
+            errorMessage: null,
+            checked: false,
+            visibility: false,
+            trackColor: "#F08000",
+            folderResolvedColor: "#F08000",
+            treeColor: "#F08000",
+            folderDomColor: "#F08000",
+            trackDomColor: "#F08000",
+            fileHandleKind: "file",
+            fileHandleProvisional: false,
+            fileHandleActual: true,
+            permissionState: "granted",
+            resolverResult: "actual",
+            getFileResult: "success",
+            getFileErrorName: null,
+            getFileErrorMessage: null,
+            checkboxStage: "map layer: created",
+            checkboxTrace: ["click: received-on", "map layer: created"]
+        })
+    }));
+    assert(refreshDiagnostic.textContent.includes(
+        "relativePath: Trips/New.gpx"
+    ) && refreshDiagnostic.textContent.includes(
+        "FileHandle provisional / actual: no / yes"
+    ) && refreshDiagnostic.textContent.includes(
+        "Folder DOM swatch: #F08000"
+    ) && refreshDiagnostic.textContent.includes(
+        "checkbox last stage: map layer: created"
+    ), "Android entry diagnostic omitted runtime state/trace fields");
+    accessCopy.setLibraryRefreshState(Object.freeze({
+        ...promptRefreshState,
+        cachedCount: 1123
+    }));
     accessCopy.setLibraryRefreshHydrationDiagnostic({
         previous: {
             getterCalled: true,

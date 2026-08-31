@@ -11,7 +11,8 @@ export default class GPXGeometryLoader {
         repository,
         fileLoader = null,
         summaryBuilder = new TrackSummaryBuilder(),
-        driveConcurrency = 4
+        driveConcurrency = 4,
+        diagnosticObserver = null
     }) {
 
         this.parser = parser;
@@ -19,6 +20,7 @@ export default class GPXGeometryLoader {
         this.fileLoader = fileLoader;
         this.summaryBuilder = summaryBuilder;
         this.driveConcurrency = driveConcurrency;
+        this.diagnosticObserver = diagnosticObserver;
         this.activeDriveOperations = 0;
         this.driveOperationWaiters = [];
         this.namespace = null;
@@ -33,6 +35,13 @@ export default class GPXGeometryLoader {
             : null;
         this.inflight.clear();
         this.stats = this.#createStats();
+    }
+
+    setDiagnosticObserver(observer) {
+
+        this.diagnosticObserver = typeof observer === "function"
+            ? observer
+            : null;
     }
 
     load(path, fileHandle) {
@@ -83,6 +92,8 @@ export default class GPXGeometryLoader {
 
     async #load(path, fileHandle) {
 
+        this.#diagnose(path, fileHandle, "GPXGeometryLoader", "started");
+
         drivePerformance.recordComponentCall("GPXGeometryLoader");
         const driveFileIdentity = this.#createDriveFileIdentity(fileHandle);
 
@@ -103,9 +114,18 @@ export default class GPXGeometryLoader {
             : null;
 
         try {
-            const file = this.fileLoader
-                ? await this.fileLoader.getFile(fileHandle)
-                : await fileHandle.getFile();
+            let file;
+
+            this.#diagnose(path, fileHandle, "getFile", "started");
+            try {
+                file = this.fileLoader
+                    ? await this.fileLoader.getFile(fileHandle)
+                    : await fileHandle.getFile();
+                this.#diagnose(path, fileHandle, "getFile", "success");
+            } catch (error) {
+                this.#diagnose(path, fileHandle, "getFile", "failure", error);
+                throw error;
+            }
 
             if (this.namespace && !driveFileIdentity) {
                 const cached = await this.#lookupCache(path, file);
@@ -130,7 +150,16 @@ export default class GPXGeometryLoader {
 
                 try {
                     drivePerformance.recordComponentCall("GPXParser.parse");
-                    result = this.parser.parse(text, fileHandle.name);
+                    this.#diagnose(path, fileHandle, "parser", "started");
+                    try {
+                        result = this.parser.parse(text, fileHandle.name);
+                        this.#diagnose(path, fileHandle, "parser", "success");
+                    } catch (error) {
+                        this.#diagnose(
+                            path, fileHandle, "parser", "failure", error
+                        );
+                        throw error;
+                    }
                 } finally {
                     endParse();
                 }
@@ -189,6 +218,26 @@ export default class GPXGeometryLoader {
 
         drivePerformance.increment(cached ? "cacheHits" : "cacheMisses");
         return cached;
+    }
+
+    #diagnose(path, fileHandle, stage, status, error = null) {
+
+        try {
+            this.diagnosticObserver?.({
+                path,
+                stage,
+                status,
+                fileHandleKind: fileHandle?.kind || null,
+                fileHandleProvisional: Boolean(fileHandle?.provisional),
+                fileHandleActual: Boolean(
+                    fileHandle && fileHandle.provisional !== true
+                ),
+                errorName: error?.name || null,
+                errorMessage: error?.message || null
+            });
+        } catch {
+            // Diagnostics must never affect GPX loading.
+        }
     }
 
     #createDriveFileIdentity(fileHandle) {

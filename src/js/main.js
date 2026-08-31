@@ -123,6 +123,31 @@ window.addEventListener("DOMContentLoaded", () => {
         getColor: path => app.getColor(path),
         getFolderColor: folderPath =>
             app.folderColorControl.getResolvedFolderColor(folderPath),
+        getEntryPresentationDiagnostic: path => {
+            const metadata = app.treeView.nodeMetadata.get(path);
+            const folderPath = metadata?.parentPath;
+            const folderRow = app.treeView.folderNodes.get(folderPath);
+            const trackRow = app.treeView.fileNodes.get(path);
+            const folderSwatch = folderRow?.querySelector(
+                ".folder-color-readonly-swatch, .folder-color-swatch"
+            );
+            const trackSwatch = trackRow?.querySelector(
+                ".tree-color-indicator"
+            );
+
+            return {
+                folderResolvedColor: app.folderColorControl
+                    .getResolvedFolderColor(folderPath),
+                displayColor: app.displayState.getDisplay(path)?.color || null,
+                treeColor: metadata?.color || null,
+                folderDomColor: folderSwatch
+                    ? getComputedStyle(folderSwatch).backgroundColor
+                    : null,
+                trackDomColor: trackSwatch
+                    ? getComputedStyle(trackSwatch).backgroundColor
+                    : null
+            };
+        },
         removePath: path => app.stopDisplay(path, { refocus: false }),
         reloadVisiblePath: async ({ path, fileHandle }) => {
             app.stopDisplay(path, { refocus: false, preserveSelection: true });
@@ -153,6 +178,13 @@ window.addEventListener("DOMContentLoaded", () => {
             return app.displaySnapshotCoordinator.flush("library-refresh");
         }
     });
+
+    app.gpxGeometryLoader.setDiagnosticObserver(
+        diagnostic => app.eventBus.emit(
+            "library-refresh:entry-diagnostic",
+            diagnostic
+        )
+    );
 
     app.libraryAccessPanel.setLibraryRefreshRuntimeBuild(
         libraryRefresh.getDiagnostic()

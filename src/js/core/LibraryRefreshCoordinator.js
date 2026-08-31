@@ -18,6 +18,28 @@ function normalizedFolderPath(path) {
     return separator < 0 ? "" : normalized.slice(0, separator);
 }
 
+function normalizeDiagnosticColor(value) {
+
+    if (typeof value !== "string" || !value.trim()) return null;
+    const color = value.trim();
+    const shortHex = color.match(/^#([0-9a-f]{3})$/i);
+
+    if (shortHex) {
+        return `#${[...shortHex[1]].map(part => part.repeat(2)).join("")}`
+            .toUpperCase();
+    }
+    const hex = color.match(/^#([0-9a-f]{6})$/i);
+
+    if (hex) return `#${hex[1].toUpperCase()}`;
+    const rgb = color.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+
+    if (!rgb) return color;
+    return `#${rgb.slice(1, 4).map(component =>
+        Math.max(0, Math.min(255, Number(component)))
+            .toString(16).padStart(2, "0")
+    ).join("").toUpperCase()}`;
+}
+
 function emptyRefreshPerformance(reason, startedAt) {
 
     return Object.freeze({
@@ -47,6 +69,7 @@ export default class LibraryRefreshCoordinator {
         treeView, discoveryCoordinator, displayState, selectionState, accessPanel,
         repository, getNamespace, getLibrary, setLibrary, getColor,
         getFolderColor = () => null,
+        getEntryPresentationDiagnostic = () => ({}),
         removePath, reloadVisiblePath, onLibraryUpdated,
         canRefresh = () => true,
         now = () => Date.now(),
@@ -61,6 +84,7 @@ export default class LibraryRefreshCoordinator {
             librarySnapshotService, treeView, discoveryCoordinator,
             displayState, selectionState, accessPanel, repository, getNamespace,
             getLibrary, setLibrary, getColor, getFolderColor,
+            getEntryPresentationDiagnostic,
             removePath, reloadVisiblePath,
             onLibraryUpdated, canRefresh, now, performanceNow, minimumIntervalMs,
             metadataBuilder, summaryBuilder, treeReconciler
@@ -105,19 +129,47 @@ export default class LibraryRefreshCoordinator {
             this.#publishRefreshState({
                 entryTrace: Object.freeze({
                     ...this.refreshState.entryTrace,
+                    ...this.#capturePresentationDiagnostic(path),
                     checked: Boolean(display?.checked),
+                    visibility: Boolean(display?.checked),
                     displayState: display?.state || null,
                     errorName: display?.error?.name || null,
                     errorMessage: display?.error?.message || null,
                     fileHandleProvisional: Boolean(
                         display?.fileHandle?.provisional
-                    )
+                    ),
+                    fileHandleActual: Boolean(
+                        display?.fileHandle &&
+                        display.fileHandle.provisional !== true
+                    ),
+                    fileHandleKind: display?.fileHandle?.kind || null,
+                    permissionState: this.refreshState.permission
                 })
             });
         });
     }
 
     bind() {
+        this.eventBus.on(
+            "library-refresh:entry-diagnostic",
+            data => {
+                try {
+                    this.#handleEntryDiagnostic(data);
+                } catch {
+                    // Runtime diagnostics never affect Viewer behavior.
+                }
+            }
+        );
+        this.eventBus.on(
+            "gpx:display-toggled",
+            data => {
+                try {
+                    this.#handleDisplayToggleDiagnostic(data);
+                } catch {
+                    // Runtime diagnostics never affect checkbox handling.
+                }
+            }
+        );
         this.eventBus.on(
             "library:sidebar-opened",
             () => {
@@ -536,7 +588,25 @@ export default class LibraryRefreshCoordinator {
                     fileHandleProvisional: Boolean(
                         this.displayState.getDisplay(tracePath)?.fileHandle
                             ?.provisional
-                    )
+                    ),
+                    fileHandleActual: Boolean(
+                        this.displayState.getDisplay(tracePath)?.fileHandle &&
+                        this.displayState.getDisplay(tracePath)?.fileHandle
+                            ?.provisional !== true
+                    ),
+                    fileHandleKind: this.displayState.getDisplay(tracePath)
+                        ?.fileHandle?.kind || null,
+                    permissionState: this.refreshState.permission,
+                    visibility: Boolean(
+                        this.displayState.getDisplay(tracePath)?.checked
+                    ),
+                    resolverResult: "not-run",
+                    getFileResult: "not-run",
+                    getFileErrorName: null,
+                    getFileErrorMessage: null,
+                    checkboxStage: "not-clicked",
+                    checkboxTrace: Object.freeze([]),
+                    ...this.#capturePresentationDiagnostic(tracePath)
                 })
             });
         } else {
@@ -654,6 +724,126 @@ export default class LibraryRefreshCoordinator {
             this.treeView.hasFile(selectedPath) ? selectedPath : null,
             { reveal: false, scroll: false, moveFocus: false }
         );
+    }
+
+    #capturePresentationDiagnostic(path) {
+
+        const display = this.displayState.getDisplay(path);
+        const metadata = this.treeView.nodeMetadata.get(path);
+        let presentation = {};
+
+        try {
+            presentation = this.getEntryPresentationDiagnostic(path) || {};
+        } catch {
+            // Diagnostic collection must never alter Library behavior.
+        }
+        return {
+            trackColor: normalizeDiagnosticColor(
+                display?.color || presentation.displayColor
+            ),
+            folderResolvedColor: normalizeDiagnosticColor(
+                presentation.folderResolvedColor
+            ),
+            treeColor: normalizeDiagnosticColor(
+                metadata?.color || presentation.treeColor
+            ),
+            folderDomColor: normalizeDiagnosticColor(
+                presentation.folderDomColor
+            ),
+            trackDomColor: normalizeDiagnosticColor(
+                presentation.trackDomColor
+            )
+        };
+    }
+
+    #handleEntryDiagnostic(data = {}) {
+
+        const trace = this.refreshState.entryTrace;
+        const path = normalizeRelativePath(data.path);
+
+        if (!trace || !path || path !== normalizeRelativePath(trace.path)) return;
+        const display = this.displayState.getDisplay(path);
+        const stage = typeof data.stage === "string" ? data.stage : "observed";
+        const status = typeof data.status === "string" ? data.status : null;
+        const step = status ? `${stage}: ${status}` : stage;
+        const checkboxTrace = [...(trace.checkboxTrace || []), step].slice(-10);
+        const resolverResult = stage === "resolver"
+            ? status || data.resolverResult || "unknown"
+            : trace.resolverResult;
+        const getFileResult = stage === "getFile"
+            ? status || "unknown"
+            : trace.getFileResult;
+
+        this.#publishRefreshState({
+            entryTrace: Object.freeze({
+                ...trace,
+                ...this.#capturePresentationDiagnostic(path),
+                displayState: display?.state || null,
+                errorName: display?.error?.name || data.errorName || null,
+                errorMessage: display?.error?.message ||
+                    data.errorMessage || null,
+                checked: Boolean(display?.checked),
+                visibility: Boolean(display?.checked),
+                fileHandleKind: data.fileHandleKind ||
+                    display?.fileHandle?.kind || trace.fileHandleKind,
+                fileHandleProvisional: data.fileHandleProvisional ?? Boolean(
+                    display?.fileHandle?.provisional
+                ),
+                fileHandleActual: data.fileHandleActual ?? Boolean(
+                    display?.fileHandle && display.fileHandle.provisional !== true
+                ),
+                permissionState: this.refreshState.permission,
+                resolverResult,
+                getFileResult,
+                getFileErrorName: stage === "getFile" && status === "failure"
+                    ? data.errorName || "Error"
+                    : trace.getFileErrorName,
+                getFileErrorMessage: stage === "getFile" && status === "failure"
+                    ? data.errorMessage || "-"
+                    : trace.getFileErrorMessage,
+                checkboxStage: step,
+                checkboxTrace: Object.freeze(checkboxTrace)
+            })
+        });
+    }
+
+    #handleDisplayToggleDiagnostic(data = {}) {
+
+        const path = normalizeRelativePath(data.path);
+        const trace = this.refreshState.entryTrace;
+
+        if (!trace || path !== normalizeRelativePath(trace.path)) return;
+        this.#handleEntryDiagnostic({
+            path,
+            stage: "click",
+            status: data.checked ? "received-on" : "received-off",
+            fileHandleKind: data.fileHandle?.kind || null,
+            fileHandleProvisional: Boolean(data.fileHandle?.provisional),
+            fileHandleActual: Boolean(
+                data.fileHandle && data.fileHandle.provisional !== true
+            )
+        });
+        this.#handleEntryDiagnostic({
+            path,
+            stage: "resolver",
+            status: !data.fileHandle
+                ? "missing"
+                : data.fileHandle.provisional === true
+                    ? "provisional"
+                    : "actual",
+            fileHandleKind: data.fileHandle?.kind || null,
+            fileHandleProvisional: Boolean(data.fileHandle?.provisional),
+            fileHandleActual: Boolean(
+                data.fileHandle && data.fileHandle.provisional !== true
+            )
+        });
+        const display = this.displayState.getDisplay(path);
+
+        this.#handleEntryDiagnostic({
+            path,
+            stage: "DisplayState",
+            status: display?.state || (data.checked ? "checked" : "unchecked")
+        });
     }
 
     #handlePersistenceState(state) {
