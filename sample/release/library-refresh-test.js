@@ -80,8 +80,18 @@ async function testFreshRecursiveScan() {
     ]);
 
     await diagnostic.scan(diagnosticRoot);
-    assert(diagnostic.getLastScanDiagnostic().directoryEntryCount === 4 &&
-        diagnostic.getLastScanDiagnostic().gpxCandidateCount === 2,
+    const scanDiagnostic = diagnostic.getLastScanDiagnostic();
+
+    assert(scanDiagnostic.directoryEntryCount === 4 &&
+        scanDiagnostic.gpxCandidateCount === 2 &&
+        scanDiagnostic.totalFileCount === 2 &&
+        scanDiagnostic.totalDirectoryCount === 2 &&
+        scanDiagnostic.rootHandleName === "GPX" &&
+        scanDiagnostic.rootHandleKind === "directory" &&
+        scanDiagnostic.gpxTailPaths.join("|") ===
+            "root.gpx|Trips/nested.gpx" &&
+        typeof scanDiagnostic.enumerationStartedAt === "string" &&
+        typeof scanDiagnostic.enumerationFinishedAt === "string",
     "recursive enumeration diagnostic did not count actual yielded entries");
 }
 
@@ -352,6 +362,19 @@ async function testRefreshAndReconciliation() {
         coordinator.getDiagnostic().addedCount === 1 &&
         coordinator.getDiagnostic().recoveredCount === 1,
     "refresh diagnostic did not report actual/cached diff counts");
+    const enumeration = coordinator.getDiagnostic().enumerationDiagnostic;
+
+    assert(enumeration.actualPathCount === 5 &&
+        enumeration.knownPathCount === 5 &&
+        enumeration.treePathCount === 4 &&
+        enumeration.snapshotPathCount === 4 &&
+        enumeration.handleSource === "actual" &&
+        enumeration.sameAsSavedHandle === true &&
+        enumeration.candidatePaths.some(item =>
+            item.path === "C.gpx" && !item.known && !item.tree &&
+            !item.snapshot
+        ),
+    "enumeration diagnostic lost actual/known/Tree/Snapshot comparison");
     const entryTrace = coordinator.getDiagnostic().entryTrace;
 
     assert(entryTrace?.path === "E.gpx" &&

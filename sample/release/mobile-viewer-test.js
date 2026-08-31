@@ -322,6 +322,11 @@ async function run() {
         themeCss.includes(".search-view.has-active-filter") &&
         themeCss.includes("max-height:28dvh"),
     "mobile Search disclosure or active-filter presentation is missing");
+    assert(themeCss.includes(".library-refresh-diagnostic[open]") &&
+        themeCss.includes("max-height:min(42dvh, 360px)") &&
+        themeCss.includes("overscroll-behavior:contain") &&
+        themeCss.includes("touch-action:pan-y"),
+    "mobile Library refresh diagnostic is not independently scrollable");
     assert(themeCss.includes("body.is-driving-mode .map-toolbar") &&
         !themeCss.includes("body.is-driving-mode .mobile-map-controls"),
     "driving mode hides the required mobile Map toggles");
@@ -474,6 +479,42 @@ async function run() {
     ) && refreshDiagnostic.textContent.includes(
         "checkbox last stage: map layer: created"
     ), "Android entry diagnostic omitted runtime state/trace fields");
+    accessCopy.setLibraryRefreshState(Object.freeze({
+        ...promptRefreshState,
+        enumerationDiagnostic: Object.freeze({
+            rootHandleName: "GPX",
+            rootHandleKind: "directory",
+            permission: "granted",
+            enumerationStartedAt: "2026-08-31T00:00:00.000Z",
+            enumerationFinishedAt: "2026-08-31T00:00:01.000Z",
+            gpxCount: 1124,
+            totalFileCount: 1130,
+            totalDirectoryCount: 20,
+            gpxTailPaths: Object.freeze(["Trips/New.gpx"]),
+            candidatePaths: Object.freeze([Object.freeze({
+                path: "Trips/New.gpx",
+                known: false,
+                tree: false,
+                snapshot: false
+            })]),
+            actualPathCount: 1124,
+            knownPathCount: 1123,
+            treePathCount: 1123,
+            snapshotPathCount: 1123,
+            handleSource: "actual",
+            handleOrigin: "saved-handle",
+            sameAsSavedHandle: true
+        })
+    }));
+    assert(refreshDiagnostic.textContent.includes("Directory Enumeration") &&
+        refreshDiagnostic.textContent.includes("root: GPX") &&
+        refreshDiagnostic.textContent.includes("actual paths: 1124") &&
+        refreshDiagnostic.textContent.includes("known paths: 1123") &&
+        refreshDiagnostic.textContent.includes("Tree paths: 1123") &&
+        refreshDiagnostic.textContent.includes("Snapshot paths: 1123") &&
+        refreshDiagnostic.textContent.includes(
+            "Trips/New.gpx [known:no Tree:no Snapshot:no]"
+        ), "Android enumeration diagnostic omitted raw path comparisons");
     accessCopy.setLibraryRefreshState(Object.freeze({
         ...promptRefreshState,
         cachedCount: 1123

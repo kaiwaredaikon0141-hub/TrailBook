@@ -1916,6 +1916,17 @@ body.is-track-info-resizing{
 
     }
 
+    .library-refresh-diagnostic[open]{
+
+        max-height:min(42dvh, 360px);
+
+        overflow-y:auto;
+
+        overscroll-behavior:contain;
+
+        touch-action:pan-y;
+    }
+
     .mobile-sidebar-display-controls{
 
         display:grid;

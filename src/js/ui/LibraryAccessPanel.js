@@ -443,6 +443,37 @@ export default class LibraryAccessPanel {
             `result: ${value("result")}`,
             `library: ${value("libraryState")}`,
             `manual refresh: ${state.canManualRefresh ? "yes" : "no"}`,
+            ...(state.enumerationDiagnostic ? [
+                "",
+                "Directory Enumeration",
+                `root: ${state.enumerationDiagnostic.rootHandleName || "-"}`,
+                `kind: ${state.enumerationDiagnostic.rootHandleKind || "-"}`,
+                `permission: ${state.enumerationDiagnostic.permission || "-"}`,
+                `started: ${state.enumerationDiagnostic.enumerationStartedAt || "-"}`,
+                `finished: ${state.enumerationDiagnostic.enumerationFinishedAt || "-"}`,
+                `GPX count: ${state.enumerationDiagnostic.gpxCount ?? "-"}`,
+                `total files: ${state.enumerationDiagnostic.totalFileCount ?? "-"}`,
+                `total directories: ${state.enumerationDiagnostic.totalDirectoryCount ?? "-"}`,
+                `source: ${state.enumerationDiagnostic.handleSource || "-"}`,
+                `origin: ${state.enumerationDiagnostic.handleOrigin || "-"}`,
+                `same as saved handle: ${state.enumerationDiagnostic.sameAsSavedHandle ? "yes" : "no"}`,
+                `actual paths: ${state.enumerationDiagnostic.actualPathCount ?? "-"}`,
+                `known paths: ${state.enumerationDiagnostic.knownPathCount ?? "-"}`,
+                `Tree paths: ${state.enumerationDiagnostic.treePathCount ?? "-"}`,
+                `Snapshot paths: ${state.enumerationDiagnostic.snapshotPathCount ?? "-"}`,
+                "GPX tail (up to 10):",
+                ...(state.enumerationDiagnostic.gpxTailPaths?.length
+                    ? state.enumerationDiagnostic.gpxTailPaths.map(path =>
+                        `  ${path}`
+                    )
+                    : ["  -"]),
+                "New/missing candidates (up to 10):",
+                ...(state.enumerationDiagnostic.candidatePaths?.length
+                    ? state.enumerationDiagnostic.candidatePaths.map(item =>
+                        `  ${item.path} [known:${item.known ? "yes" : "no"} Tree:${item.tree ? "yes" : "no"} Snapshot:${item.snapshot === null ? "-" : item.snapshot ? "yes" : "no"}]`
+                    )
+                    : ["  -"])
+            ] : []),
             ...(state.entryTrace ? [
                 "",
                 "Refresh Entry Trace",

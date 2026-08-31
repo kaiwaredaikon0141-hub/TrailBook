@@ -101,7 +101,7 @@ export default class LibraryRefreshCoordinator {
             addedCount: null, recoveredCount: null,
             removedCount: null, modifiedCount: null,
             reason: "none", result: "idle", performance: null,
-            entryTrace: null
+            entryTrace: null, enumerationDiagnostic: null
         });
         this.refreshPerformance = null;
         this.refreshPerformanceActive = false;
@@ -306,6 +306,43 @@ export default class LibraryRefreshCoordinator {
         const enumerationMs = this.performanceNow() - enumerationStartedAt;
         const scanned = library.gpxFileCount;
         const scanDiagnostic = this.scanner.getLastScanDiagnostic?.();
+        const previousContext = this.previousLibraryCoordinator
+            .getRefreshContext?.() || {};
+        const savedHandle = previousContext.handle ||
+            this.previousLibraryCoordinator.getRefreshHandle?.() || null;
+        const currentHandle = currentLibrary?.rootFolder?.handle || null;
+        const enumerationDiagnostic = Object.freeze({
+            rootHandleName: scanDiagnostic?.rootHandleName ??
+                handle?.name ?? null,
+            rootHandleKind: scanDiagnostic?.rootHandleKind ??
+                handle?.kind ?? null,
+            permission: this.refreshState.permission,
+            enumerationStartedAt: scanDiagnostic?.enumerationStartedAt ?? null,
+            enumerationFinishedAt: scanDiagnostic?.enumerationFinishedAt ?? null,
+            gpxCount: scanDiagnostic?.gpxCandidateCount ?? scanned,
+            totalFileCount: scanDiagnostic?.totalFileCount ?? null,
+            totalDirectoryCount: scanDiagnostic?.totalDirectoryCount ?? null,
+            gpxTailPaths: Object.freeze([
+                ...(scanDiagnostic?.gpxTailPaths || [])
+            ].slice(-10)),
+            candidatePaths: Object.freeze([]),
+            actualPathCount: scanned,
+            knownPathCount: null,
+            treePathCount: null,
+            snapshotPathCount: null,
+            handleSource: handle?.constructor?.name ===
+                "CachedDirectoryHandle"
+                ? "cached"
+                : handle?.provisional === true
+                    ? "provisional"
+                    : "actual",
+            handleOrigin: handle === currentHandle
+                ? "current-library"
+                : handle === savedHandle
+                    ? "saved-handle"
+                    : "other",
+            sameAsSavedHandle: Boolean(savedHandle && handle === savedHandle)
+        });
 
         this.#updateRefreshPerformance({
             mode: "incremental",
@@ -316,6 +353,7 @@ export default class LibraryRefreshCoordinator {
                 library.gpxFileCount,
             scannedCount: scanned
         });
+        this.#publishRefreshState({ enumerationDiagnostic });
 
         if (currentLibrary !== this.getLibrary()) return false;
         const result = await this.#reconcile(library, currentLibrary);
@@ -355,6 +393,34 @@ export default class LibraryRefreshCoordinator {
         const newPaths = new Set(fileEntries.map(({ path }) =>
             normalizeRelativePath(path)
         ));
+        const snapshotContext = this.librarySnapshotService
+            .getRefreshContext?.() || {};
+        const snapshotHasPath = path =>
+            typeof this.librarySnapshotService.hasProvisionalPath ===
+                "function" &&
+            this.librarySnapshotService.hasProvisionalPath(path);
+        const candidatePaths = [...newPaths].filter(path =>
+            !oldEntries.has(path) || !oldPaths.has(path) ||
+            (snapshotContext.provisional === true && !snapshotHasPath(path))
+        ).slice(-10).map(path => Object.freeze({
+            path,
+            known: oldEntries.has(path),
+            tree: oldPaths.has(path),
+            snapshot: snapshotContext.provisional === true
+                ? snapshotHasPath(path)
+                : null
+        }));
+
+        this.#publishRefreshState({
+            enumerationDiagnostic: Object.freeze({
+                ...(this.refreshState.enumerationDiagnostic || {}),
+                actualPathCount: newPaths.size,
+                knownPathCount: oldEntries.size,
+                treePathCount: oldPaths.size,
+                snapshotPathCount: snapshotContext.cachedCount ?? null,
+                candidatePaths: Object.freeze(candidatePaths)
+            })
+        });
         const removed = oldFileEntries
             .filter(({ path }) => !newPaths.has(normalizeRelativePath(path)))
             .map(({ path }) => path);

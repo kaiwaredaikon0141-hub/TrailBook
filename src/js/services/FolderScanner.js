@@ -85,7 +85,14 @@ export default class FolderScanner {
 
         this.lastScanDiagnostic = Object.freeze({
             directoryEntryCount: 0,
-            gpxCandidateCount: 0
+            gpxCandidateCount: 0,
+            totalFileCount: 0,
+            totalDirectoryCount: 0,
+            rootHandleName: null,
+            rootHandleKind: null,
+            enumerationStartedAt: null,
+            enumerationFinishedAt: null,
+            gpxTailPaths: Object.freeze([])
         });
     }
 
@@ -104,17 +111,29 @@ export default class FolderScanner {
 
         const diagnostic = {
             directoryEntryCount: 0,
-            gpxCandidateCount: 0
+            gpxCandidateCount: 0,
+            totalFileCount: 0,
+            totalDirectoryCount: 0,
+            rootHandleName: rootHandle?.name || null,
+            rootHandleKind: rootHandle?.kind || null,
+            enumerationStartedAt: new Date().toISOString(),
+            enumerationFinishedAt: null,
+            gpxTailPaths: []
         };
         const rootFolder = await this.#scanFolder(
             rootHandle.name,
             rootHandle,
-            diagnostic
+            diagnostic,
+            ""
         );
 
         const counts = this.#countFolder(rootFolder);
 
-        this.lastScanDiagnostic = Object.freeze({ ...diagnostic });
+        diagnostic.enumerationFinishedAt = new Date().toISOString();
+        this.lastScanDiagnostic = Object.freeze({
+            ...diagnostic,
+            gpxTailPaths: Object.freeze([...diagnostic.gpxTailPaths])
+        });
         return new Library(
             rootFolder.name,
             rootFolder,
@@ -123,32 +142,48 @@ export default class FolderScanner {
         );
     }
 
-    async #scanFolder(name, handle, diagnostic) {
+    async #scanFolder(name, handle, diagnostic, relativeFolderPath) {
 
         const folder = new Folder(name, handle);
 
         for await (const entry of handle.values()) {
 
             diagnostic.directoryEntryCount += 1;
+            const relativePath = relativeFolderPath
+                ? `${relativeFolderPath}/${entry.name}`
+                : entry.name;
 
             if (entry.kind === "directory") {
+
+                diagnostic.totalDirectoryCount += 1;
 
                 if (isReservedLibraryFolderName(entry.name)) {
                     continue;
                 }
 
                 folder.folders.push(
-                    await this.#scanFolder(entry.name, entry, diagnostic)
+                    await this.#scanFolder(
+                        entry.name,
+                        entry,
+                        diagnostic,
+                        relativePath
+                    )
                 );
 
                 continue;
             }
+
+            if (entry.kind === "file") diagnostic.totalFileCount += 1;
 
             if (
                 entry.kind === "file" &&
                 entry.name.toLowerCase().endsWith(GPX_EXTENSION)
             ) {
                 diagnostic.gpxCandidateCount += 1;
+                diagnostic.gpxTailPaths.push(relativePath);
+                if (diagnostic.gpxTailPaths.length > 10) {
+                    diagnostic.gpxTailPaths.shift();
+                }
                 folder.gpxFiles.push(entry);
             }
         }
