@@ -59,6 +59,19 @@ export default class DisplayState {
         this.#notify(path);
     }
 
+    rebindFileHandle(path, fileHandle) {
+
+        const display = this.displays.get(path);
+
+        if (!display || !fileHandle || display.fileHandle === fileHandle) {
+            return false;
+        }
+
+        display.fileHandle = fileHandle;
+
+        return true;
+    }
+
     unregisterFile(path) {
 
         const removed = this.displays.delete(path);

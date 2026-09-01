@@ -22,10 +22,21 @@ export default class TreeIncrementalReconciler {
                 });
             }
         });
+        const samePathSet = prepared.nodeMetadata.size ===
+            previousMetadata.size && [...previousMetadata.keys()].every(
+            path => prepared.nodeMetadata.has(path)
+        );
+        const nextMetadata = affectedPaths.length === 0 && samePathSet
+            ? new Map([...previousMetadata.keys()].map(path => [
+                path,
+                prepared.nodeMetadata.get(path)
+            ]))
+            : prepared.nodeMetadata;
+
         Object.assign(treeView, {
             currentLibrary: library,
             currentRootHandle: prepared.rootHandle,
-            nodeMetadata: prepared.nodeMetadata,
+            nodeMetadata: nextMetadata,
             fileHandlesByPath: prepared.fileHandlesByPath,
             pathsByFileHandle: prepared.pathsByFileHandle
         });

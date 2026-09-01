@@ -98,6 +98,9 @@ async function testFreshRecursiveScan() {
 function createTree(initialLibrary) {
     const builder = new TreeMetadataBuilder();
     const tree = {
+        metadataBuilder: builder,
+        element: { scrollTop: 0, contains: () => false },
+        renderRequestId: 0,
         expandedPaths: new Set([""]),
         nodeMetadata: new Map(),
         selected: null,
@@ -121,6 +124,11 @@ function createTree(initialLibrary) {
             return builder.getSearchSourceEntries(this.nodeMetadata);
         },
         hasFile(path) { return this.nodeMetadata.get(path)?.kind === "file"; },
+        applyFocusState() {},
+        parentPath: path => builder.parentPath(path),
+        isDescendant(path, candidate) {
+            return candidate === "" || path.startsWith(`${candidate}/`);
+        },
         refreshAllFileRows() {},
         refreshAllFolderRows() {},
         setDisplayChecked(path, checked) {
@@ -674,6 +682,174 @@ async function testFastRefreshScale() {
     "fast refresh lost selection or used a full Tree apply");
 }
 
+async function testNoOpRefreshPresentationInvariance() {
+    const trackCount = 1123;
+    const files = Array.from({ length: trackCount }, (_, index) =>
+        fileHandle(`Existing-${index}.gpx`, index + 1, index + 1)
+    );
+    const scannedFiles = files.map((handle, index) =>
+        fileHandle(handle.name, index + 1, index + 1)
+    );
+    const before = library("NoOp", files);
+    const after = library("NoOp", [...scannedFiles].reverse());
+    const tree = await createTree(before);
+    const displayState = new DisplayState();
+    const selectionState = new SelectionState();
+    const entries = files.map((handle, index) => ({
+        relativePath: handle.name,
+        status: "ready",
+        index
+    }));
+    let currentLibrary = before;
+    let registerCalls = 0;
+    let displayNotifications = 0;
+    let snapshotUpdates = 0;
+    let presentationRefreshes = 0;
+    const folderPresentations = new Map([
+        ["", { mode: "auto", resolvedColor: "#AA5500" }],
+        ["Trips", { mode: "explicit", resolvedColor: "#0055AA" }]
+    ]);
+    const beforeFolderPresentations = new Map(folderPresentations);
+    const originalRegisterFile = displayState.registerFile.bind(displayState);
+
+    displayState.registerFile = (...args) => {
+        registerCalls += 1;
+        return originalRegisterFile(...args);
+    };
+    tree.getFileEntries().forEach(({ path, fileHandle: handle }, index) => {
+        const color = index % 2 === 0 ? "#AA5500" : "#0055AA";
+
+        originalRegisterFile(
+            path,
+            handle,
+            color
+        );
+        tree.nodeMetadata.get(path).color = color;
+    });
+    displayState.setChecked("Existing-10.gpx", true);
+    displayState.setError(
+        "Existing-11.gpx",
+        new DOMException("existing error", "NotReadableError")
+    );
+    tree.nodeMetadata.get("Existing-10.gpx").checked = true;
+    tree.nodeMetadata.get("Existing-11.gpx").state = "error";
+    tree.nodeMetadata.get("Existing-11.gpx").error =
+        displayState.getDisplay("Existing-11.gpx").error;
+    selectionState.select("Existing-10.gpx", "test");
+    registerCalls = 0;
+    const beforeDisplays = new Map([...displayState.getDisplays()].map(
+        ([path, display]) => [path, {
+            color: display.color,
+            checked: display.checked,
+            state: display.state,
+            error: display.error
+        }]
+    ));
+    const beforeTree = new Map(tree.getFileEntries().map(({ path }) => {
+        const metadata = tree.nodeMetadata.get(path);
+
+        return [path, {
+            color: metadata.color,
+            checked: metadata.checked,
+            state: metadata.state,
+            error: metadata.error
+        }];
+    }));
+    const beforeTreeOrder = [...tree.nodeMetadata.keys()];
+    displayState.subscribe(() => { displayNotifications += 1; });
+    const coordinator = new LibraryRefreshCoordinator({
+        eventBus: new EventBus(),
+        scanner: { scan: async () => after },
+        previousLibraryCoordinator: {
+            isLoading: () => false,
+            getRefreshHandle: () => before.rootFolder.handle,
+            requestRefreshPermission: async () => "granted"
+        },
+        librarySnapshotService: {
+            isProvisional: () => true,
+            hasProvisionalPath: () => true,
+            getRefreshContext: () => ({
+                provisional: true,
+                libraryState: "provisional",
+                cachedCount: trackCount
+            })
+        },
+        treeView: tree,
+        treeReconciler: new TreeIncrementalReconciler(),
+        discoveryCoordinator: {
+            getSnapshotState: () => ({ entries }),
+            reconcileLibrary() { return true; }
+        },
+        displayState,
+        selectionState,
+        repository: {},
+        getNamespace: () => "local:no-op",
+        getLibrary: () => currentLibrary,
+        setLibrary: value => { currentLibrary = value; },
+        getColor: () => "#FF0000",
+        getFolderColor: () => "#00FF00",
+        removePath() {},
+        reloadVisiblePath() {},
+        onLibraryUpdated: (value, context = {}) => {
+            snapshotUpdates += 1;
+            if (!context.presentationUnchanged) {
+                presentationRefreshes += 1;
+                folderPresentations.set("", {
+                    mode: "auto",
+                    resolvedColor: "#0055AA"
+                });
+            }
+            return true;
+        },
+        now: () => 100
+    });
+
+    const result = await coordinator.refresh({
+        reason: "manual-refresh",
+        reconnect: true
+    });
+    const afterDisplays = displayState.getDisplays();
+
+    assert(result.added === 0 && result.recovered === 0 &&
+        result.removed === 0 && result.modified === 0,
+    "1123 Track no-op fixture unexpectedly produced a diff");
+    assert(registerCalls === 0 && displayNotifications === 0 &&
+        presentationRefreshes === 0,
+        "no-op refresh re-registered Tracks or rebuilt Folder presentation");
+    assert(snapshotUpdates === 1,
+        "no-op refresh skipped required Snapshot/Phase B completion work");
+    assert([...beforeDisplays].every(([path, previous]) => {
+        const current = afterDisplays.get(path);
+
+        return current?.color === previous.color &&
+            current.checked === previous.checked &&
+            current.state === previous.state &&
+            current.error === previous.error;
+    }), "no-op refresh changed existing Track presentation/state");
+    assert([...beforeTree].every(([path, previous]) => {
+        const current = tree.nodeMetadata.get(path);
+
+        return current?.color === previous.color &&
+            current.checked === previous.checked &&
+            current.state === previous.state &&
+            current.error === previous.error;
+    }), "no-op refresh changed Tree metadata presentation/state");
+    assert([...tree.nodeMetadata.keys()].every(
+        (path, index) => path === beforeTreeOrder[index]
+    ), "no-op refresh changed Tree metadata order used by Auto Folder color");
+    assert([...beforeFolderPresentations].every(([path, previous]) => {
+        const current = folderPresentations.get(path);
+
+        return current?.mode === previous.mode &&
+            current.resolvedColor === previous.resolvedColor;
+    }), "no-op refresh changed Folder resolved/explicit/auto presentation");
+    assert(displayState.getDisplay("Existing-10.gpx")?.fileHandle ===
+        scannedFiles[10],
+    "no-op refresh did not rebind the actual FileHandle safely");
+    assert(selectionState.getSelectedPath() === "Existing-10.gpx",
+        "no-op refresh changed selection");
+}
+
 function testRefreshCompletionFeedback() {
     const panel = new LibraryAccessPanel();
     const base = {
@@ -987,6 +1163,7 @@ try {
     await testRefreshAndReconciliation();
     await testIncrementalTreeDomReconcile();
     await testFastRefreshScale();
+    await testNoOpRefreshPresentationInvariance();
     testRefreshCompletionFeedback();
     if (!focusedIncremental) {
         await testPromptDoesNotRequestOrScan();

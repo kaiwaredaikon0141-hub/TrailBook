@@ -484,6 +484,8 @@ export default class LibraryRefreshCoordinator {
         const changed = [];
         const unchangedCount = fileEntries.length - added.length;
         const selectedPath = this.selectionState.getSelectedPath();
+        const noOpDiff = added.length === 0 && removed.length === 0 &&
+            changed.length === 0;
 
         this.#updateRefreshPerformance({
             diffMs,
@@ -497,27 +499,33 @@ export default class LibraryRefreshCoordinator {
 
         const modifiedStartedAt = this.performanceNow();
         removed.forEach(path => this.removePath(path));
-        fileEntries.forEach(({ path, fileHandle }) => {
-            const key = normalizeRelativePath(path);
-            const previous = previousDisplays.get(key);
+        if (noOpDiff) {
+            fileEntries.forEach(({ path, fileHandle }) => {
+                this.displayState.rebindFileHandle?.(path, fileHandle);
+            });
+        } else {
+            fileEntries.forEach(({ path, fileHandle }) => {
+                const key = normalizeRelativePath(path);
+                const previous = previousDisplays.get(key);
 
-            this.displayState.registerFile(
-                path,
-                fileHandle,
-                normalizedPaths.has(key)
-                    ? resolveAddedColor(path)
-                    : previous?.color ?? this.getColor(path)
-            );
-            if (addedPaths.has(key)) {
-                this.displayState.setChecked(path, false);
-            } else if (previous) {
-                this.displayState.setChecked(path, previous.checked);
-            }
-            if (normalizedPaths.has(key)) {
-                this.displayState.setChecked(path, false);
-                this.displayState.setIdle(path);
-            }
-        });
+                this.displayState.registerFile(
+                    path,
+                    fileHandle,
+                    normalizedPaths.has(key)
+                        ? resolveAddedColor(path)
+                        : previous?.color ?? this.getColor(path)
+                );
+                if (addedPaths.has(key)) {
+                    this.displayState.setChecked(path, false);
+                } else if (previous) {
+                    this.displayState.setChecked(path, previous.checked);
+                }
+                if (normalizedPaths.has(key)) {
+                    this.displayState.setChecked(path, false);
+                    this.displayState.setIdle(path);
+                }
+            });
+        }
         removed.forEach(path => this.displayState.unregisterFile(path));
         const modifiedProcessingMs = this.performanceNow() - modifiedStartedAt;
 
@@ -561,7 +569,9 @@ export default class LibraryRefreshCoordinator {
             normalizeRelativePath(path) === selectedKey
         )?.path || selectedPath;
 
-        this.#restoreTreePresentation(reconciledSelectedPath);
+        if (!noOpDiff) {
+            this.#restoreTreePresentation(reconciledSelectedPath);
+        }
         added.forEach(({ path }) => {
             this.displayState.setChecked(path, false);
             this.treeView.setDisplayChecked(path, false);
@@ -571,7 +581,8 @@ export default class LibraryRefreshCoordinator {
         const snapshotStartedAt = this.performanceNow();
         const performanceRunStartedAt = this.refreshPerformance?.startedAt;
         const snapshotUpdate = this.onLibraryUpdated(library, {
-            preserveExistingPresentation: true
+            preserveExistingPresentation: true,
+            presentationUnchanged: noOpDiff
         });
         const reconcileMs = this.performanceNow() - reconcileStartedAt;
 

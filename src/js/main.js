@@ -157,7 +157,8 @@ window.addEventListener("DOMContentLoaded", () => {
             });
         },
         onLibraryUpdated: (library, {
-            preserveExistingPresentation = false
+            preserveExistingPresentation = false,
+            presentationUnchanged = false
         } = {}) => {
             if (!preserveExistingPresentation) {
                 app.librarySettingsCoordinator.reconcileFolderPaths(
@@ -166,7 +167,9 @@ window.addEventListener("DOMContentLoaded", () => {
                         .map(entry => entry.path)
                 );
             }
-            app.updateFolderColorPresentation();
+            if (!presentationUnchanged) {
+                app.updateFolderColorPresentation();
+            }
             app.statusBar.showLibraryLoaded(library);
             app.libraryAccessPanel.hide();
             if (app.displaySnapshotCoordinator.getStatus().restoreState ===
