@@ -75,6 +75,7 @@ export default class LibraryRefreshCoordinator {
         now = () => Date.now(),
         performanceNow = () => globalThis.performance?.now?.() ?? Date.now(),
         minimumIntervalMs = 2000,
+        trackCatalogCoordinator = null,
         metadataBuilder = new TreeMetadataBuilder(),
         summaryBuilder = new TrackSummaryBuilder(),
         treeReconciler = new TreeIncrementalReconciler()
@@ -87,7 +88,8 @@ export default class LibraryRefreshCoordinator {
             getEntryPresentationDiagnostic,
             removePath, reloadVisiblePath,
             onLibraryUpdated, canRefresh, now, performanceNow, minimumIntervalMs,
-            metadataBuilder, summaryBuilder, treeReconciler
+            metadataBuilder, summaryBuilder, treeReconciler,
+            trackCatalogCoordinator
         });
         this.activeRefresh = null;
         this.lastResult = null;
@@ -556,6 +558,13 @@ export default class LibraryRefreshCoordinator {
                 name: fileHandle.name
             }, null);
         }).filter(Boolean);
+        const catalogMetadata = new Map(discoveryEntries.map(entry => [
+            normalizeRelativePath(entry.relativePath), entry
+        ]));
+
+        this.trackCatalogCoordinator?.mergeActual(this.getNamespace(), fileEntries, {
+            metadataByPath: catalogMetadata
+        });
         const addedProcessingMs = this.performanceNow() -
             addedProcessingStartedAt;
 

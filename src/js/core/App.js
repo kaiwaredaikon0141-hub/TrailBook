@@ -18,6 +18,8 @@ import ViewStateCoordinator from "./ViewStateCoordinator.js";
 import PreviousLibraryCoordinator from "./PreviousLibraryCoordinator.js";
 import DisplaySnapshotCoordinator from "./DisplaySnapshotCoordinator.js";
 import TrackDiscoveryCoordinator from "./TrackDiscoveryCoordinator.js";
+import LibraryTrackCatalogCoordinator from
+    "./LibraryTrackCatalogCoordinator.js";
 import DisplayState from "../state/DisplayState.js";
 import SelectionState from "../state/SelectionState.js";
 import FolderColorState from "../state/FolderColorState.js";
@@ -40,13 +42,10 @@ import MapView from "../ui/MapView.js";
 export default class App {
 
     #refocusTimer = null;
-
     #searchRefreshTimer = null;
-
     #displayOptions = {
         showWaypoints: false
     };
-
     constructor() {
 
         this.config = Config;
@@ -100,6 +99,8 @@ export default class App {
             applyFolderColorChange: path => this.applyFolderColorChange(path)
         });
         this.displayState = new DisplayState();
+        this.libraryTrackCatalogCoordinator =
+            new LibraryTrackCatalogCoordinator();
         this.selectionState = new SelectionState();
         this.displayQueue = new GPXDisplayQueue(2);
         this.trackDiscoveryCoordinator = new TrackDiscoveryCoordinator({
@@ -180,7 +181,7 @@ export default class App {
             searchView: this.searchView
         });
         this.librarySnapshotService = new LibrarySnapshotService({
-            treeView: this.treeView, discoveryCoordinator: this.trackDiscoveryCoordinator,
+            treeView: this.treeView, discoveryCoordinator: this.trackDiscoveryCoordinator, trackCatalogCoordinator: this.libraryTrackCatalogCoordinator,
             displayState: this.displayState, searchView: this.searchView, accessPanel: this.libraryAccessPanel, eventBus: this.eventBus, mapView: this.mapView, selectionState: this.selectionState, getColor: path => this.getColor(path), statusBar: this.statusBar
         });
         this.workspace.append(sidebar, this.mapView.element);
@@ -233,8 +234,8 @@ export default class App {
                 }
                 if (!this.librarySnapshotService.isProvisional()) this.trackDiscoveryCoordinator.clearLibrary();
             },
-            applyLibrary: (library, context) =>
-                this.handleLibraryLoaded(library, context),
+            applyLibrary: (library, context) => this.libraryTrackCatalogCoordinator
+                .applyCompleteLibrary({ libraryIdentity: context.cacheNamespace, apply: () => this.handleLibraryLoaded(library, context), getEntries: () => this.treeView.getFileEntries() }),
             getCurrentLibrary: () => this.currentLibrary, hasUsableLibrary: () => Boolean(this.currentLibrary) || this.librarySnapshotService.isProvisional()
         });
 
@@ -370,7 +371,6 @@ export default class App {
         if (!isCurrent()) {
             return false;
         }
-
         this.searchView.setAvailable(true);
 
         this.currentLibrary = library;

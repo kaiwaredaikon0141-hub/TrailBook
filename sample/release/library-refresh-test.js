@@ -15,6 +15,12 @@ import TreeView from "../../src/js/ui/TreeView.js";
 import TreeIncrementalReconciler from "../../src/js/ui/TreeIncrementalReconciler.js";
 import LibraryAccessPanel from "../../src/js/ui/LibraryAccessPanel.js";
 import GPXGeometryLoader from "../../src/js/services/GPXGeometryLoader.js";
+import LibraryTrackCatalog, {
+    LibraryPathCollisionError,
+    normalizeTrackRelativePath
+} from "../../src/js/core/LibraryTrackCatalog.js";
+import LibraryTrackCatalogCoordinator from
+    "../../src/js/core/LibraryTrackCatalogCoordinator.js";
 
 const output = document.getElementById("result");
 const focusedIncremental = new URLSearchParams(
@@ -93,6 +99,168 @@ async function testFreshRecursiveScan() {
         typeof scanDiagnostic.enumerationStartedAt === "string" &&
         typeof scanDiagnostic.enumerationFinishedAt === "string",
     "recursive enumeration diagnostic did not count actual yielded entries");
+}
+
+async function testLibraryTrackCatalog() {
+    const libraryA = "local:library-a";
+    const libraryB = "local:library-b";
+    const catalog = new LibraryTrackCatalog();
+    const handles = Array.from({ length: 1123 }, (_, index) =>
+        fileHandle(`Track-${index}.gpx`, index + 1, index + 1)
+    );
+
+    catalog.replaceFromCompleteScan(libraryA, handles.map(handle => ({
+        path: `Trips\\${handle.name}`,
+        fileHandle: handle
+    })));
+    assert(catalog.paths(libraryA).length === 1123,
+        "Catalog did not retain 1123 unique normalized Track paths");
+    assert(normalizeTrackRelativePath("Trips\\Track-1.gpx") ===
+        "Trips/Track-1.gpx",
+    "Catalog relativePath normalization is not canonical");
+    catalog.replaceProvisional(libraryB, [{
+        relativePath: "Trips/Track-1.gpx",
+        provisionalMetadata: {
+            displayName: "Cached",
+            color: "#ff0000",
+            checked: true,
+            getFile() {},
+            queryPermission() {},
+            requestPermission() {},
+            loader: { getFile() {} },
+            status() {}
+        }
+    }]);
+    const cached = catalog.get(libraryB, "Trips/Track-1.gpx");
+
+    assert(cached.actualFileHandle === null &&
+        typeof cached.provisionalMetadata.getFile === "undefined" &&
+        typeof cached.provisionalMetadata.queryPermission === "undefined" &&
+        typeof cached.provisionalMetadata.requestPermission === "undefined" &&
+        typeof cached.provisionalMetadata.loader === "undefined" &&
+        typeof cached.provisionalMetadata.status === "undefined" &&
+        !Object.hasOwn(cached.provisionalMetadata, "color") &&
+        !Object.hasOwn(cached.provisionalMetadata, "checked"),
+    "provisional Catalog entry exposed a loadable FileHandle capability");
+    assert(cached.actualFileHandle !== handles[1],
+        "Library B provisional restore inherited Library A actual handle");
+    const handleB = fileHandle("Track-1.gpx", 3, 3);
+    const actualMetadata = Object.freeze({ source: "actual" });
+
+    catalog.replaceFromCompleteScan(libraryB, [{
+        path: "Trips/Track-1.gpx", fileHandle: handleB
+    }], {
+        metadataByPath: new Map([["Trips/Track-1.gpx", actualMetadata]])
+    });
+    assert(catalog.get(libraryB, "Trips/Track-1.gpx").actualFileHandle ===
+        handleB &&
+        catalog.get(libraryB, "Trips/Track-1.gpx").metadata ===
+            actualMetadata &&
+        catalog.get(libraryB, "Trips/Track-1.gpx").metadataSource === "actual" &&
+        catalog.get(libraryB, "Trips/Track-1.gpx")
+            .provisionalMetadata.displayName === "Cached",
+    "Library B complete scan did not replace the same-path source binding");
+    const partial = Array.from({ length: 100 }, (_, index) => ({
+        path: `Track-${index}.gpx`,
+        fileHandle: fileHandle(`Track-${index}.gpx`, index, index)
+    }));
+
+    catalog.replaceFromCompleteScan(libraryB, partial);
+    let identityRejected = false;
+
+    try {
+        catalog.mergeActual(libraryA, []);
+    } catch {
+        identityRejected = true;
+    }
+    assert(identityRejected,
+        "partial merge accepted a mismatched Library identity");
+    catalog.mergeActual(libraryB, [{
+        path: "Track-0.gpx", fileHandle: fileHandle("Track-0.gpx", 2, 2)
+    }]);
+    assert(catalog.paths(libraryB).length === 100,
+        "partial actual merge removed Tracks absent from its input");
+    catalog.replaceFromCompleteScan(libraryB, partial.slice(0, 99));
+    assert(catalog.paths(libraryB).length === 99 &&
+        !catalog.has(libraryB, "Track-99.gpx"),
+    "complete scan replacement did not remove its missing Track");
+    let invalidRejected = false;
+
+    try {
+        catalog.mergeActual(libraryB, [{
+            path: "invalid.gpx", fileHandle: { kind: "file" }
+        }]);
+    } catch {
+        invalidRejected = true;
+    }
+    assert(invalidRejected && !catalog.has(libraryB, "invalid.gpx"),
+        "Catalog accepted an actual handle without getFile capability");
+    let collision = null;
+
+    try {
+        catalog.mergeActual(libraryB, [
+            { path: "Trips//a.gpx", fileHandle: fileHandle("a.gpx", 1, 1) },
+            { path: "Trips/a.gpx", fileHandle: fileHandle("a.gpx", 1, 1) }
+        ]);
+    } catch (error) {
+        collision = error;
+    }
+    assert(collision instanceof LibraryPathCollisionError &&
+        !catalog.has(libraryB, "Trips/a.gpx"),
+    "normalization collision silently overwrote a Catalog entry");
+    catalog.replaceFromCompleteScan(libraryB, [
+        { path: "root.gpx", fileHandle: fileHandle("root.gpx", 1, 1) },
+        {
+            path: "Trips/Deep/nested.gpx",
+            fileHandle: fileHandle("nested.gpx", 1, 1)
+        }
+    ]);
+    assert(catalog.get(libraryB, "root.gpx").folderPath === "" &&
+        catalog.get(libraryB, "Trips/Deep/nested.gpx").folderPath ===
+            "Trips/Deep",
+    "root or nested Track folder identity was incorrect");
+    const removedHandle = catalog.get(libraryB, "root.gpx").actualFileHandle;
+
+    catalog.remove(libraryB, "root.gpx");
+    const reboundHandle = fileHandle("root.gpx", 5, 5);
+
+    catalog.mergeActual(libraryB, [{
+        path: "root.gpx", fileHandle: reboundHandle
+    }]);
+    assert(catalog.get(libraryB, "root.gpx").actualFileHandle === reboundHandle &&
+        catalog.get(libraryB, "root.gpx").actualFileHandle !== removedHandle,
+    "removed/re-added Track retained its old actual source");
+    catalog.replaceFromCompleteScan(libraryB, []);
+    const diagnostic = catalog.getDiagnostics(libraryB, []);
+
+    assert(diagnostic.pathCount === 0 &&
+        diagnostic.actualHandleCount === 0 &&
+        diagnostic.provisionalCount === 0 &&
+        diagnostic.missingFromCatalog.length === 0 &&
+        diagnostic.extraInCatalog.length === 0,
+    "empty Library left stale Catalog entries");
+    let reported = null;
+    const isolated = new LibraryTrackCatalogCoordinator({
+        catalog: {
+            replaceFromCompleteScan() {
+                throw new Error("catalog-only failure");
+            }
+        },
+        reportError: state => { reported = state; }
+    });
+    let runtimeContinued = false;
+    const applied = await isolated.applyCompleteLibrary({
+        libraryIdentity: libraryB,
+        apply: async () => {
+            runtimeContinued = true;
+            return true;
+        },
+        getEntries: () => []
+    });
+
+    assert(applied && runtimeContinued && reported?.result === "failure" &&
+        reported.errorMessage === "catalog-only failure",
+    "Catalog failure was silent or stopped the existing runtime path");
 }
 
 function createTree(initialLibrary) {
@@ -601,6 +769,10 @@ async function testFastRefreshScale() {
     const tree = await createTree(before);
     const displayState = new DisplayState();
     const selectionState = new SelectionState();
+    const trackCatalog = new LibraryTrackCatalog();
+    const trackCatalogCoordinator = new LibraryTrackCatalogCoordinator({
+        catalog: trackCatalog
+    });
     let currentLibrary = before;
 
     tree.getFileEntries().forEach(({ path, fileHandle: handle }) => {
@@ -637,6 +809,7 @@ async function testFastRefreshScale() {
         },
         displayState,
         selectionState,
+        trackCatalogCoordinator,
         repository: {},
         getNamespace: () => "local:scale",
         getLibrary: () => currentLibrary,
@@ -672,6 +845,10 @@ async function testFastRefreshScale() {
         performance.existingGetFileCount === 0 &&
         performance.existingMetadataValidationCount === 0,
     "fast refresh called getFile/metadata validation for existing Tracks");
+    assert(trackCatalog.paths("local:scale").length === existingCount + 2 &&
+        trackCatalog.has("local:scale", "New-A.gpx") &&
+        trackCatalog.has("local:scale", "New-B.gpx"),
+    "incremental refresh did not populate new Tracks in the parallel Catalog");
     assert(displayState.getDisplay("New-A.gpx")?.color === "#f08000" &&
         displayState.getDisplay("New-B.gpx")?.color === "#f08000" &&
         !displayState.getDisplay("New-A.gpx")?.checked &&
@@ -695,6 +872,10 @@ async function testNoOpRefreshPresentationInvariance() {
     const tree = await createTree(before);
     const displayState = new DisplayState();
     const selectionState = new SelectionState();
+    const trackCatalog = new LibraryTrackCatalog();
+    const trackCatalogCoordinator = new LibraryTrackCatalogCoordinator({
+        catalog: trackCatalog
+    });
     const entries = files.map((handle, index) => ({
         relativePath: handle.name,
         status: "ready",
@@ -726,6 +907,10 @@ async function testNoOpRefreshPresentationInvariance() {
         );
         tree.nodeMetadata.get(path).color = color;
     });
+    trackCatalog.replaceFromCompleteScan(
+        "local:no-op",
+        tree.getFileEntries()
+    );
     displayState.setChecked("Existing-10.gpx", true);
     displayState.setError(
         "Existing-11.gpx",
@@ -782,6 +967,7 @@ async function testNoOpRefreshPresentationInvariance() {
         },
         displayState,
         selectionState,
+        trackCatalogCoordinator,
         repository: {},
         getNamespace: () => "local:no-op",
         getLibrary: () => currentLibrary,
@@ -846,6 +1032,11 @@ async function testNoOpRefreshPresentationInvariance() {
     assert(displayState.getDisplay("Existing-10.gpx")?.fileHandle ===
         scannedFiles[10],
     "no-op refresh did not rebind the actual FileHandle safely");
+    assert(trackCatalog.paths("local:no-op").length === trackCount &&
+        trackCatalog.get("local:no-op", "Existing-10.gpx")
+            ?.actualFileHandle ===
+            scannedFiles[10],
+    "no-op refresh did not update the parallel Catalog source binding");
     assert(selectionState.getSelectedPath() === "Existing-10.gpx",
         "no-op refresh changed selection");
 }
@@ -1160,6 +1351,7 @@ function testRefreshContextGetters() {
 
 try {
     await testFreshRecursiveScan();
+    await testLibraryTrackCatalog();
     await testRefreshAndReconciliation();
     await testIncrementalTreeDomReconcile();
     await testFastRefreshScale();

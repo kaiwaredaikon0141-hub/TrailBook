@@ -137,6 +137,7 @@ export default class LibrarySnapshotService {
         mapView,
         selectionState,
         getColor,
+        trackCatalogCoordinator = null,
         statusBar = null
     }) {
         Object.assign(this, {
@@ -149,6 +150,7 @@ export default class LibrarySnapshotService {
             mapView,
             selectionState,
             getColor,
+            trackCatalogCoordinator,
             statusBar
         });
         this.provisional = false;
@@ -210,6 +212,10 @@ export default class LibrarySnapshotService {
         this.treeView.expandedPaths = new Set(state.expandedPaths);
         this.treeView.focusedPath = "";
         await this.treeView.render(model.library, { preserveNavigation: true });
+        this.trackCatalogCoordinator?.replaceProvisional(
+            cacheNamespace,
+            state.entries
+        );
         this.displayState.setLibrary(model.library.rootFolder.handle);
         model.fileEntries.forEach(({ path, fileHandle }) => {
             const entry = state.entries.find(item => item.relativePath === path);

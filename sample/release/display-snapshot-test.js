@@ -12,6 +12,10 @@ import TrackDiscoveryEntry from
     "../../src/js/models/TrackDiscoveryEntry.js";
 import LibrarySnapshotService from
     "../../src/js/services/LibrarySnapshotService.js";
+import LibraryTrackCatalog from
+    "../../src/js/core/LibraryTrackCatalog.js";
+import LibraryTrackCatalogCoordinator from
+    "../../src/js/core/LibraryTrackCatalogCoordinator.js";
 
 const output = document.getElementById("result");
 let assertions = 0;
@@ -361,6 +365,10 @@ async function testLibrarySnapshotService() {
         }),
         setProvisionalLibrary: state => provisional.push(state)
     };
+    const trackCatalog = new LibraryTrackCatalog();
+    const trackCatalogCoordinator = new LibraryTrackCatalogCoordinator({
+        catalog: trackCatalog
+    });
     const service = new LibrarySnapshotService({
         treeView,
         discoveryCoordinator,
@@ -372,6 +380,7 @@ async function testLibrarySnapshotService() {
         eventBus,
         mapView: { removeGPX: path => removed.push(path) },
         selectionState,
+        trackCatalogCoordinator,
         getColor: () => "#123456",
         statusBar: {
             showLibraryLoaded: library => statusLibraries.push(library.name)
@@ -409,6 +418,17 @@ async function testLibrarySnapshotService() {
         "cached selected Track was not restored");
     assert(service.isProvisionalFor("local-cache"),
         "cached Library was not marked provisional");
+    assert(trackCatalog.get("local-cache", "Trips/one.gpx")
+        ?.actualFileHandle === null &&
+        trackCatalog.get("local-cache", "Trips/one.gpx")
+            ?.provisionalMetadata.displayName ===
+            "Morning Ride" &&
+        !Object.hasOwn(
+            trackCatalog.get("local-cache", "Trips/one.gpx")
+                .provisionalMetadata,
+            "color"
+        ),
+    "cached Library restore did not hydrate a non-loadable Catalog entry");
     assert(statusLibraries[0] === "GPX",
         "cached Library left the stale open-Library status message visible");
     assert(accessStates[0] === true && events[0].value.provisional,

@@ -109,6 +109,7 @@ window.addEventListener("DOMContentLoaded", () => {
         scanner: app.folderScanner,
         previousLibraryCoordinator: app.previousLibraryCoordinator,
         librarySnapshotService: app.librarySnapshotService,
+        trackCatalogCoordinator: app.libraryTrackCatalogCoordinator,
         accessPanel: app.libraryAccessPanel,
         treeView: app.treeView,
         discoveryCoordinator: app.trackDiscoveryCoordinator,
@@ -267,8 +268,8 @@ window.addEventListener("DOMContentLoaded", () => {
             app.clearSelection("library-switch");
             app.trackDiscoveryCoordinator.clearLibrary();
         },
-        applyLibrary: (library, context) =>
-            app.handleLibraryLoaded(library, context),
+        applyLibrary: (library, context) => app.libraryTrackCatalogCoordinator
+            .applyCompleteLibrary({ libraryIdentity: context.cacheNamespace, apply: () => app.handleLibraryLoaded(library, context), getEntries: () => app.treeView.getFileEntries() }),
         getCurrentLibrary: () => app.currentLibrary,
         setReadOnlyPresentation: readOnly => {
             if (readOnly) app.librarySettingsPanel.setAvailable(false);
