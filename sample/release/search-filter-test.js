@@ -255,6 +255,15 @@ async function testCoordinator() {
         fileHandle: { name: path.split("/").pop() }
     }));
 
+    coordinator.setSourceResolver({
+        resolve: path => ({
+            status: "ready",
+            relativePath: path,
+            actualFileHandle: handles.find(entry => entry.path === path)
+                ?.fileHandle
+        })
+    });
+
     sidebar.append(searchView.element, folderTree);
     folderTree.append(
         row("", "folder"),

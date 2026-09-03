@@ -42,7 +42,33 @@ function file(name, { size = 100, lastModified = Date.UTC(2026, 7, 3) } = {}) {
 }
 
 function handle(sourceFile) {
-    return { name: sourceFile.name, async getFile() { return sourceFile; } };
+    return {
+        kind: "file",
+        name: sourceFile.name,
+        async getFile() { return sourceFile; }
+    };
+}
+
+function sourceResolver(initialEntries = []) {
+    const sources = new Map();
+    const resolver = {
+        replace(entries) {
+            sources.clear();
+            entries.forEach(({ path, relativePath = path, fileHandle }) =>
+                sources.set(relativePath, fileHandle));
+        },
+        bind(path, fileHandle) { sources.set(path, fileHandle); },
+        resolve(path) {
+            const actualFileHandle = sources.get(path);
+
+            return actualFileHandle
+                ? { status: "ready", relativePath: path, actualFileHandle }
+                : { status: "unavailable", relativePath: path, reason: "missing" };
+        }
+    };
+
+    resolver.replace(initialEntries);
+    return resolver;
 }
 
 function point(latitude, longitude, { time = null, elevation = null } = {}) {
@@ -312,13 +338,16 @@ async function testLazyIndex() {
             return builder.build(path, await fileHandle.getFile(), parsed());
         }
     };
-    const index = new LibraryDiscoveryIndexService({ loader, concurrency: 2 });
     const sources = [
         { path: "b.gpx", fileHandle: handle(file("b.gpx")) },
         { path: "a.gpx", fileHandle: handle(file("a.gpx")) },
         { path: "a.gpx", fileHandle: handle(file("duplicate.gpx")) },
         { path: "broken.gpx", fileHandle: handle(file("broken.gpx")) }
     ];
+    const resolver = sourceResolver(sources);
+    const index = new LibraryDiscoveryIndexService({
+        loader, concurrency: 2, sourceResolver: resolver
+    });
 
     index.setLibrary({ namespace: "lazy", fileEntries: sources, generation: 4 });
     assert(index.getStatus() === "idle", "index did not remain lazy");
@@ -361,18 +390,29 @@ async function testGenerationGuard() {
             }));
         }
     };
-    const index = new LibraryDiscoveryIndexService({ loader });
+    const resolver = sourceResolver();
+    const index = new LibraryDiscoveryIndexService({
+        loader, sourceResolver: resolver
+    });
 
+    const oldEntries = [
+        { path: "old.gpx", fileHandle: handle(file("old.gpx")) }
+    ];
+    resolver.replace(oldEntries);
     index.setLibrary({
         namespace: "old",
         generation: 1,
-        fileEntries: [{ path: "old.gpx", fileHandle: handle(file("old.gpx")) }]
+        fileEntries: oldEntries
     });
     const oldBuild = index.build({ isCurrent: generation => generation === 1 });
+    const newEntries = [
+        { path: "new.gpx", fileHandle: handle(file("new.gpx")) }
+    ];
+    resolver.replace(newEntries);
     index.setLibrary({
         namespace: "new",
         generation: 2,
-        fileEntries: [{ path: "new.gpx", fileHandle: handle(file("new.gpx")) }]
+        fileEntries: newEntries
     });
     await releases.shift()();
     await oldBuild;
@@ -396,10 +436,14 @@ async function testLargeWarmIndexContract() {
             return builder.build(path, await fileHandle.getFile(), cachedResult);
         }
     };
-    const index = new LibraryDiscoveryIndexService({ loader, concurrency: 2 });
     const fileEntries = Array.from({ length: 806 }, (_, itemIndex) => {
         const name = `track-${String(itemIndex).padStart(4, "0")}.gpx`;
         return { path: `bulk/${name}`, fileHandle: handle(file(name)) };
+    });
+    const index = new LibraryDiscoveryIndexService({
+        loader,
+        concurrency: 2,
+        sourceResolver: sourceResolver(fileEntries)
     });
 
     index.setLibrary({
@@ -427,9 +471,14 @@ async function testTargetedEntryReplacement() {
             })));
         }
     };
-    const index = new LibraryDiscoveryIndexService({ loader });
-    const oldHandle = { marker: "old" };
-    const newHandle = { marker: "edited" };
+    const oldHandle = { kind: "file", marker: "old", async getFile() {} };
+    const newHandle = { kind: "file", marker: "edited", async getFile() {} };
+    const resolver = sourceResolver([{
+        path: "same.gpx", fileHandle: oldHandle
+    }]);
+    const index = new LibraryDiscoveryIndexService({
+        loader, sourceResolver: resolver
+    });
 
     index.setLibrary({
         namespace: "replace",
@@ -437,6 +486,7 @@ async function testTargetedEntryReplacement() {
         fileEntries: [{ path: "same.gpx", fileHandle: oldHandle }]
     });
     const stale = index.loadEntry("same.gpx");
+    resolver.bind("same.gpx", newHandle);
     assert(index.replaceFileEntry({
         relativePath: "same.gpx",
         fileHandle: newHandle

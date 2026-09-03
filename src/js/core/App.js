@@ -18,8 +18,8 @@ import ViewStateCoordinator from "./ViewStateCoordinator.js";
 import PreviousLibraryCoordinator from "./PreviousLibraryCoordinator.js";
 import DisplaySnapshotCoordinator from "./DisplaySnapshotCoordinator.js";
 import TrackDiscoveryCoordinator from "./TrackDiscoveryCoordinator.js";
-import LibraryTrackCatalogCoordinator from
-    "./LibraryTrackCatalogCoordinator.js";
+import LibraryTrackCatalogCoordinator from "./LibraryTrackCatalogCoordinator.js";
+import { settleUnavailableTrackDisplay } from "./TrackDisplaySourceBoundary.js";
 import DisplayState from "../state/DisplayState.js";
 import SelectionState from "../state/SelectionState.js";
 import FolderColorState from "../state/FolderColorState.js";
@@ -234,8 +234,7 @@ export default class App {
                 }
                 if (!this.librarySnapshotService.isProvisional()) this.trackDiscoveryCoordinator.clearLibrary();
             },
-            applyLibrary: (library, context) => this.libraryTrackCatalogCoordinator
-                .applyCompleteLibrary({ libraryIdentity: context.cacheNamespace, apply: () => this.handleLibraryLoaded(library, context), getEntries: () => this.treeView.getFileEntries() }),
+            applyLibrary: (library, context) => this.handleLibraryLoaded(library, context),
             getCurrentLibrary: () => this.currentLibrary, hasUsableLibrary: () => Boolean(this.currentLibrary) || this.librarySnapshotService.isProvisional()
         });
 
@@ -368,9 +367,8 @@ export default class App {
         await this.treeView.render(library, { preserveNavigation: preserveCached });
         if (preserveCached) this.treeView.setSelectedPath(this.selectionState.getSelectedPath(), { reveal: true });
 
-        if (!isCurrent()) {
-            return false;
-        }
+        if (!isCurrent()) return false;
+        this.libraryTrackCatalogCoordinator.replaceFromCompleteScan(cacheNamespace, this.treeView.getFileEntries());
         this.searchView.setAvailable(true);
 
         this.currentLibrary = library;
@@ -528,7 +526,7 @@ export default class App {
     }) {
 
         const display = this.displayState.getDisplay(path);
-
+        const rollbackUnavailable = checked && !display?.checked;
         if (!display) {
             this.displayState.registerFile(path, fileHandle, this.getColor(path));
         }
@@ -544,7 +542,7 @@ export default class App {
             return;
         }
 
-        this.startDisplay(path, fileHandle, { refocus: !preserveMapView });
+        this.startDisplay(path, fileHandle, { refocus: !preserveMapView, rollbackUnavailable });
     }
 
     handleFolderDisplayToggled({
@@ -588,7 +586,7 @@ export default class App {
         this.updateDisplayStatus();
     }
 
-    startDisplay(path, fileHandle, { refocus = true } = {}) {
+    startDisplay(path, fileHandle, { refocus = true, rollbackUnavailable = false } = {}) {
 
         const display = this.displayState.getDisplay(path);
         const cachedResult = this.displayState.getCachedResult(path);
@@ -624,13 +622,13 @@ export default class App {
             fileHandle,
             generation,
             requestId,
-            run: () => this.gpxGeometryLoader.load(path, fileHandle),
+            run: () => this.gpxGeometryLoader.load(path),
             onSuccess: result => this.handleDisplayParsed(
                 path,
                 result,
                 generation,
                 requestId,
-                { refocus }
+                { refocus, rollbackUnavailable }
             ),
             onFailure: error => this.handleDisplayFailed(
                 path,
@@ -646,7 +644,7 @@ export default class App {
         result,
         generation,
         requestId,
-        { refocus = true } = {}
+        { refocus = true, rollbackUnavailable = false } = {}
     ) {
 
         const display = this.displayState.getDisplay(path);
@@ -658,6 +656,8 @@ export default class App {
         ) {
             return;
         }
+
+        if (settleUnavailableTrackDisplay(this, path, result, { rollbackRequested: rollbackUnavailable })) return;
 
         this.displayState.setCachedResult(path, result);
 

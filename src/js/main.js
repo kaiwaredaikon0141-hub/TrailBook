@@ -8,6 +8,7 @@ import BatchSimplificationCoordinator, {
 import EditedGPXLibraryRefreshCoordinator from "./core/EditedGPXLibraryRefreshCoordinator.js";
 import LibraryRefreshCoordinator from "./core/LibraryRefreshCoordinator.js";
 import TrackEditingCoordinator from "./core/TrackEditingCoordinator.js";
+import TrackSourceResolver from "./core/TrackSourceResolver.js";
 import SelectedTrackFileResolver from "./services/SelectedTrackFileResolver.js";
 import { registerTrailBookServiceWorker } from "./services/PWAServiceWorker.js";
 import { folderPathFromFilePath } from "./utils/PathUtils.js";
@@ -21,6 +22,12 @@ window.addEventListener("DOMContentLoaded", () => {
     const app = new App();
 
     app.initialize();
+    const trackSourceResolver = new TrackSourceResolver({
+        catalog: app.libraryTrackCatalogCoordinator.catalog,
+        getLibraryIdentity: () => app.gpxGeometryLoader.namespace
+    });
+    app.gpxGeometryLoader.setSourceResolver(trackSourceResolver);
+    app.trackDiscoveryCoordinator.setSourceResolver(trackSourceResolver);
     app.trackDiscoveryCoordinator.sidebarShell
         ?.querySelector(".sidebar-fixed-controls")
         ?.append(app.mapView.sidebarDisplayControls);
@@ -102,7 +109,9 @@ window.addEventListener("DOMContentLoaded", () => {
         onLibraryUpdated: library => {
             app.statusBar.showLibraryLoaded(library);
             app.libraryAccessPanel.hide();
-        }
+        },
+        rebindTrackSource: source => app.libraryTrackCatalogCoordinator
+            .replaceActualPath(app.gpxGeometryLoader.namespace, source)
     });
     const libraryRefresh = new LibraryRefreshCoordinator({
         eventBus: app.eventBus,
@@ -268,8 +277,8 @@ window.addEventListener("DOMContentLoaded", () => {
             app.clearSelection("library-switch");
             app.trackDiscoveryCoordinator.clearLibrary();
         },
-        applyLibrary: (library, context) => app.libraryTrackCatalogCoordinator
-            .applyCompleteLibrary({ libraryIdentity: context.cacheNamespace, apply: () => app.handleLibraryLoaded(library, context), getEntries: () => app.treeView.getFileEntries() }),
+        applyLibrary: (library, context) =>
+            app.handleLibraryLoaded(library, context),
         getCurrentLibrary: () => app.currentLibrary,
         setReadOnlyPresentation: readOnly => {
             if (readOnly) app.librarySettingsPanel.setAvailable(false);

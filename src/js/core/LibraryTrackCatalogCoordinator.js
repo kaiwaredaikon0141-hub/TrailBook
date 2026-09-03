@@ -44,6 +44,27 @@ export default class LibraryTrackCatalogCoordinator {
             this.catalog.mergeActual(libraryIdentity, entries, options));
     }
 
+    remove(libraryIdentity, path) {
+        return this.#synchronize("remove", libraryIdentity, () =>
+            this.catalog.remove(libraryIdentity, path));
+    }
+
+    replaceActualPath(
+        libraryIdentity,
+        { sourcePath, targetPath = sourcePath, fileHandle }
+    ) {
+        return this.#synchronize("replace-actual-path", libraryIdentity, () => {
+            this.catalog.mergeActual(libraryIdentity, [{
+                path: targetPath,
+                fileHandle
+            }]);
+            if (sourcePath !== targetPath) {
+                this.catalog.remove(libraryIdentity, sourcePath);
+            }
+            return true;
+        });
+    }
+
     async applyCompleteLibrary({ libraryIdentity, apply, getEntries }) {
 
         const applied = await apply();

@@ -479,6 +479,8 @@ export default class LibraryRefreshCoordinator {
         const diffMs = this.performanceNow() - diffStartedAt;
         const namespace = this.getNamespace();
 
+        this.trackCatalogCoordinator?.mergeActual(namespace, fileEntries);
+
         // The normal refresh is path-discovery-first. Existing file identity
         // validation is reserved for a separate complete/background refresh.
         const validationMs = 0;
@@ -562,7 +564,7 @@ export default class LibraryRefreshCoordinator {
             normalizeRelativePath(entry.relativePath), entry
         ]));
 
-        this.trackCatalogCoordinator?.mergeActual(this.getNamespace(), fileEntries, {
+        this.trackCatalogCoordinator?.mergeActual(namespace, added, {
             metadataByPath: catalogMetadata
         });
         const addedProcessingMs = this.performanceNow() -
@@ -854,7 +856,7 @@ export default class LibraryRefreshCoordinator {
         const step = status ? `${stage}: ${status}` : stage;
         const checkboxTrace = [...(trace.checkboxTrace || []), step].slice(-10);
         const resolverResult = stage === "resolver"
-            ? status || data.resolverResult || "unknown"
+            ? data.resolverResult || status || "unknown"
             : trace.resolverResult;
         const getFileResult = stage === "getFile"
             ? status || "unknown"

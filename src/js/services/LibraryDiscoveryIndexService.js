@@ -1,18 +1,25 @@
 import TrackSummaryBuilder from "./TrackSummaryBuilder.js";
 import drivePerformance from "./DrivePerformanceMonitor.js";
+import { isTrackSourceUnavailable } from "../core/TrackSourceResolver.js";
 
 /**
  * Lazily builds one compact discovery entry per GPX path.
  */
 export default class LibraryDiscoveryIndexService {
 
-    constructor({ loader, summaryBuilder = new TrackSummaryBuilder(), concurrency = 2 }) {
+    constructor({
+        loader,
+        summaryBuilder = new TrackSummaryBuilder(),
+        concurrency = 2,
+        sourceResolver = null
+    }) {
 
         if (!loader || typeof loader.loadSummary !== "function") {
             throw new TypeError("A discovery-capable GPX loader is required.");
         }
 
         this.loader = loader;
+        this.sourceResolver = sourceResolver;
         this.summaryBuilder = summaryBuilder;
         this.concurrency = Number.isFinite(concurrency)
             ? Math.max(1, Math.floor(concurrency))
@@ -26,6 +33,13 @@ export default class LibraryDiscoveryIndexService {
         this.buildToken = 0;
         this.entryPromises = new Map();
         this.entryVersions = new Map();
+    }
+
+    setSourceResolver(resolver) {
+
+        this.sourceResolver = typeof resolver?.resolve === "function"
+            ? resolver
+            : null;
     }
 
     setLibrary({
@@ -261,19 +275,10 @@ export default class LibraryDiscoveryIndexService {
         return this.getEntries();
     }
 
-    async #createFailureSummary({ relativePath, fileHandle }) {
-
-        let file = null;
-
-        try {
-            file = await fileHandle?.getFile?.();
-        } catch {
-            // The entry remains discoverable with path-only fallback data.
-        }
-
+    #createFailureSummary({ relativePath, fileHandle }) {
         return this.summaryBuilder.build(
             relativePath,
-            file || { name: fileHandle?.name || relativePath.split("/").pop() },
+            { name: fileHandle?.name || relativePath.split("/").pop() },
             null,
             { status: "error" }
         );
@@ -284,12 +289,23 @@ export default class LibraryDiscoveryIndexService {
         let summary;
 
         try {
-            summary = await this.loader.loadSummary(
-                source.relativePath,
-                source.fileHandle
+            const resolved = this.sourceResolver?.resolve(
+                source.relativePath
             );
+
+            if (!resolved || isTrackSourceUnavailable(resolved)) {
+                summary = this.#createUnavailableSummary(source);
+            } else {
+                summary = await this.loader.loadSummary(
+                    source.relativePath,
+                    resolved.actualFileHandle
+                );
+                if (isTrackSourceUnavailable(summary)) {
+                    summary = this.#createUnavailableSummary(source);
+                }
+            }
         } catch (error) {
-            summary = await this.#createFailureSummary(source);
+            summary = this.#createFailureSummary(source);
 
             if (this.#isEntryCurrent(
                 source.relativePath,
@@ -313,6 +329,13 @@ export default class LibraryDiscoveryIndexService {
         this.entries.set(source.relativePath, summary);
 
         return summary;
+    }
+
+    #createUnavailableSummary({ relativePath, fileHandle }) {
+
+        return this.summaryBuilder.build(relativePath, {
+            name: fileHandle?.name || relativePath.split("/").pop()
+        }, null);
     }
 
     #isLibraryCurrent(generation, isCurrent) {

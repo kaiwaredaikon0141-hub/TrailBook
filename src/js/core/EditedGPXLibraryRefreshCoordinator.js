@@ -13,6 +13,7 @@ export default class EditedGPXLibraryRefreshCoordinator {
         getColor,
         invalidateGeometry = async () => false,
         reloadVisiblePath = async () => true,
+        rebindTrackSource = () => true,
         onLibraryUpdated = () => {}
     }) {
 
@@ -25,6 +26,7 @@ export default class EditedGPXLibraryRefreshCoordinator {
         this.getColor = getColor;
         this.invalidateGeometry = invalidateGeometry;
         this.reloadVisiblePath = reloadVisiblePath;
+        this.rebindTrackSource = rebindTrackSource;
         this.onLibraryUpdated = onLibraryUpdated;
     }
 
@@ -54,6 +56,7 @@ export default class EditedGPXLibraryRefreshCoordinator {
                 fileHandle,
                 this.getColor(targetPath)
             )) return false;
+            this.rebindTrackSource({ sourcePath, targetPath, fileHandle });
 
             const discoveryRefreshed = await this.discoveryCoordinator
                 .renameFileEntry({ sourcePath, targetPath, fileHandle });
@@ -71,6 +74,7 @@ export default class EditedGPXLibraryRefreshCoordinator {
                 this.getColor(sourcePath)
             );
             this.displayState.setIdle(sourcePath);
+            this.rebindTrackSource({ sourcePath, targetPath, fileHandle });
 
             const discoveryRefreshed = await this.discoveryCoordinator
                 .refreshFileEntry({ path: sourcePath, fileHandle });

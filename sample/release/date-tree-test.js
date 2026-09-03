@@ -345,6 +345,15 @@ async function testCoordinator() {
         path,
         fileHandle: { name: path }
     }));
+
+    coordinator.setSourceResolver({
+        resolve: path => ({
+            status: "ready",
+            relativePath: path,
+            actualFileHandle: handles.find(entry => entry.path === path)
+                ?.fileHandle
+        })
+    });
     displayState.setLibrary({});
     handles.forEach(({ path, fileHandle }) =>
         displayState.registerFile(path, fileHandle, "#000000")

@@ -1014,6 +1014,7 @@ async function testGeometryCache() {
         }
     };
     const fileHandle = {
+        kind: "file",
         name: "a.gpx",
         async getFile() { return sourceFile; }
     };
@@ -1052,6 +1053,7 @@ async function testGeometryCache() {
         async text() { return "<gpx changed />"; }
     };
     await loader.load("a.gpx", {
+        kind: "file",
         name: "a.gpx",
         async getFile() { return changedFile; }
     });
@@ -1457,6 +1459,13 @@ async function testLibraryRestoreOrdering() {
             async load() { return { source: "none" }; },
             applyLoad() { return true; }
         },
+        librarySnapshotService: {
+            isProvisionalFor() { return false; },
+            reconcileActual() {}
+        },
+        libraryTrackCatalogCoordinator: {
+            replaceFromCompleteScan() { order.push("catalog-ready"); }
+        },
         clearSelection() {},
         displayQueue: { clear() {} },
         searchView: { setAvailable() {} },
@@ -1493,8 +1502,9 @@ async function testLibraryRestoreOrdering() {
 
     assert(await App.prototype.handleLibraryLoaded.call(app, library, context),
         "Library apply failed");
-    assert(order.indexOf("tree-ready") < order.indexOf("discovery-ready"),
-        "Discovery configured before Tree ready");
+    assert(order.indexOf("tree-ready") < order.indexOf("catalog-ready") &&
+        order.indexOf("catalog-ready") < order.indexOf("discovery-ready"),
+    "Catalog actual sources were not ready before Discovery configuration");
     assert(order.indexOf("display-registered") < order.indexOf("view-state-restore"),
         "display restore started before file registration");
     assert(order.indexOf("discovery-ready") < order.indexOf("view-state-restore"),

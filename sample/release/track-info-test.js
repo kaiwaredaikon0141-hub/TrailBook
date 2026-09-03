@@ -231,7 +231,16 @@ async function testIndexEntryLoad() {
         setLibraryNamespace() {},
         async loadSummary() { loadCount += 1; return summary; }
     };
-    const index = new LibraryDiscoveryIndexService({ loader });
+    const sourceResolver = {
+        resolve: path => ({
+            status: "ready",
+            relativePath: path,
+            actualFileHandle: { kind: "file", async getFile() {} }
+        })
+    };
+    const index = new LibraryDiscoveryIndexService({
+        loader, sourceResolver
+    });
 
     index.setLibrary({
         generation: 1,
@@ -252,7 +261,8 @@ async function testIndexEntryLoad() {
         loader: {
             setLibraryNamespace() {},
             loadSummary() { return wait.promise; }
-        }
+        },
+        sourceResolver
     });
     staleIndex.setLibrary({
         generation: 1,

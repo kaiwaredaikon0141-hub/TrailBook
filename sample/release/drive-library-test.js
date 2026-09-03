@@ -324,6 +324,7 @@ async function testDriveGeometryCacheOrdering() {
     });
     localLoader.setLibraryNamespace("local:root");
     await localLoader.load("local.gpx", {
+        kind: "file",
         name: "local.gpx",
         getFile: async () => {
             localOrder.push("getFile");
@@ -377,7 +378,9 @@ async function testDriveMissConcurrency() {
         summaryBuilder: { build: path => ({ displayName: path }) }
     });
     const handles = Array.from({ length: 10 }, (_, index) => ({
+        kind: "file",
         name: `track-${index}.gpx`,
+        getFile() { throw new Error("custom Drive loader must be used"); },
         driveEntry: {
             size: 6,
             modifiedTime: "2026-08-15T00:00:00Z"
@@ -396,7 +399,9 @@ async function testDriveMissConcurrency() {
     assert(started === 4, "fifth Drive miss waits for a slot");
 
     const hit = await loader.load("hit.gpx", {
+        kind: "file",
         name: "hit.gpx",
+        getFile() { throw new Error("cache hit must not read source"); },
         driveEntry: { size: 6, modifiedTime: "2026-08-15T00:00:00Z" }
     });
     assert(hit.id === "cached" && started === 4,
@@ -445,7 +450,9 @@ async function testDriveMissConcurrency() {
     });
     const failureHandles = ["fail.gpx", "a.gpx", "b.gpx", "c.gpx", "d.gpx"]
         .map(name => ({
+            kind: "file",
             name,
+            getFile() { throw new Error("custom Drive loader must be used"); },
             driveEntry: { size: 6, modifiedTime: null }
         }));
 

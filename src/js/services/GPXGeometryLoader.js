@@ -1,5 +1,6 @@
 import TrackSummaryBuilder from "./TrackSummaryBuilder.js";
 import drivePerformance from "./DrivePerformanceMonitor.js";
+import { isTrackSourceUnavailable } from "../core/TrackSourceResolver.js";
 
 /**
  * Loads display geometry from IndexedDB before falling back to GPX parsing.
@@ -21,6 +22,7 @@ export default class GPXGeometryLoader {
         this.summaryBuilder = summaryBuilder;
         this.driveConcurrency = driveConcurrency;
         this.diagnosticObserver = diagnosticObserver;
+        this.sourceResolver = null;
         this.activeDriveOperations = 0;
         this.driveOperationWaiters = [];
         this.namespace = null;
@@ -44,6 +46,14 @@ export default class GPXGeometryLoader {
             : null;
     }
 
+    setSourceResolver(resolver) {
+
+        this.sourceResolver = typeof resolver?.resolve === "function"
+            ? resolver
+            : null;
+        this.inflight.clear();
+    }
+
     load(path, fileHandle) {
 
         const request = this.#request(path, fileHandle);
@@ -62,7 +72,26 @@ export default class GPXGeometryLoader {
 
     #request(path, fileHandle) {
 
-        const requestKey = JSON.stringify([this.namespace, path]);
+        const source = this.#resolveSource(path, fileHandle);
+
+        this.#diagnose(
+            path,
+            source.actualFileHandle,
+            "resolver",
+            source.status,
+            null,
+            source.reason
+        );
+        if (isTrackSourceUnavailable(source)) {
+            return {
+                bundle: Promise.resolve({ result: source, summary: source }),
+                result: null,
+                summary: null
+            };
+        }
+
+        const resolvedPath = source.relativePath;
+        const requestKey = JSON.stringify([this.namespace, resolvedPath]);
         const existing = this.inflight.get(requestKey);
 
         if (existing) {
@@ -70,7 +99,7 @@ export default class GPXGeometryLoader {
             return existing;
         }
 
-        const bundle = this.#load(path, fileHandle);
+        const bundle = this.#load(resolvedPath, source.actualFileHandle);
         const request = {
             bundle,
             result: null,
@@ -83,6 +112,39 @@ export default class GPXGeometryLoader {
             () => this.inflight.delete(requestKey)
         );
         return request;
+    }
+
+    #resolveSource(path, fileHandle) {
+
+        if (this.sourceResolver) {
+            try {
+                return this.sourceResolver.resolve(path);
+            } catch {
+                return {
+                    status: "unavailable",
+                    relativePath: path,
+                    reason: "library-mismatch"
+                };
+            }
+        }
+        if (
+            fileHandle?.kind === "file" &&
+            fileHandle.provisional !== true &&
+            typeof fileHandle.getFile === "function"
+        ) {
+            return {
+                status: "ready",
+                relativePath: path,
+                actualFileHandle: fileHandle
+            };
+        }
+        return {
+            status: "unavailable",
+            relativePath: path,
+            reason: fileHandle?.provisional === true
+                ? "provisional-only"
+                : "missing"
+        };
     }
 
     getStats() {
@@ -220,7 +282,7 @@ export default class GPXGeometryLoader {
         return cached;
     }
 
-    #diagnose(path, fileHandle, stage, status, error = null) {
+    #diagnose(path, fileHandle, stage, status, error = null, reason = null) {
 
         try {
             this.diagnosticObserver?.({
@@ -233,7 +295,8 @@ export default class GPXGeometryLoader {
                     fileHandle && fileHandle.provisional !== true
                 ),
                 errorName: error?.name || null,
-                errorMessage: error?.message || null
+                errorMessage: error?.message || null,
+                resolverResult: reason || status
             });
         } catch {
             // Diagnostics must never affect GPX loading.

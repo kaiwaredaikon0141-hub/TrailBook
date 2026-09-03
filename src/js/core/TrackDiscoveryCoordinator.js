@@ -83,6 +83,11 @@ export default class TrackDiscoveryCoordinator {
         });
     }
 
+    setSourceResolver(resolver) {
+
+        this.index.setSourceResolver(resolver);
+    }
+
     setLibrary({ namespace, libraryId, fileEntries, generation, isCurrent }) {
 
         this.available = true;

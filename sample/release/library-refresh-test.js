@@ -15,12 +15,19 @@ import TreeView from "../../src/js/ui/TreeView.js";
 import TreeIncrementalReconciler from "../../src/js/ui/TreeIncrementalReconciler.js";
 import LibraryAccessPanel from "../../src/js/ui/LibraryAccessPanel.js";
 import GPXGeometryLoader from "../../src/js/services/GPXGeometryLoader.js";
+import LibraryDiscoveryIndexService from
+    "../../src/js/services/LibraryDiscoveryIndexService.js";
 import LibraryTrackCatalog, {
     LibraryPathCollisionError,
     normalizeTrackRelativePath
 } from "../../src/js/core/LibraryTrackCatalog.js";
 import LibraryTrackCatalogCoordinator from
     "../../src/js/core/LibraryTrackCatalogCoordinator.js";
+import TrackSourceResolver, {
+    isTrackSourceUnavailable
+} from "../../src/js/core/TrackSourceResolver.js";
+import { settleUnavailableTrackDisplay } from
+    "../../src/js/core/TrackDisplaySourceBoundary.js";
 
 const output = document.getElementById("result");
 const focusedIncremental = new URLSearchParams(
@@ -263,6 +270,171 @@ async function testLibraryTrackCatalog() {
     "Catalog failure was silent or stopped the existing runtime path");
 }
 
+async function testCatalogTrackSourceResolution() {
+    const libraryA = "local:source-a";
+    const libraryB = "local:source-b";
+    const path = "Trips/source.gpx";
+    const catalog = new LibraryTrackCatalog();
+    let activeLibrary = libraryB;
+    let getFileCount = 0;
+    const resolver = new TrackSourceResolver({
+        catalog,
+        getLibraryIdentity: () => activeLibrary
+    });
+    const provisional = {
+        relativePath: path,
+        provisionalMetadata: { displayName: "Cached source" }
+    };
+
+    catalog.replaceProvisional(libraryB, [provisional]);
+    const unavailable = resolver.resolve(path);
+
+    assert(isTrackSourceUnavailable(unavailable) &&
+        unavailable.reason === "provisional-only",
+    "provisional-only Catalog entry was exposed as a loadable source");
+    const displayState = new DisplayState();
+    const cachedHandle = {
+        kind: "file", name: "source.gpx", provisional: true,
+        async getFile() { getFileCount += 1; throw new Error("must not load"); }
+    };
+
+    displayState.setLibrary({ kind: "directory" });
+    displayState.registerFile(path, cachedHandle, "#123456");
+    displayState.setChecked(path, true);
+    const restoredGeometry = { tracks: [{ segments: [] }] };
+
+    displayState.setLoaded(path, restoredGeometry);
+    displayState.setCachedResult(path, restoredGeometry);
+    const treeCalls = [];
+    let removedMapLayers = 0;
+    const displayBoundary = {
+        displayState,
+        treeView: {
+            setDisplayIdle: value => treeCalls.push(["idle", value]),
+            setDisplayChecked: (value, checked) =>
+                treeCalls.push(["checked", value, checked])
+        },
+        mapView: { removeGPX() { removedMapLayers += 1; } },
+        updateDisplayStatus() {},
+        scheduleSearchRefresh() {}
+    };
+    const preserved = settleUnavailableTrackDisplay(
+        displayBoundary,
+        path,
+        unavailable,
+        { rollbackRequested: false }
+    );
+
+    assert(preserved && displayState.getDisplay(path).checked &&
+        displayState.getDisplay(path).state === "loaded" &&
+        displayState.getDisplay(path).error === null &&
+        displayState.getCachedResult(path) === restoredGeometry &&
+        removedMapLayers === 0 && treeCalls.length === 0,
+    "Fast Restore display was mutated by a source-unavailable result");
+    displayState.setChecked(path, false);
+    displayState.setIdle(path);
+    displayState.setChecked(path, true);
+    displayState.setLoading(path, 2);
+    const settled = settleUnavailableTrackDisplay({
+        ...displayBoundary
+    }, path, unavailable, { rollbackRequested: true });
+    const display = displayState.getDisplay(path);
+
+    assert(settled && getFileCount === 0 && !display.checked &&
+        display.state === "idle" && display.error === null &&
+        treeCalls.some(call => call[0] === "checked" && call[2] === false),
+    "source unavailable became a Viewer error or attempted provisional getFile");
+    const discoveryLoader = new GPXGeometryLoader({
+        parser: { parse: () => { throw new Error("must not parse"); } },
+        repository: {}
+    });
+    const discovery = new LibraryDiscoveryIndexService({
+        loader: discoveryLoader,
+        sourceResolver: resolver
+    });
+
+    discoveryLoader.setSourceResolver(resolver);
+    discovery.setLibrary({
+        namespace: libraryB,
+        generation: 1,
+        fileEntries: [{ path, fileHandle: cachedHandle }]
+    });
+    const provisionalEntries = await discovery.build();
+
+    assert(provisionalEntries[0]?.status === "ready" &&
+        discovery.getFailures().size === 0 && getFileCount === 0,
+    "provisional-only Discovery entry became an error or read its cached handle");
+    const actualHandle = fileHandle("source.gpx", 10, 20);
+    const originalGetFile = actualHandle.getFile;
+
+    actualHandle.getFile = async () => {
+        getFileCount += 1;
+        return originalGetFile();
+    };
+    catalog.mergeActual(libraryB, [{ path, fileHandle: actualHandle }]);
+    const ready = resolver.resolve(path);
+
+    assert(ready.status === "ready" &&
+        ready.actualFileHandle === actualHandle,
+    "Phase B actual binding did not make the Catalog source ready");
+    const loader = new GPXGeometryLoader({
+        parser: { parse: () => ({ tracks: [], metadata: {} }) },
+        repository: {
+            getWithSummary: async () => null,
+            set: async () => false
+        }
+    });
+
+    loader.setLibraryNamespace(libraryB);
+    loader.setSourceResolver(resolver);
+    const loaded = await loader.load(path, cachedHandle);
+
+    assert(loaded?.tracks?.length === 0 && getFileCount === 1,
+        "GPX loader did not use exactly one Catalog actual source read");
+    let legacyFallbackReads = 0;
+    const failingDiscovery = new LibraryDiscoveryIndexService({
+        loader: {
+            setLibraryNamespace() {},
+            async loadSummary() { throw new Error("actual source failed"); }
+        },
+        sourceResolver: resolver
+    });
+
+    failingDiscovery.setLibrary({
+        namespace: libraryB,
+        generation: 1,
+        fileEntries: [{
+            path,
+            fileHandle: {
+                name: "legacy.gpx",
+                async getFile() { legacyFallbackReads += 1; }
+            }
+        }]
+    });
+    const failedEntries = await failingDiscovery.build();
+
+    assert(legacyFallbackReads === 0 &&
+        failingDiscovery.getFailures().size === 1 &&
+        failedEntries[0]?.status === "error",
+    "Discovery actual failure read a legacy entry FileHandle fallback");
+    activeLibrary = libraryA;
+    assert(resolver.resolve(path).reason === "library-mismatch",
+        "resolver returned a source from a different active Library");
+    const throwingIdentity = new TrackSourceResolver({
+        catalog,
+        getLibraryIdentity: () => { throw new Error("identity unavailable"); }
+    });
+
+    assert(throwingIdentity.resolve(path).reason === "library-mismatch",
+        "resolver leaked an identity-provider exception");
+    assert(resolver.resolve("../outside.gpx").reason === "missing",
+        "resolver leaked an invalid relativePath exception");
+    activeLibrary = libraryB;
+    catalog.remove(libraryB, path);
+    assert(resolver.resolve(path).reason === "missing",
+        "removed Catalog Track remained loadable");
+}
+
 function createTree(initialLibrary) {
     const builder = new TreeMetadataBuilder();
     const tree = {
@@ -400,6 +572,12 @@ async function testRefreshAndReconciliation() {
     snapshotService.provisionalPaths = new Set([
         "A.gpx", "B.gpx", "D.gpx", "F.gpx"
     ]);
+    const refreshCatalog = new LibraryTrackCatalog();
+
+    refreshCatalog.replaceFromCompleteScan(
+        "local:GPX",
+        tree.getFileEntries()
+    );
     const previous = {
         isLoading: () => false,
         getRefreshHandle: () => oldLibrary.rootFolder.handle,
@@ -416,6 +594,9 @@ async function testRefreshAndReconciliation() {
         scanner: { scan: async () => { scanCount += 1; return actualLibrary; } },
         previousLibraryCoordinator: previous,
         librarySnapshotService: snapshotService,
+        trackCatalogCoordinator: new LibraryTrackCatalogCoordinator({
+            catalog: refreshCatalog
+        }),
         treeView: tree,
         treeReconciler: {
             reconcile: (view, value) => view.reconcileLibrary(value)
@@ -471,6 +652,8 @@ async function testRefreshAndReconciliation() {
     assert(result.added === 1 && result.recovered === 1 &&
         result.removed === 1 && result.modified === 0,
         "Library diff counts were incorrect");
+    assert(refreshCatalog.has("local:GPX", "D.gpx"),
+        "incremental removed candidate deleted its Catalog source binding");
     assert(displayState.getDisplay("C.gpx")?.checked === false &&
         displayState.getDisplay("E.gpx")?.checked === false,
     "new GPX files were not both registered unchecked");
@@ -726,16 +909,15 @@ async function testIncrementalTreeDomReconcile() {
         }
     };
 
-    try {
-        await failedLoader.load("Trips/Denied.gpx", deniedHandle);
-    } catch {
-        // The unchanged loader contract rejects; diagnostics only observe it.
-    }
-    assert(failedLoaderDiagnostics.some(value =>
-        value.stage === "getFile" && value.status === "failure" &&
-        value.errorName === "NotAllowedError" &&
-        value.fileHandleProvisional === true
-    ), "GPX loader diagnostics lost the getFile failure/provisional identity");
+    const unavailable = await failedLoader.load(
+        "Trips/Denied.gpx",
+        deniedHandle
+    );
+
+    assert(isTrackSourceUnavailable(unavailable) &&
+        unavailable.reason === "provisional-only" &&
+        !failedLoaderDiagnostics.some(value => value.stage === "getFile"),
+    "GPX loader called getFile or reported an error for provisional-only source");
 }
 
 async function testFastRefreshScale() {
@@ -1352,6 +1534,7 @@ function testRefreshContextGetters() {
 try {
     await testFreshRecursiveScan();
     await testLibraryTrackCatalog();
+    await testCatalogTrackSourceResolution();
     await testRefreshAndReconciliation();
     await testIncrementalTreeDomReconcile();
     await testFastRefreshScale();

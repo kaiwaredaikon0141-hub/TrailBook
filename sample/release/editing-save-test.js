@@ -346,6 +346,7 @@ async function testInPlaceRefresh() {
     let cacheInvalidations = 0;
     let discoveryRefreshes = 0;
     let reloads = 0;
+    let sourceRebinds = 0;
     const coordinator = new EditedGPXLibraryRefreshCoordinator({
         treeView: {
             nodeMetadata: metadata,
@@ -374,6 +375,12 @@ async function testInPlaceRefresh() {
         },
         getLibrary: () => library,
         getColor: () => "#abcdef",
+        rebindTrackSource({ sourcePath, targetPath, fileHandle }) {
+            if (sourcePath === "rides/source.gpx" &&
+                targetPath === sourcePath && fileHandle === sourceHandle) {
+                sourceRebinds += 1;
+            }
+        },
         async reloadVisiblePath({ path, wasChecked, wasSelected }) {
             reloads += 1;
             return path === "rides/source.gpx" && wasChecked && wasSelected;
@@ -389,8 +396,9 @@ async function testInPlaceRefresh() {
         "in-place refresh changed path or presentation state");
     assert(library.gpxFileCount === 1,
         "in-place refresh changed Library GPX count");
-    assert(cacheInvalidations === 1 && discoveryRefreshes === 1 && reloads === 1,
-        "in-place refresh did not target cache, Discovery, and Viewer once");
+    assert(cacheInvalidations === 1 && discoveryRefreshes === 1 &&
+        sourceRebinds === 1 && reloads === 1,
+    "in-place refresh did not update Catalog, cache, Discovery, and Viewer once");
 }
 
 async function testConfirmationDialog() {

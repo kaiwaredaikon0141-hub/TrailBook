@@ -196,6 +196,16 @@ async function testManifestAndAssets() {
     )).then(response => response.text());
     assert(mainSource.includes("trailbook-development-build-info"),
         "localhost fixed build diagnostic is not attached");
+    assert(mainSource.includes("new TrackSourceResolver") &&
+        mainSource.includes("setSourceResolver(trackSourceResolver)"),
+    "production GPX module graph did not install the Catalog source resolver");
+    const discoverySource = await fetch(new URL(
+        "../../src/js/services/LibraryDiscoveryIndexService.js",
+        location.href
+    )).then(response => response.text());
+    assert(!discoverySource.includes("fileHandle?.getFile?.()") &&
+        !/source\.fileHandle\s*\)/.test(discoverySource),
+    "Discovery retained a legacy FileHandle GPX source fallback");
 
     const themeSource = await fetch(new URL(
         "../../src/css/theme.css", location.href
@@ -542,7 +552,7 @@ async function testServiceWorkerCache() {
         new URL(request.url).pathname.includes("/js/") &&
         new URL(request.url).pathname.endsWith(".js")
     );
-    assert(cachedModules.length === 111,
+    assert(cachedModules.length === 113,
         `production module graph not precached: ${cachedModules.length}`);
     assert(!cachedRequests.some(request => request.url.endsWith(".gpx")),
         "GPX entered app shell cache");

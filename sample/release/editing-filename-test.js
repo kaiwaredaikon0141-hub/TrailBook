@@ -345,6 +345,8 @@ async function testFailureSafetyAndRefresh() {
         path: "rides/old.gpx", checked: true, state: "loaded", requestId: 1
     }]]);
     let selected = "rides/old.gpx";
+    let reboundSource = null;
+    const sourceOrder = [];
     const treeView = {
         nodeMetadata: metadata,
         hasFile: path => metadata.get(path)?.kind === "file",
@@ -371,9 +373,18 @@ async function testFailureSafetyAndRefresh() {
             select(path) { selected = path; return { selectedPath: path }; },
             getSelectedPath: () => selected
         },
-        discoveryCoordinator: { async renameFileEntry() { return true; } },
+        discoveryCoordinator: {
+            async renameFileEntry() {
+                sourceOrder.push("discovery");
+                return reboundSource?.targetPath === "rides/new.gpx";
+            }
+        },
         getLibrary: () => ({ rootFolder: {}, gpxFileCount: 1 }),
         getColor: () => "#000000",
+        rebindTrackSource: source => {
+            reboundSource = source;
+            sourceOrder.push("catalog");
+        },
         reloadVisiblePath: async ({ sourcePath, path, wasChecked }) =>
             sourcePath === "rides/old.gpx" && path === "rides/new.gpx" && wasChecked
     });
@@ -387,6 +398,12 @@ async function testFailureSafetyAndRefresh() {
     assert(selected === "rides/new.gpx" && displays.has("rides/new.gpx") &&
         !displays.has("rides/old.gpx"),
     "visibility or selection did not migrate to new path");
+    assert(reboundSource?.sourcePath === "rides/old.gpx" &&
+        reboundSource.targetPath === "rides/new.gpx" &&
+        reboundSource.fileHandle === replacement,
+    "renamed Track actual source was not rebound before Viewer refresh");
+    assert(sourceOrder.join(",") === "catalog,discovery",
+        "Discovery reloaded the renamed path before Catalog source binding");
 }
 
 try {
