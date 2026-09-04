@@ -86,10 +86,10 @@ export default class App {
         this.folderColorState = new FolderColorState({
             store: this.displaySettingsStore,
             pathColorResolver: path => resolvePathHashColor(
-                path,
-                this.config.map.displayPalette
+                path, this.config.map.displayPalette
             ),
-            fallbackColor: this.config.map.trackStyle.lineColor
+            fallbackColor: this.config.map.trackStyle.lineColor,
+            autoPalette: this.config.map.displayPalette
         });
         this.librarySettingsCoordinator = new LibrarySettingsCoordinator({
             config: this.config.sharedLibrarySettings,
@@ -144,7 +144,7 @@ export default class App {
         );
         this.folderColorControl = new FolderColorControl(
             this.treeView, this.eventBus, this.displayState,
-            path => this.getColor(path)
+            path => this.getColor(path), path => this.folderColorState.resolveAutoColor(path)
         );
         this.folderColorDialog = new FolderColorDialog(
             this.eventBus,

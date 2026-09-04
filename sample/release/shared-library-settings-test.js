@@ -1,5 +1,8 @@
 import Config from "../../src/js/core/Config.js";
 import App from "../../src/js/core/App.js";
+import FolderAutoColorResolver, {
+    canonicalFolderKey
+} from "../../src/js/core/FolderAutoColorResolver.js";
 import LibrarySettingsRepository from
     "../../src/js/services/LibrarySettingsRepository.js";
 import LibrarySettingsState from
@@ -331,6 +334,95 @@ function testFolderColorProjection() {
     assert(state.getExplicitColor("") === null, "Auto retained old explicit color");
 }
 
+function testDeterministicFolderAutoColor() {
+
+    const palette = ["#111111", "#222222", "#333333", "#444444"];
+    const resolver = new FolderAutoColorResolver(palette);
+    const rootColor = resolver.resolve("");
+    const folderColor = resolver.resolve("Trips");
+    const nestedColor = resolver.resolve("Trips/Nested");
+
+    assert(palette.includes(rootColor), "root sentinel did not resolve a color");
+    assert(folderColor === resolver.resolve("Trips"),
+        "same Folder path did not resolve deterministically");
+    assert(nestedColor === resolver.resolve("./Trips//Nested/"),
+        "shared Library path normalization changed the Auto color");
+    assert(canonicalFolderKey("") === "/" &&
+        canonicalFolderKey("Trips\\Nested") === "Trips/Nested" &&
+        canonicalFolderKey("Trips") !== canonicalFolderKey("trips"),
+    "root normalization or case-preserving Folder identity changed");
+    assert(new FolderAutoColorResolver(palette).resolve("Trips/Nested") ===
+        nestedColor,
+    "new resolver instance changed the Folder Auto color");
+    const mutablePalette = [...palette];
+    const isolatedResolver = new FolderAutoColorResolver(mutablePalette);
+    const isolatedColor = isolatedResolver.resolve("Trips");
+
+    mutablePalette.reverse();
+    assert(isolatedResolver.resolve("Trips") === isolatedColor,
+        "runtime palette mutation changed the Folder Auto color");
+
+    const baseline = resolver.resolve("Trips");
+
+    [0, 1, 100].forEach(trackCount => {
+        const tracks = Array.from({ length: trackCount }, (_, index) => index);
+
+        tracks.reverse();
+        tracks.push("new");
+        tracks.pop();
+        assert(resolver.resolve("Trips", {
+            tracks,
+            snapshotColor: "#FFFFFF"
+        }) === baseline,
+        `Track count/order/Snapshot changed Auto color at ${trackCount}`);
+    });
+
+    const autoColorResolver = {
+        resolve(path) {
+            return {
+                "": "#111111",
+                Trips: "#222222",
+                "Trips/Child": "#333333",
+                "Trips/Child/Leaf": "#444444"
+            }[path];
+        }
+    };
+    const state = new FolderColorState({
+        pathColorResolver: () => "#999999",
+        fallbackColor: "#AAAAAA",
+        autoColorResolver
+    });
+    const folderPaths = ["", "Trips", "Trips/Child", "Trips/Child/Leaf"];
+
+    state.setActiveLibrary("root-name:test", folderPaths, {});
+    assert(state.getFolderPresentation("").resolvedColor === "#111111" &&
+        state.getFolderPresentation("").mode === "auto",
+    "empty root Folder did not use its deterministic Auto color");
+    assert(state.getFolderPresentation("Trips").resolvedColor === "#222222" &&
+        state.getFolderPresentation("Trips/Child").resolvedColor === "#333333",
+    "Auto parent color was inherited by its independently Auto child");
+    assert(state.resolveTrackColor("Trips/Child/ride.gpx") === "#999999",
+        "Phase 2B changed existing Track color ownership");
+
+    state.setActiveLibrary("root-name:test", folderPaths, {
+        Trips: "#AABBCC"
+    });
+    assert(state.getFolderPresentation("Trips").mode === "explicit" &&
+        state.getResolvedFolderColor("Trips") === "#AABBCC",
+    "explicit Folder color did not take priority");
+    assert(state.getFolderPresentation("Trips/Child").mode === "inherited" &&
+        state.getResolvedFolderColor("Trips/Child") === "#AABBCC",
+    "nearest ancestor explicit color was not inherited");
+
+    state.setActiveLibrary("root-name:test", folderPaths, {
+        Trips: "#AABBCC",
+        "Trips/Child": "#DDEEFF"
+    });
+    assert(state.getFolderPresentation("Trips/Child").mode === "explicit" &&
+        state.getResolvedFolderColor("Trips/Child/Leaf") === "#DDEEFF",
+    "child explicit color did not override its parent");
+}
+
 async function testAppIntegration() {
 
     const app = new App();
@@ -481,6 +573,7 @@ export async function runSharedLibrarySettingsTests() {
     await testRepository();
     testStateAndPrecedence();
     testFolderColorProjection();
+    testDeterministicFolderAutoColor();
     await testAppIntegration();
 
     return { assertions };

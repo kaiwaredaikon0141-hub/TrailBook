@@ -688,13 +688,14 @@ async function run() {
         colorTreeView,
         colorEvents,
         colorState,
+        () => "#123456",
         () => "#123456"
     );
 
     colorState.setLibrary({});
     colorState.registerFile("Trips/ride.gpx", {}, "#123456");
     colorControl.setPresentations(new Map([["Trips", {
-        mode: "auto", explicitColor: null, resolvedColor: null
+        mode: "auto", explicitColor: null, resolvedColor: "#123456"
     }]]));
     const readonly = folderRow.querySelector(".folder-color-readonly");
     const trackSwatch = fileRow.querySelector(".tree-color-indicator");
@@ -707,8 +708,17 @@ async function run() {
         "Auto Folder presentation color is not available to incremental refresh");
     colorState.getDisplay("Trips/ride.gpx").color = "#008080";
     colorTreeView.nodeMetadata.get("Trips/ride.gpx").color = "#008080";
+    colorControl.refresh();
     assert(colorControl.getResolvedFolderColor("Trips") === "#123456",
-        "Folder color getter recomputed a different sibling Track color");
+        "Folder color presentation was recomputed from a Track color");
+    assert(readonly.dataset.resolvedColor === "#123456",
+        "Folder DOM swatch was recomputed from Tree/Display color");
+    assert(colorControl.getLegacyTrackProjectionColor("Trips") === "#008080",
+        "Phase 2B changed the legacy Track color projection");
+    colorControl.setPresentations(new Map());
+    assert(colorControl.getResolvedFolderColor("Trips") === "#123456" &&
+        readonly.dataset.resolvedColor === "#123456",
+        "provisional Tree lost its deterministic Auto Folder color");
     colorState.getDisplay("Trips/ride.gpx").color = "#123456";
     colorTreeView.nodeMetadata.get("Trips/ride.gpx").color = "#123456";
     assert(trackSwatch.getAttribute("aria-label").includes("#123456") &&

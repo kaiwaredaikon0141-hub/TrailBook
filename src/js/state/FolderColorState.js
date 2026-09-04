@@ -4,17 +4,28 @@ import {
     isSameOrDescendant,
     folderPathFromFilePath
 } from "../utils/PathUtils.js";
+import FolderAutoColorResolver from "../core/FolderAutoColorResolver.js";
 
 /**
  * Owns explicit Folder colors for the active Library without UI or map access.
  */
 export default class FolderColorState {
 
-    constructor({ store, pathColorResolver, fallbackColor } = {}) {
+    constructor({
+        store,
+        pathColorResolver,
+        fallbackColor,
+        autoPalette = null,
+        autoColorResolver = null
+    } = {}) {
 
         this.store = store;
         this.pathColorResolver = pathColorResolver;
         this.fallbackColor = fallbackColor;
+        this.autoColorResolver = autoColorResolver ||
+            new FolderAutoColorResolver(
+                autoPalette?.length ? autoPalette : [fallbackColor || "#e53935"]
+            );
         this.activeLibraryId = null;
         this.explicitColors = new Map();
         this.folderPaths = new Set([ROOT_PATH]);
@@ -136,6 +147,17 @@ export default class FolderColorState {
             return null;
         }
 
+        return this.#getExplicitOrInheritedColor(folderPath) ||
+            this.resolveAutoColor(folderPath);
+    }
+
+    resolveAutoColor(folderPath) {
+
+        return this.autoColorResolver.resolve(folderPath);
+    }
+
+    #getExplicitOrInheritedColor(folderPath) {
+
         let candidate = folderPath;
 
         while (true) {
@@ -165,7 +187,7 @@ export default class FolderColorState {
             };
         }
 
-        const inheritedColor = this.getResolvedFolderColor(folderPath);
+        const inheritedColor = this.#getExplicitOrInheritedColor(folderPath);
 
         return inheritedColor
             ? {
@@ -176,7 +198,7 @@ export default class FolderColorState {
             : {
                 mode: "auto",
                 explicitColor: null,
-                resolvedColor: null
+                resolvedColor: this.resolveAutoColor(folderPath)
             };
     }
 
@@ -192,7 +214,7 @@ export default class FolderColorState {
 
     resolveTrackColor(gpxPath, folderPath = folderPathFromFilePath(gpxPath)) {
 
-        return this.getResolvedFolderColor(folderPath) ||
+        return this.#getExplicitOrInheritedColor(folderPath) ||
             this.pathColorResolver?.(gpxPath) ||
             this.fallbackColor;
     }
