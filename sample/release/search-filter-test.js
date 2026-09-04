@@ -298,6 +298,12 @@ async function testCoordinator() {
         "Track result path mismatch");
     assert(!displayState.getDisplay("Library/南/beta.gpx").checked,
         "filter changed Map visibility");
+    displayState.setColor(handles[0].path, "#ABCDEF");
+    await flush();
+    assert(searchView.results[0].color === "#ABCDEF" &&
+        searchView.resultList.querySelector(".search-result-color")
+            .style.backgroundColor,
+    "resolved Track color did not synchronize to Search");
     eventBus.emit("search:filter-changed", {
         filter: { query: "", from: "", to: "" }
     });

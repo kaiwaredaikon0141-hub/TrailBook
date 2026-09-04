@@ -3,6 +3,13 @@ import App from "../../src/js/core/App.js";
 import FolderAutoColorResolver, {
     canonicalFolderKey
 } from "../../src/js/core/FolderAutoColorResolver.js";
+import TrackColorResolver, {
+    canonicalTrackFolderPath
+} from "../../src/js/core/TrackColorResolver.js";
+import TrackColorMapProjection from
+    "../../src/js/core/TrackColorMapProjection.js";
+import TrackStyleService from "../../src/js/services/TrackStyleService.js";
+import DisplayState from "../../src/js/state/DisplayState.js";
 import LibrarySettingsRepository from
     "../../src/js/services/LibrarySettingsRepository.js";
 import LibrarySettingsState from
@@ -320,7 +327,6 @@ function testFolderColorProjection() {
     };
     const state = new FolderColorState({
         store,
-        pathColorResolver: () => "#000000",
         fallbackColor: "#FFFFFF"
     });
 
@@ -388,7 +394,6 @@ function testDeterministicFolderAutoColor() {
         }
     };
     const state = new FolderColorState({
-        pathColorResolver: () => "#999999",
         fallbackColor: "#AAAAAA",
         autoColorResolver
     });
@@ -401,8 +406,8 @@ function testDeterministicFolderAutoColor() {
     assert(state.getFolderPresentation("Trips").resolvedColor === "#222222" &&
         state.getFolderPresentation("Trips/Child").resolvedColor === "#333333",
     "Auto parent color was inherited by its independently Auto child");
-    assert(state.resolveTrackColor("Trips/Child/ride.gpx") === "#999999",
-        "Phase 2B changed existing Track color ownership");
+    assert(state.resolveTrackColor("Trips/Child/ride.gpx") === "#333333",
+        "Track did not resolve through its deterministic Auto Folder");
 
     state.setActiveLibrary("root-name:test", folderPaths, {
         Trips: "#AABBCC"
@@ -411,7 +416,8 @@ function testDeterministicFolderAutoColor() {
         state.getResolvedFolderColor("Trips") === "#AABBCC",
     "explicit Folder color did not take priority");
     assert(state.getFolderPresentation("Trips/Child").mode === "inherited" &&
-        state.getResolvedFolderColor("Trips/Child") === "#AABBCC",
+        state.getResolvedFolderColor("Trips/Child") === "#AABBCC" &&
+        state.resolveTrackColor("Trips/Child/ride.gpx") === "#AABBCC",
     "nearest ancestor explicit color was not inherited");
 
     state.setActiveLibrary("root-name:test", folderPaths, {
@@ -419,8 +425,105 @@ function testDeterministicFolderAutoColor() {
         "Trips/Child": "#DDEEFF"
     });
     assert(state.getFolderPresentation("Trips/Child").mode === "explicit" &&
-        state.getResolvedFolderColor("Trips/Child/Leaf") === "#DDEEFF",
+        state.getResolvedFolderColor("Trips/Child/Leaf") === "#DDEEFF" &&
+        state.resolveTrackColor("Trips/Child/Leaf/ride.gpx") === "#DDEEFF",
     "child explicit color did not override its parent");
+}
+
+function testTrackColorResolution() {
+
+    const folderColors = new Map([
+        ["", "#101010"],
+        ["Trips", "#202020"],
+        ["Other", "#303030"]
+    ]);
+    const resolver = new TrackColorResolver({
+        resolveFolderColor: path => folderColors.get(path)
+    });
+    const tripPaths = Array.from(
+        { length: 100 },
+        (_, index) => `Trips/track-${index}.gpx`
+    );
+    const colors = tripPaths.map(path => resolver.resolve(path));
+
+    assert(colors.every(color => color === "#202020"),
+        "Tracks in the same Folder did not resolve to one color");
+    assert(resolver.resolve("Trips/a.gpx") ===
+        resolver.resolve("Trips/completely-different-name.gpx"),
+    "Track filename hash still affected resolved color");
+    assert(resolver.resolve("Trips/renamed.gpx") === colors[0],
+        "same-Folder rename changed resolved color");
+    assert(resolver.resolve("Other/renamed.gpx") === "#303030",
+        "Folder move did not adopt the destination Folder color");
+    assert(resolver.resolve("root.gpx") === "#101010" &&
+        canonicalTrackFolderPath("root.gpx", "/") === "",
+    "root Track did not resolve through the root Folder");
+    assert([...tripPaths].reverse().every(path =>
+        resolver.resolve(path, "Trips") === "#202020"
+    ), "Track order changed resolved colors");
+    assert(resolver.resolve("Trips/new.gpx", "Trips", {
+        displayColor: "#FFFFFF",
+        treeColor: "#EEEEEE",
+        snapshotColor: "#DDDDDD"
+    }) === "#202020",
+    "legacy presentation cache affected Track color resolution");
+    const mapStyle = new TrackStyleService(Config.map.trackStyle)
+        .getNormalStyle({ color: resolver.resolve("Trips/map.gpx"), zoomLevel: 12 });
+
+    assert(mapStyle.color === "#202020" && mapStyle.lineColor === "#202020",
+        "Map style did not use the shared resolved Track color");
+    const displayState = new DisplayState();
+    let notifications = 0;
+    const mapUpdates = [];
+    let geometryLoads = 0;
+
+    displayState.setLibrary({});
+    displayState.registerFile("Trips/map.gpx", {}, "#FFFFFF");
+    displayState.setCachedResult("Trips/map.gpx", { segments: [] });
+    const mapProjection = new TrackColorMapProjection({
+        displayState,
+        mapView: {
+            hasDisplay: path => path === "Trips/map.gpx",
+            updateTrackColor: (path, styles) => {
+                mapUpdates.push({ path, styles });
+                return 1;
+            },
+            displayGPX: () => { geometryLoads += 1; }
+        },
+        getStyles: color => ({
+            normalStyle: new TrackStyleService(Config.map.trackStyle)
+                .getNormalStyle({ color, zoomLevel: 12 })
+        })
+    });
+    displayState.subscribe(({ path }) => {
+        if (path === "Trips/map.gpx") notifications += 1;
+    });
+    assert(displayState.setColor("Trips/map.gpx", "#202020") &&
+        displayState.getDisplay("Trips/map.gpx").color === "#202020" &&
+        displayState.cache.get("Trips/map.gpx").color === "#202020",
+    "resolved color was not written through compatibility presentation caches");
+    assert(!displayState.setColor("Trips/map.gpx", "#202020") &&
+        notifications === 1,
+    "unchanged resolved color emitted a presentation mutation");
+    assert(mapUpdates.length === 1 &&
+        mapUpdates[0].styles.normalStyle.color === "#202020",
+    "DisplayState color notification did not update Map style only once");
+    displayState.setLibrary({});
+    displayState.registerFile("Trips/map.gpx", {}, "#202020");
+    assert(mapUpdates.length === 2 &&
+        mapUpdates[1].styles.normalStyle.color === "#202020" &&
+        geometryLoads === 0,
+    "Phase B registration did not converge a cached Map layer to current color");
+    mapProjection.destroy();
+    let mismatchRejected = false;
+
+    try {
+        resolver.resolve("Trips/a.gpx", "Other");
+    } catch (error) {
+        mismatchRejected = error instanceof RangeError;
+    }
+    assert(mismatchRejected,
+        "Track/Folder identity mismatch was silently accepted");
 }
 
 async function testAppIntegration() {
@@ -478,7 +581,13 @@ async function testAppIntegration() {
         setPresentations() {},
         setFileColor() {}
     };
-    app.viewStateCoordinator = { restoreLibrary() {} };
+    app.librarySnapshotService = {
+        isProvisionalFor() { return false; },
+        reconcileActual() {}
+    };
+    app.viewStateCoordinator = {
+        async restoreLibrary() { return false; }
+    };
     const currentContext = {
         generation: 1,
         isCurrent: () => true,
@@ -531,6 +640,7 @@ async function testAppIntegration() {
     staleApp.libraryAccessPanel = app.libraryAccessPanel;
     staleApp.folderColorControl = app.folderColorControl;
     staleApp.viewStateCoordinator = app.viewStateCoordinator;
+    staleApp.librarySnapshotService = app.librarySnapshotService;
 
     const firstHandle = {};
     const secondHandle = {};
@@ -574,6 +684,7 @@ export async function runSharedLibrarySettingsTests() {
     testStateAndPrecedence();
     testFolderColorProjection();
     testDeterministicFolderAutoColor();
+    testTrackColorResolution();
     await testAppIntegration();
 
     return { assertions };

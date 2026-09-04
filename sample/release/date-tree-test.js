@@ -398,6 +398,11 @@ async function testCoordinator() {
     await flush();
     assert(trackRow.querySelector("input").checked,
         "DisplayState subscription did not synchronize Date Tree");
+    displayState.setColor("a.gpx", "#ABCDEF");
+    await flush();
+    assert(trackRow.querySelector(".date-tree-color-indicator")
+        .getAttribute("aria-label").includes("#ABCDEF"),
+    "resolved Track color did not synchronize to Date Tree");
     eventBus.emit("selection:changed", { path: "a.gpx", source: "map" });
     assert(trackRow.getAttribute("aria-current") === "true",
         "SelectionState event did not synchronize Date Tree");

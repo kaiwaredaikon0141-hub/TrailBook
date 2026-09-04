@@ -37,7 +37,7 @@ export default class FolderColorControl {
             childList: true,
             subtree: true
         });
-        this.displayState?.subscribe(path => {
+        this.displayState?.subscribe(({ path }) => {
             if (path === null) {
                 this.refresh();
             } else {
@@ -121,12 +121,6 @@ export default class FolderColorControl {
 
         return presentation?.resolvedColor ||
             this.getAutoFolderColor?.(folderPath) || null;
-    }
-
-    /** Keeps the pre-Phase-2B Track projection until Track ownership migrates. */
-    getLegacyTrackProjectionColor(folderPath) {
-
-        return this.#buildLegacyTrackProjectionColors().get(folderPath) || null;
     }
 
     #refreshRow(row) {
@@ -238,50 +232,6 @@ export default class FolderColorControl {
             swatch?.after(mode);
         }
         if (mode.textContent !== modeLabel) mode.textContent = modeLabel;
-    }
-
-    #buildLegacyTrackProjectionColors() {
-
-        const directColors = new Map();
-        const childFolders = new Map();
-        const folderPaths = [];
-
-        for (const metadata of this.treeView.nodeMetadata.values()) {
-            if (metadata.kind === "folder") {
-                folderPaths.push(metadata.path);
-                if (metadata.path && metadata.parentPath !== metadata.path) {
-                    const children = childFolders.get(metadata.parentPath) || [];
-
-                    children.push(metadata.path);
-                    childFolders.set(metadata.parentPath, children);
-                }
-                continue;
-            }
-            if (metadata.kind !== "file") continue;
-            const color = this.displayState?.getDisplay(metadata.path)?.color ||
-                metadata.color || this.getResolvedColor?.(metadata.path) || null;
-
-            if (color && !directColors.has(metadata.parentPath)) {
-                directColors.set(metadata.parentPath, color);
-            }
-        }
-        const resolvedColors = new Map();
-        const resolve = path => {
-            if (resolvedColors.has(path)) return resolvedColors.get(path);
-            let color = directColors.get(path) || null;
-
-            if (!color) {
-                for (const childPath of childFolders.get(path) || []) {
-                    color = resolve(childPath);
-                    if (color) break;
-                }
-            }
-            resolvedColors.set(path, color);
-            return color;
-        };
-
-        folderPaths.forEach(resolve);
-        return resolvedColors;
     }
 
     #samePresentation(first, second) {

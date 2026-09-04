@@ -56,7 +56,10 @@ export default class DisplayState {
             requestId: previous?.requestId ?? 0,
             lastUsedAt: previous?.lastUsedAt ?? 0
         });
-        this.#notify(path);
+        this.#notify(
+            path,
+            previous?.color === color ? "state" : "color"
+        );
     }
 
     rebindFileHandle(path, fileHandle) {
@@ -69,6 +72,19 @@ export default class DisplayState {
 
         display.fileHandle = fileHandle;
 
+        return true;
+    }
+
+    setColor(path, color) {
+
+        const display = this.displays.get(path);
+
+        if (!display || display.color === color) return false;
+        display.color = color;
+        const cached = this.cache.get(path);
+
+        if (cached) cached.color = color;
+        this.#notify(path, "color");
         return true;
     }
 
@@ -301,10 +317,14 @@ export default class DisplayState {
         }
     }
 
-    #notify(path) {
+    #notify(path, change = "state") {
 
         const display = path === null ? null : this.getDisplay(path);
 
-        this.listeners.forEach(listener => listener({ path, display }));
+        this.listeners.forEach(listener => listener({
+            path,
+            display,
+            change
+        }));
     }
 }

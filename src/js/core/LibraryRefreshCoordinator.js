@@ -10,14 +10,6 @@ function normalizeRelativePath(path) {
     return typeof path === "string" ? path.replaceAll("\\", "/") : "";
 }
 
-function normalizedFolderPath(path) {
-
-    const normalized = normalizeRelativePath(path);
-    const separator = normalized.lastIndexOf("/");
-
-    return separator < 0 ? "" : normalized.slice(0, separator);
-}
-
 function normalizeDiagnosticColor(value) {
 
     if (typeof value !== "string" || !value.trim()) return null;
@@ -68,7 +60,6 @@ export default class LibraryRefreshCoordinator {
         eventBus, scanner, previousLibraryCoordinator, librarySnapshotService,
         treeView, discoveryCoordinator, displayState, selectionState, accessPanel,
         repository, getNamespace, getLibrary, setLibrary, getColor,
-        getFolderColor = () => null,
         getEntryPresentationDiagnostic = () => ({}),
         removePath, reloadVisiblePath, onLibraryUpdated,
         canRefresh = () => true,
@@ -84,7 +75,7 @@ export default class LibraryRefreshCoordinator {
             eventBus, scanner, previousLibraryCoordinator,
             librarySnapshotService, treeView, discoveryCoordinator,
             displayState, selectionState, accessPanel, repository, getNamespace,
-            getLibrary, setLibrary, getColor, getFolderColor,
+            getLibrary, setLibrary, getColor,
             getEntryPresentationDiagnostic,
             removePath, reloadVisiblePath,
             onLibraryUpdated, canRefresh, now, performanceNow, minimumIntervalMs,
@@ -464,18 +455,7 @@ export default class LibraryRefreshCoordinator {
                     previous.state === "error";
             }));
         const normalizedPaths = new Set([...addedPaths, ...reboundErrorPaths]);
-        const folderColors = new Map();
-        const resolveAddedColor = path => {
-            const folderPath = normalizedFolderPath(path);
-
-            if (!folderColors.has(folderPath)) {
-                folderColors.set(
-                    folderPath,
-                    this.getFolderColor(folderPath) || this.getColor(path)
-                );
-            }
-            return folderColors.get(folderPath);
-        };
+        const resolveCurrentColor = path => this.getColor(path);
         const diffMs = this.performanceNow() - diffStartedAt;
         const namespace = this.getNamespace();
 
@@ -512,17 +492,17 @@ export default class LibraryRefreshCoordinator {
                 const key = normalizeRelativePath(path);
                 const previous = previousDisplays.get(key);
 
-                this.displayState.registerFile(
-                    path,
-                    fileHandle,
-                    normalizedPaths.has(key)
-                        ? resolveAddedColor(path)
-                        : previous?.color ?? this.getColor(path)
-                );
-                if (addedPaths.has(key)) {
-                    this.displayState.setChecked(path, false);
-                } else if (previous) {
-                    this.displayState.setChecked(path, previous.checked);
+                const currentColor = resolveCurrentColor(path);
+
+                if (normalizedPaths.has(key) || !previous) {
+                    this.displayState.registerFile(
+                        path,
+                        fileHandle,
+                        currentColor
+                    );
+                } else {
+                    this.displayState.rebindFileHandle?.(path, fileHandle);
+                    this.displayState.setColor(path, currentColor);
                 }
                 if (normalizedPaths.has(key)) {
                     this.displayState.setChecked(path, false);
@@ -654,9 +634,7 @@ export default class LibraryRefreshCoordinator {
                     renderedDom: treeResult?.renderedPaths?.some(path =>
                         normalizeRelativePath(path) === tracePath
                     ) ?? false,
-                    folderResolvedColor: folderColors.get(
-                        normalizedFolderPath(tracePath)
-                    ) || null,
+                    folderResolvedColor: this.getColor(tracePath),
                     displayColor: this.displayState.getDisplay(tracePath)?.color ||
                         null,
                     treeColor: this.treeView.nodeMetadata.get(tracePath)?.color ||

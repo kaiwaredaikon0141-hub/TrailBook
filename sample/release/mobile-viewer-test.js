@@ -706,21 +706,20 @@ async function run() {
     "mobile Auto Folder color is not exposed as a read-only resolved swatch");
     assert(colorControl.getResolvedFolderColor("Trips") === "#123456",
         "Auto Folder presentation color is not available to incremental refresh");
-    colorState.getDisplay("Trips/ride.gpx").color = "#008080";
-    colorTreeView.nodeMetadata.get("Trips/ride.gpx").color = "#008080";
-    colorControl.refresh();
+    colorTreeView.nodeMetadata.get("Trips/ride.gpx").color = "#FFFFFF";
+    colorState.setColor("Trips/ride.gpx", "#008080");
     assert(colorControl.getResolvedFolderColor("Trips") === "#123456",
         "Folder color presentation was recomputed from a Track color");
     assert(readonly.dataset.resolvedColor === "#123456",
         "Folder DOM swatch was recomputed from Tree/Display color");
-    assert(colorControl.getLegacyTrackProjectionColor("Trips") === "#008080",
-        "Phase 2B changed the legacy Track color projection");
+    assert(trackSwatch.getAttribute("aria-label").includes("#008080") &&
+        colorTreeView.nodeMetadata.get("Trips/ride.gpx").color === "#008080",
+    "resolved Track color did not replace the stale Tree presentation cache");
     colorControl.setPresentations(new Map());
     assert(colorControl.getResolvedFolderColor("Trips") === "#123456" &&
         readonly.dataset.resolvedColor === "#123456",
         "provisional Tree lost its deterministic Auto Folder color");
-    colorState.getDisplay("Trips/ride.gpx").color = "#123456";
-    colorTreeView.nodeMetadata.get("Trips/ride.gpx").color = "#123456";
+    colorState.setColor("Trips/ride.gpx", "#123456");
     assert(trackSwatch.getAttribute("aria-label").includes("#123456") &&
         fileRow.querySelector(".tree-color-mode").textContent === "Auto",
     "mobile resolved Track color is missing");

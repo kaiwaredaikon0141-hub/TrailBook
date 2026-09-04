@@ -527,7 +527,7 @@ async function testRefreshAndReconciliation() {
 
     displayState.setLibrary(oldLibrary.rootFolder.handle);
     const previousColors = new Map([
-        ["A.gpx", "#111111"],
+        ["A.gpx", "#f08000"],
         ["B.gpx", "#222222"],
         ["D.gpx", "#444444"],
         ["F.gpx", "#333333"]
@@ -539,7 +539,10 @@ async function testRefreshAndReconciliation() {
     displayState.setChecked("A.gpx", true);
     displayState.setChecked("B.gpx", true);
     displayState.setChecked("F.gpx", false);
-    oldF.provisional = true;
+    displayState.rebindFileHandle("F.gpx", {
+        ...oldF,
+        provisional: true
+    });
     displayState.setError("F.gpx", new DOMException(
         "Cached handle cannot load",
         "NotAllowedError"
@@ -554,10 +557,19 @@ async function testRefreshAndReconciliation() {
     let scanCount = 0;
     let previousOpenCount = 0;
     let snapshotUpdates = 0;
+    const colorMutations = [];
     let updateContext = null;
     let persistedLibrarySnapshot = null;
     let now = 100;
     const eventBus = new EventBus();
+    const originalSetColor = displayState.setColor.bind(displayState);
+
+    displayState.setColor = (path, color) => {
+        const changed = originalSetColor(path, color);
+
+        if (changed) colorMutations.push([path, color]);
+        return changed;
+    };
     const snapshotService = new LibrarySnapshotService({
         treeView: tree,
         discoveryCoordinator: discovery,
@@ -610,8 +622,7 @@ async function testRefreshAndReconciliation() {
         getNamespace: () => "local:GPX",
         getLibrary: () => currentLibrary,
         setLibrary: value => { currentLibrary = value; },
-        getColor: path => path === "C.gpx" ? "#555555" : "#666666",
-        getFolderColor: () => "#f08000",
+        getColor: () => "#f08000",
         getEntryPresentationDiagnostic: () => ({
             folderResolvedColor: "#f08000",
             folderDomColor: "rgb(240, 128, 0)",
@@ -661,10 +672,14 @@ async function testRefreshAndReconciliation() {
         "existing visibility was not preserved");
     assert(displayState.getDisplay("F.gpx")?.checked === false,
         "existing hidden state was not preserved");
-    assert(displayState.getDisplay("A.gpx")?.color === "#111111" &&
-        displayState.getDisplay("B.gpx")?.color === "#222222" &&
+    assert(displayState.getDisplay("A.gpx")?.color === "#f08000" &&
+        displayState.getDisplay("B.gpx")?.color === "#f08000" &&
         displayState.getDisplay("F.gpx")?.color === "#f08000",
-    "existing colors were reassigned after scan-order changes");
+    "existing Tracks did not converge to the current Folder color");
+    assert(colorMutations.length === 1 &&
+        colorMutations[0][0] === "B.gpx" &&
+        colorMutations[0][1] === "#f08000",
+    "non-no-op refresh did not mutate only a stale existing Track color");
     assert(displayState.getDisplay("F.gpx")?.state === "idle" &&
         displayState.getDisplay("F.gpx")?.error === null &&
         displayState.getDisplay("F.gpx")?.fileHandle === newF &&
@@ -996,8 +1011,7 @@ async function testFastRefreshScale() {
         getNamespace: () => "local:scale",
         getLibrary: () => currentLibrary,
         setLibrary: value => { currentLibrary = value; },
-        getColor: () => "#008080",
-        getFolderColor: () => "#f08000",
+        getColor: () => "#f08000",
         removePath() {},
         reloadVisiblePath() {},
         onLibraryUpdated: () => true,
@@ -1065,6 +1079,7 @@ async function testNoOpRefreshPresentationInvariance() {
     }));
     let currentLibrary = before;
     let registerCalls = 0;
+    let colorSetCalls = 0;
     let displayNotifications = 0;
     let snapshotUpdates = 0;
     let presentationRefreshes = 0;
@@ -1074,10 +1089,15 @@ async function testNoOpRefreshPresentationInvariance() {
     ]);
     const beforeFolderPresentations = new Map(folderPresentations);
     const originalRegisterFile = displayState.registerFile.bind(displayState);
+    const originalSetColor = displayState.setColor.bind(displayState);
 
     displayState.registerFile = (...args) => {
         registerCalls += 1;
         return originalRegisterFile(...args);
+    };
+    displayState.setColor = (...args) => {
+        colorSetCalls += 1;
+        return originalSetColor(...args);
     };
     tree.getFileEntries().forEach(({ path, fileHandle: handle }, index) => {
         const color = index % 2 === 0 ? "#AA5500" : "#0055AA";
@@ -1155,7 +1175,6 @@ async function testNoOpRefreshPresentationInvariance() {
         getLibrary: () => currentLibrary,
         setLibrary: value => { currentLibrary = value; },
         getColor: () => "#FF0000",
-        getFolderColor: () => "#00FF00",
         removePath() {},
         reloadVisiblePath() {},
         onLibraryUpdated: (value, context = {}) => {
@@ -1181,7 +1200,8 @@ async function testNoOpRefreshPresentationInvariance() {
     assert(result.added === 0 && result.recovered === 0 &&
         result.removed === 0 && result.modified === 0,
     "1123 Track no-op fixture unexpectedly produced a diff");
-    assert(registerCalls === 0 && displayNotifications === 0 &&
+    assert(registerCalls === 0 && colorSetCalls === 0 &&
+        displayNotifications === 0 &&
         presentationRefreshes === 0,
         "no-op refresh re-registered Tracks or rebuilt Folder presentation");
     assert(snapshotUpdates === 1,
@@ -1204,7 +1224,7 @@ async function testNoOpRefreshPresentationInvariance() {
     }), "no-op refresh changed Tree metadata presentation/state");
     assert([...tree.nodeMetadata.keys()].every(
         (path, index) => path === beforeTreeOrder[index]
-    ), "no-op refresh changed Tree metadata order used by Auto Folder color");
+    ), "no-op refresh changed Tree metadata order");
     assert([...beforeFolderPresentations].every(([path, previous]) => {
         const current = folderPresentations.get(path);
 

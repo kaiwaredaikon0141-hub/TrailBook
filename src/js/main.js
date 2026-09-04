@@ -131,8 +131,6 @@ window.addEventListener("DOMContentLoaded", () => {
         getLibrary: () => app.currentLibrary,
         setLibrary: library => { app.currentLibrary = library; },
         getColor: path => app.getColor(path),
-        getFolderColor: folderPath =>
-            app.folderColorControl.getLegacyTrackProjectionColor(folderPath),
         getEntryPresentationDiagnostic: path => {
             const metadata = app.treeView.nodeMetadata.get(path);
             const folderPath = metadata?.parentPath;

@@ -1,10 +1,10 @@
 import {
     ROOT_PATH,
     parentPath,
-    isSameOrDescendant,
-    folderPathFromFilePath
+    isSameOrDescendant
 } from "../utils/PathUtils.js";
 import FolderAutoColorResolver from "../core/FolderAutoColorResolver.js";
+import TrackColorResolver from "../core/TrackColorResolver.js";
 
 /**
  * Owns explicit Folder colors for the active Library without UI or map access.
@@ -13,19 +13,22 @@ export default class FolderColorState {
 
     constructor({
         store,
-        pathColorResolver,
         fallbackColor,
         autoPalette = null,
-        autoColorResolver = null
+        autoColorResolver = null,
+        trackColorResolver = null
     } = {}) {
 
         this.store = store;
-        this.pathColorResolver = pathColorResolver;
-        this.fallbackColor = fallbackColor;
         this.autoColorResolver = autoColorResolver ||
             new FolderAutoColorResolver(
                 autoPalette?.length ? autoPalette : [fallbackColor || "#e53935"]
             );
+        this.trackColorResolver = trackColorResolver ||
+            new TrackColorResolver({
+                resolveFolderColor: folderPath =>
+                    this.getFolderPresentation(folderPath).resolvedColor
+            });
         this.activeLibraryId = null;
         this.explicitColors = new Map();
         this.folderPaths = new Set([ROOT_PATH]);
@@ -212,11 +215,9 @@ export default class FolderColorState {
         );
     }
 
-    resolveTrackColor(gpxPath, folderPath = folderPathFromFilePath(gpxPath)) {
+    resolveTrackColor(gpxPath, folderPath = undefined) {
 
-        return this.#getExplicitOrInheritedColor(folderPath) ||
-            this.pathColorResolver?.(gpxPath) ||
-            this.fallbackColor;
+        return this.trackColorResolver.resolve(gpxPath, folderPath);
     }
 
     getAffectedFolderPaths(changedFolderPath) {

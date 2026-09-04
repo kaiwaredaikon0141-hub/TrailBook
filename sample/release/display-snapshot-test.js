@@ -386,6 +386,8 @@ async function testLibrarySnapshotService() {
             showLibraryLoaded: library => statusLibraries.push(library.name)
         }
     });
+    displayState.setLibrary({});
+    displayState.registerFile("Trips/one.gpx", {}, "#654321");
     const state = service.capture({
         libraryIdentity: "root-name:GPX",
         rootName: "GPX"
@@ -396,7 +398,7 @@ async function testLibrarySnapshotService() {
     assert(state.mode === "date" && state.filter.query === "ride",
         "mode/filter state was not captured");
     assert(state.entries[0].color === "#123456",
-        "cached Library Track color was not captured");
+        "stale DisplayState color overrode current runtime Track resolution");
     assert(await service.restore(state, {
         cacheNamespace: "local-cache",
         restoredTracks: [{

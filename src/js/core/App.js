@@ -19,12 +19,12 @@ import PreviousLibraryCoordinator from "./PreviousLibraryCoordinator.js";
 import DisplaySnapshotCoordinator from "./DisplaySnapshotCoordinator.js";
 import TrackDiscoveryCoordinator from "./TrackDiscoveryCoordinator.js";
 import LibraryTrackCatalogCoordinator from "./LibraryTrackCatalogCoordinator.js";
+import TrackColorMapProjection from "./TrackColorMapProjection.js";
 import { settleUnavailableTrackDisplay } from "./TrackDisplaySourceBoundary.js";
 import DisplayState from "../state/DisplayState.js";
 import SelectionState from "../state/SelectionState.js";
 import FolderColorState from "../state/FolderColorState.js";
 import { folderPathFromFilePath } from "../utils/PathUtils.js";
-import { resolvePathHashColor } from "../utils/PathColor.js";
 import Toolbar from "../ui/Toolbar.js";
 import TreeView from "../ui/TreeView.js";
 import FolderColorControl from "../ui/FolderColorControl.js";
@@ -85,9 +85,6 @@ export default class App {
         );
         this.folderColorState = new FolderColorState({
             store: this.displaySettingsStore,
-            pathColorResolver: path => resolvePathHashColor(
-                path, this.config.map.displayPalette
-            ),
             fallbackColor: this.config.map.trackStyle.lineColor,
             autoPalette: this.config.map.displayPalette
         });
@@ -146,6 +143,14 @@ export default class App {
             this.treeView, this.eventBus, this.displayState,
             path => this.getColor(path), path => this.folderColorState.resolveAutoColor(path)
         );
+        this.trackColorMapProjection = new TrackColorMapProjection({
+            displayState: this.displayState,
+            mapView: this.mapView,
+            getStyles: color => ({
+                normalStyle: this.createTrackStyle(color),
+                ...this.createSelectionStyles(color)
+            })
+        });
         this.folderColorDialog = new FolderColorDialog(
             this.eventBus,
             this.config.map.trackStyle.lineColor
@@ -874,7 +879,7 @@ export default class App {
         const affectedFolders = new Set(
             this.folderColorState.getAffectedFolderPaths(folderPath)
         );
-        let updatedLayers = 0;
+        let updatedTracks = 0;
 
         this.displayState.getDisplays().forEach(display => {
             const displayFolderPath = folderPathFromFilePath(display.path);
@@ -892,26 +897,14 @@ export default class App {
                 return;
             }
 
-            display.color = color;
-            this.folderColorControl.setFileColor(display.path, color);
-            this.searchView.setResultColor(display.path, color);
-
-            if (!this.mapView.hasDisplay(display.path)) {
-                return;
+            if (this.displayState.setColor(display.path, color)) {
+                updatedTracks += 1;
             }
-
-            updatedLayers += this.mapView.updateTrackColor(
-                display.path,
-                {
-                    normalStyle: this.createTrackStyle(color),
-                    ...this.createSelectionStyles(color)
-                }
-            );
         });
 
         this.updateFolderColorPresentation();
 
-        return updatedLayers;
+        return updatedTracks;
     }
 
     updateFolderColorPresentation() {
