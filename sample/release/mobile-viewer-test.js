@@ -350,6 +350,11 @@ async function run() {
         themeCss.includes("flex:0 0 auto"),
         "mobile build information can shrink out of the sidebar"
     );
+    assert(themeCss.includes(".map-build-indicator") &&
+        themeCss.includes("pointer-events:none") &&
+        themeCss.includes("bottom:max(130px") &&
+        themeCss.includes("calc(env(safe-area-inset-bottom) + 122px)"),
+    "mobile Map build indicator can overlap controls or capture input");
     assert(themeCss.includes("grid-column:1 / -1") &&
         themeCss.includes(".folder-color-readonly") &&
         themeCss.includes("flex:0 0 18px") &&

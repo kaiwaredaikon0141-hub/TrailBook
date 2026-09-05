@@ -190,12 +190,49 @@ async function testManifestAndAssets() {
     assert(compactBuildInfo.textContent.startsWith(`v${Config.version}`) &&
         compactBuildInfo.textContent.includes(changedFingerprint),
         "compact localhost build diagnostics");
+    const mapBuildInfo = createBuildInfoElement({
+        config: Config,
+        runtimeBuild: { commit: "stale-build-metadata" },
+        runtimeBuildIdentifier: "431fb68c",
+        locationObject: { hostname: "example.github.io" },
+        compact: true,
+        mapIndicator: true
+    });
+
+    assert(mapBuildInfo.textContent === `v${Config.version} \u00b7 431fb68c` &&
+        mapBuildInfo.classList.contains("map-build-indicator") &&
+        !mapBuildInfo.textContent.includes("SW:"),
+    "Map build indicator does not use the production runtime module marker");
+    const localMapBuildInfo = createBuildInfoElement({
+        config: Config,
+        runtimeBuild: { commit: "local" },
+        runtimeBuildIdentifier: "local",
+        locationObject: { hostname: "localhost" },
+        compact: true,
+        mapIndicator: true
+    });
+
+    await resolveBuildInfoElements([localMapBuildInfo], {
+        config: Config,
+        runtimeBuild: { commit: "local" },
+        runtimeBuildIdentifier: "local",
+        locationObject: { hostname: "localhost" },
+        serviceWorkerRegistration: null,
+        developmentBuildIdentifier: changedFingerprint
+    });
+    assert(localMapBuildInfo.textContent ===
+        `v${Config.version} \u00b7 ${changedFingerprint}`,
+    "localhost Map build indicator did not use the source fingerprint");
 
     const mainSource = await fetch(new URL(
         "../../src/js/main.js", location.href
     )).then(response => response.text());
     assert(mainSource.includes("trailbook-development-build-info"),
         "localhost fixed build diagnostic is not attached");
+    assert(mainSource.includes("mapBuildInfo") &&
+        mainSource.includes("mapIndicator: true") &&
+        !/["'][0-9a-f]{8}["']/.test(mainSource),
+    "Map build indicator is missing or hard-codes a commit");
     assert(mainSource.includes("new TrackSourceResolver") &&
         mainSource.includes("setSourceResolver(trackSourceResolver)"),
     "production GPX module graph did not install the Catalog source resolver");
@@ -213,6 +250,11 @@ async function testManifestAndAssets() {
     assert(themeSource.includes(".trailbook-development-build-info") &&
         themeSource.includes("position:fixed"),
     "localhost fixed build diagnostic CSS missing");
+    assert(themeSource.includes(".map-build-indicator") &&
+        themeSource.includes("pointer-events:none") &&
+        themeSource.includes("bottom:max(130px") &&
+        themeSource.includes("env(safe-area-inset-bottom)"),
+    "Map build indicator can intercept input or overlap mobile Map controls");
 
     const workflow = await fetch(new URL(
         "../../.github/workflows/pages.yml", location.href

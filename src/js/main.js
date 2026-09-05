@@ -33,6 +33,11 @@ window.addEventListener("DOMContentLoaded", () => {
         ?.append(app.mapView.sidebarDisplayControls);
     const buildInfo = createBuildInfoElement();
     app.trackDiscoveryCoordinator.sidebarShell?.append(buildInfo);
+    const mapBuildInfo = createBuildInfoElement({
+        compact: true,
+        mapIndicator: true
+    });
+    app.mapView.element.append(mapBuildInfo);
     const localDevelopment = location.hostname === "localhost" ||
         location.hostname === "127.0.0.1" || location.hostname === "[::1]";
     const developmentBuildInfo = localDevelopment
@@ -287,7 +292,7 @@ window.addEventListener("DOMContentLoaded", () => {
     );
 
     const serviceWorkerRegistration = registerTrailBookServiceWorker();
-    resolveBuildInfoElements([buildInfo, developmentBuildInfo], {
+    resolveBuildInfoElements([buildInfo, developmentBuildInfo, mapBuildInfo], {
         serviceWorkerRegistration
     });
 

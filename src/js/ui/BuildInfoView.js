@@ -1,4 +1,5 @@
 import Config from "../core/Config.js";
+import { RUNTIME_BUILD_ID } from "../runtime/RuntimeBuild.js";
 import { isLocalDevelopmentLocation } from "../services/PWAServiceWorker.js";
 
 const MODULE_SPECIFIER_PATTERNS = Object.freeze([
@@ -134,8 +135,20 @@ function buildInfoText({
     localDevelopment,
     developmentBuildIdentifier,
     serviceWorkerStatus,
-    compact
+    compact,
+    mapIndicator,
+    runtimeBuildIdentifier
 }) {
+
+    if (mapIndicator) {
+        const identifier = localDevelopment
+            ? developmentBuildIdentifier || "dev-checking..."
+            : /^[0-9a-f]{8}$/i.test(runtimeBuildIdentifier)
+                ? runtimeBuildIdentifier.toLowerCase()
+                : getBuildIdentifier(runtimeBuild);
+
+        return `v${config.version} \u00b7 ${identifier}`;
+    }
 
     const parts = [compact
         ? `v${config.version}`
@@ -169,7 +182,8 @@ export function updateBuildInfoElement(element, {
     runtimeBuild = globalThis.TRAILBOOK_BUILD,
     locationObject = globalThis.location,
     developmentBuildIdentifier = null,
-    serviceWorkerStatus = null
+    serviceWorkerStatus = null,
+    runtimeBuildIdentifier = RUNTIME_BUILD_ID
 } = {}) {
 
     const localDevelopment = isLocalDevelopmentLocation(locationObject);
@@ -181,7 +195,9 @@ export function updateBuildInfoElement(element, {
         developmentBuildIdentifier,
         serviceWorkerStatus: serviceWorkerStatus ||
             (localDevelopment ? "disabled" : "checking"),
-        compact: element.dataset.compact === "true"
+        compact: element.dataset.compact === "true",
+        mapIndicator: element.dataset.mapIndicator === "true",
+        runtimeBuildIdentifier
     });
 
     return element;
@@ -191,17 +207,23 @@ export function createBuildInfoElement({
     config = Config,
     runtimeBuild = globalThis.TRAILBOOK_BUILD,
     locationObject = globalThis.location,
-    compact = false
+    compact = false,
+    mapIndicator = false,
+    runtimeBuildIdentifier = RUNTIME_BUILD_ID
 } = {}) {
 
     const element = document.createElement("footer");
 
-    element.className = "trailbook-build-info";
+    element.className = mapIndicator
+        ? "trailbook-build-info map-build-indicator"
+        : "trailbook-build-info";
     element.dataset.compact = String(compact);
+    element.dataset.mapIndicator = String(mapIndicator);
     updateBuildInfoElement(element, {
         config,
         runtimeBuild,
-        locationObject
+        locationObject,
+        runtimeBuildIdentifier
     });
 
     return element;
@@ -213,6 +235,7 @@ export async function resolveBuildInfoElements(elements, {
     locationObject = globalThis.location,
     serviceWorkerRegistration = null,
     developmentBuildIdentifier = null,
+    runtimeBuildIdentifier = RUNTIME_BUILD_ID,
     developmentIdentifierOptions = {},
     navigatorObject = globalThis.navigator
 } = {}) {
@@ -239,7 +262,8 @@ export async function resolveBuildInfoElements(elements, {
         runtimeBuild,
         locationObject,
         developmentBuildIdentifier: resolvedIdentifier,
-        serviceWorkerStatus
+        serviceWorkerStatus,
+        runtimeBuildIdentifier
     }));
 
     if (!localDevelopment && registration) {
@@ -256,7 +280,8 @@ export async function resolveBuildInfoElements(elements, {
                     runtimeBuild,
                     locationObject,
                     developmentBuildIdentifier: resolvedIdentifier,
-                    serviceWorkerStatus: status
+                    serviceWorkerStatus: status,
+                    runtimeBuildIdentifier
                 }
             ));
         };
