@@ -545,6 +545,8 @@ function testStartupTrackColorConvergence() {
         staleColors[index]
     ]));
     let colorNotifications = 0;
+    let treeBatchUpdates = 0;
+    let discoveryBatchUpdates = 0;
     let geometryLoads = 0;
 
     displayState.setLibrary({});
@@ -555,7 +557,20 @@ function testStartupTrackColorConvergence() {
         searchColors.set(path, staleColors[index]);
         dateColors.set(path, staleColors[index]);
     });
-    displayState.subscribe(({ path, display, change }) => {
+    displayState.subscribe(({ path, display, change, paths: changedPaths }) => {
+        if (change === "colors") {
+            colorNotifications += 1;
+            treeBatchUpdates += 1;
+            discoveryBatchUpdates += 1;
+            changedPaths.forEach(changedPath => {
+                const changedDisplay = displayState.getDisplay(changedPath);
+
+                treeColors.set(changedPath, changedDisplay.color);
+                searchColors.set(changedPath, changedDisplay.color);
+                dateColors.set(changedPath, changedDisplay.color);
+            });
+            return;
+        }
         if (change !== "color") return;
         colorNotifications += 1;
         treeColors.set(path, display.color);
@@ -575,9 +590,14 @@ function testStartupTrackColorConvergence() {
         getStyles: color => ({ normalStyle: { color } })
     });
     const changed = projection.converge(() => brown);
+    const changedDiagnostic = projection.getLastConvergenceDiagnostic();
 
-    assert(changed === 3 && colorNotifications === 3,
-        "startup Phase B did not mutate exactly the stale Track colors");
+    assert(changed === 3 && colorNotifications === 1 &&
+        treeBatchUpdates === 1 && discoveryBatchUpdates === 1,
+    "startup Phase B did not batch stale Track color propagation");
+    assert(changedDiagnostic.mapStyleUpdateCount === 3 &&
+        changedDiagnostic.geometryLoadCount === 0,
+    "startup batch did not limit Map work to style-only changes");
     assert(paths.every(path =>
         displayState.getDisplay(path).color === brown &&
         displayState.cache.get(path).color === brown &&
@@ -587,9 +607,70 @@ function testStartupTrackColorConvergence() {
         mapColors.get(path) === brown
     ), "startup Track color consumers did not converge to Folder brown");
     assert(projection.converge(() => brown) === 0 &&
-        colorNotifications === 3 && geometryLoads === 0,
+        colorNotifications === 1 && geometryLoads === 0,
     "current startup color caused duplicate mutation or geometry loading");
+    const diagnostic = projection.getLastConvergenceDiagnostic();
+
+    assert(diagnostic.totalTrackCount === paths.length &&
+        diagnostic.staleTrackCount === 0 &&
+        diagnostic.notificationCount === 0 &&
+        diagnostic.geometryLoadCount === 0,
+    "startup color convergence diagnostic did not report no-op state");
     projection.destroy();
+}
+
+function testStartupTrackColorBatchScale() {
+
+    const trackCount = 1123;
+    const currentColor = "#795548";
+
+    [0, 10, trackCount].forEach(staleCount => {
+        const displayState = new DisplayState();
+        let notifications = 0;
+        let batchPathCount = 0;
+        let geometryLoads = 0;
+
+        displayState.setLibrary({});
+        for (let index = 0; index < trackCount; index += 1) {
+            displayState.registerFile(
+                `Rental/track-${index}.gpx`,
+                {},
+                index < staleCount ? "#800080" : currentColor
+            );
+        }
+        displayState.subscribe(({ change, paths = [] }) => {
+            if (change !== "colors") return;
+            notifications += 1;
+            batchPathCount += paths.length;
+        });
+        const projection = new TrackColorMapProjection({
+            displayState,
+            mapView: {
+                hasDisplay: () => false,
+                updateTrackColor: () => 0,
+                displayGPX: () => { geometryLoads += 1; }
+            },
+            getStyles: color => ({ normalStyle: { color } })
+        });
+        const changed = projection.converge(() => currentColor);
+        const diagnostic = projection.getLastConvergenceDiagnostic();
+
+        assert(changed === staleCount &&
+            diagnostic.displayMutationCount === staleCount,
+        `startup ${staleCount} stale fixture mutation count changed`);
+        assert(notifications === (staleCount > 0 ? 1 : 0) &&
+            batchPathCount === staleCount &&
+            diagnostic.notificationCount === notifications,
+        `startup ${staleCount} stale fixture notification was amplified`);
+        assert(displayState.getDisplays().size === trackCount &&
+            [...displayState.getDisplays().values()].every(
+                display => display.color === currentColor
+            ),
+        `startup ${staleCount} stale fixture did not converge`);
+        assert(geometryLoads === 0 && diagnostic.geometryLoadCount === 0,
+            `startup ${staleCount} stale fixture loaded geometry`);
+        projection.destroy();
+    });
 }
 
 async function testAppIntegration() {
@@ -778,6 +859,7 @@ export async function runSharedLibrarySettingsTests() {
     testDeterministicFolderAutoColor();
     testTrackColorResolution();
     testStartupTrackColorConvergence();
+    testStartupTrackColorBatchScale();
     await testAppIntegration();
 
     return { assertions };

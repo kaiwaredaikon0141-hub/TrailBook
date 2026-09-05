@@ -88,6 +88,30 @@ export default class DisplayState {
         return true;
     }
 
+    setColors(colors) {
+
+        const changedPaths = [];
+
+        for (const [path, color] of colors || []) {
+            const display = this.displays.get(path);
+
+            if (!display || display.color === color) continue;
+            display.color = color;
+            const cached = this.cache.get(path);
+
+            if (cached) cached.color = color;
+            changedPaths.push(path);
+        }
+
+        if (changedPaths.length > 0) {
+            this.#notify(null, "colors", {
+                paths: Object.freeze([...changedPaths])
+            });
+        }
+
+        return changedPaths;
+    }
+
     unregisterFile(path) {
 
         const removed = this.displays.delete(path);
@@ -317,11 +341,12 @@ export default class DisplayState {
         }
     }
 
-    #notify(path, change = "state") {
+    #notify(path, change = "state", detail = {}) {
 
         const display = path === null ? null : this.getDisplay(path);
 
         this.listeners.forEach(listener => listener({
+            ...detail,
             path,
             display,
             change
