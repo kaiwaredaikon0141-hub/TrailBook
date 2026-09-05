@@ -526,6 +526,72 @@ function testTrackColorResolution() {
         "Track/Folder identity mismatch was silently accepted");
 }
 
+function testStartupTrackColorConvergence() {
+
+    const brown = "#795548";
+    const paths = [
+        "Rental/2021_08_29-copy.gpx",
+        "Rental/2021_08_29.gpx",
+        "Rental/2021_09_04-02.gpx",
+        "Rental/already-current.gpx"
+    ];
+    const staleColors = ["#800080", "#800080", "#0000FF", brown];
+    const displayState = new DisplayState();
+    const treeColors = new Map();
+    const searchColors = new Map();
+    const dateColors = new Map();
+    const mapColors = new Map(paths.map((path, index) => [
+        path,
+        staleColors[index]
+    ]));
+    let colorNotifications = 0;
+    let geometryLoads = 0;
+
+    displayState.setLibrary({});
+    paths.forEach((path, index) => {
+        displayState.registerFile(path, {}, staleColors[index]);
+        displayState.setCachedResult(path, { segments: [] });
+        treeColors.set(path, staleColors[index]);
+        searchColors.set(path, staleColors[index]);
+        dateColors.set(path, staleColors[index]);
+    });
+    displayState.subscribe(({ path, display, change }) => {
+        if (change !== "color") return;
+        colorNotifications += 1;
+        treeColors.set(path, display.color);
+        searchColors.set(path, display.color);
+        dateColors.set(path, display.color);
+    });
+    const projection = new TrackColorMapProjection({
+        displayState,
+        mapView: {
+            hasDisplay: path => mapColors.has(path),
+            updateTrackColor: (path, styles) => {
+                mapColors.set(path, styles.normalStyle.color);
+                return 1;
+            },
+            displayGPX: () => { geometryLoads += 1; }
+        },
+        getStyles: color => ({ normalStyle: { color } })
+    });
+    const changed = projection.converge(() => brown);
+
+    assert(changed === 3 && colorNotifications === 3,
+        "startup Phase B did not mutate exactly the stale Track colors");
+    assert(paths.every(path =>
+        displayState.getDisplay(path).color === brown &&
+        displayState.cache.get(path).color === brown &&
+        treeColors.get(path) === brown &&
+        searchColors.get(path) === brown &&
+        dateColors.get(path) === brown &&
+        mapColors.get(path) === brown
+    ), "startup Track color consumers did not converge to Folder brown");
+    assert(projection.converge(() => brown) === 0 &&
+        colorNotifications === 3 && geometryLoads === 0,
+    "current startup color caused duplicate mutation or geometry loading");
+    projection.destroy();
+}
+
 async function testAppIntegration() {
 
     const app = new App();
@@ -580,6 +646,19 @@ async function testAppIntegration() {
         setPersistenceStatus() {},
         setPresentations() {},
         setFileColor() {}
+    };
+    app.trackColorMapProjection = {
+        converge(resolveColor) {
+            let changed = 0;
+
+            app.displayState.getDisplays().forEach(display => {
+                if (app.displayState.setColor(
+                    display.path,
+                    resolveColor(display.path)
+                )) changed += 1;
+            });
+            return changed;
+        }
     };
     app.librarySnapshotService = {
         isProvisionalFor() { return false; },
@@ -639,6 +718,19 @@ async function testAppIntegration() {
     staleApp.statusBar = app.statusBar;
     staleApp.libraryAccessPanel = app.libraryAccessPanel;
     staleApp.folderColorControl = app.folderColorControl;
+    staleApp.trackColorMapProjection = {
+        converge(resolveColor) {
+            let changed = 0;
+
+            staleApp.displayState.getDisplays().forEach(display => {
+                if (staleApp.displayState.setColor(
+                    display.path,
+                    resolveColor(display.path)
+                )) changed += 1;
+            });
+            return changed;
+        }
+    };
     staleApp.viewStateCoordinator = app.viewStateCoordinator;
     staleApp.librarySnapshotService = app.librarySnapshotService;
 
@@ -685,6 +777,7 @@ export async function runSharedLibrarySettingsTests() {
     testFolderColorProjection();
     testDeterministicFolderAutoColor();
     testTrackColorResolution();
+    testStartupTrackColorConvergence();
     await testAppIntegration();
 
     return { assertions };

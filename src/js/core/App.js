@@ -425,6 +425,7 @@ export default class App {
             isCurrent
         }).then(restored => {
             this.librarySnapshotService.reconcileActual();
+            this.trackColorMapProjection.converge(path => this.getColor(path));
             return this.displaySnapshotCoordinator?.completePhaseB({ restored });
         });
 
