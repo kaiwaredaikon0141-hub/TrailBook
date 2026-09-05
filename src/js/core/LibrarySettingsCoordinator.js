@@ -26,6 +26,7 @@ export default class LibrarySettingsCoordinator {
         config,
         displaySettingsStore,
         folderColorState,
+        folderPresentationCache = null,
         confirmDiscard = message => globalThis.confirm?.(message) === true,
         setSaveInteraction = () => {},
         applyFolderColorChange = () => {},
@@ -39,6 +40,7 @@ export default class LibrarySettingsCoordinator {
         this.state = state;
         this.displaySettingsStore = displaySettingsStore;
         this.folderColorState = folderColorState;
+        this.folderPresentationCache = folderPresentationCache;
         this.confirmDiscard = confirmDiscard;
         this.setSaveInteraction = setSaveInteraction;
         this.applyFolderColorChange = applyFolderColorChange;
@@ -90,7 +92,11 @@ export default class LibrarySettingsCoordinator {
         return { requestId, result, rootHandle, generation, isCurrent };
     }
 
-    applyLoad(loadContext, { libraryId, folderPaths }) {
+    applyLoad(loadContext, {
+        libraryId,
+        folderPaths,
+        presentationCacheMode = "replace"
+    }) {
 
         if (
             !loadContext?.isCurrent() ||
@@ -113,6 +119,7 @@ export default class LibrarySettingsCoordinator {
             folderPaths,
             this.state.getSnapshot().folderColors
         );
+        this.#cachePresentations(presentationCacheMode);
         this.#render();
 
         return true;
@@ -158,7 +165,11 @@ export default class LibrarySettingsCoordinator {
             libraryId: null
         });
 
-        if (!this.applyLoad(loadContext, { libraryId, folderPaths })) {
+        if (!this.applyLoad(loadContext, {
+            libraryId,
+            folderPaths,
+            presentationCacheMode: "merge"
+        })) {
             return Object.freeze({
                 applied: false,
                 stale: true,
@@ -367,6 +378,7 @@ export default class LibrarySettingsCoordinator {
 
         if (result.status === "saved") {
             this.state.applySaveSuccess(saveRequestId, result.loadResult);
+            this.#cachePresentations("replace");
         } else if (CONFLICT_ERRORS.has(result.errorCode)) {
             this.state.markConflict(saveRequestId, result.errorCode);
         } else {
@@ -391,6 +403,7 @@ export default class LibrarySettingsCoordinator {
             this.folderPaths,
             this.state.getSnapshot().folderColors
         );
+        this.#cachePresentations("replace");
 
         const affectedPaths = new Set([
             "",
@@ -412,6 +425,26 @@ export default class LibrarySettingsCoordinator {
         return () => (
             generation === this.generation && this.isCurrentLibrary()
         );
+    }
+
+    #cachePresentations(mode) {
+
+        if (
+            this.state.getStatus().source !== "shared-json" ||
+            !this.folderPresentationCache ||
+            !this.libraryId
+        ) return 0;
+        const presentations = this.folderColorState.getFolderPresentations();
+
+        return mode === "merge"
+            ? this.folderPresentationCache.merge(
+                this.libraryId,
+                presentations
+            )
+            : this.folderPresentationCache.replace(
+                this.libraryId,
+                presentations
+            );
     }
 
     #render() {

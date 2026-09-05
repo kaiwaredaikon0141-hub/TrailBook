@@ -8,6 +8,7 @@ import GeometryCacheRepository from "../services/GeometryCacheRepository.js";
 import GPXGeometryLoader from "../services/GPXGeometryLoader.js";
 import TrackStyleService from "../services/TrackStyleService.js";
 import DisplaySettingsStore from "../services/DisplaySettingsStore.js";
+import LastKnownFolderPresentationCache from "../services/LastKnownFolderPresentationCache.js";
 import ViewStateStore from "../services/ViewStateStore.js";
 import PreviousLibraryStore from "../services/PreviousLibraryStore.js";
 import DisplaySnapshotStore from "../services/DisplaySnapshotStore.js";
@@ -73,6 +74,7 @@ export default class App {
         this.displaySettingsStore = new DisplaySettingsStore(
             this.config.uiSettings
         );
+        this.folderPresentationCache = new LastKnownFolderPresentationCache(this.config.folderPresentationCache);
         this.viewStateStore = new ViewStateStore(this.config.viewState);
         this.previousLibraryStore = new PreviousLibraryStore(
             this.config.previousLibrary
@@ -92,6 +94,7 @@ export default class App {
             config: this.config.sharedLibrarySettings,
             displaySettingsStore: this.displaySettingsStore,
             folderColorState: this.folderColorState,
+            folderPresentationCache: this.folderPresentationCache,
             setSaveInteraction: busy => this.toolbar?.setFolderPickerBusy(busy),
             applyFolderColorChange: path => this.applyFolderColorChange(path)
         });
@@ -186,7 +189,7 @@ export default class App {
             searchView: this.searchView
         });
         this.librarySnapshotService = new LibrarySnapshotService({
-            treeView: this.treeView, discoveryCoordinator: this.trackDiscoveryCoordinator, trackCatalogCoordinator: this.libraryTrackCatalogCoordinator,
+            treeView: this.treeView, discoveryCoordinator: this.trackDiscoveryCoordinator, trackCatalogCoordinator: this.libraryTrackCatalogCoordinator, getLastKnownFolderPresentations: identity => this.folderPresentationCache.get(identity), applyProvisionalFolderPresentations: presentations => this.folderColorControl.setProvisionalPresentations(presentations),
             displayState: this.displayState, searchView: this.searchView, accessPanel: this.libraryAccessPanel, eventBus: this.eventBus, mapView: this.mapView, selectionState: this.selectionState, getColor: path => this.getColor(path), statusBar: this.statusBar
         });
         this.workspace.append(sidebar, this.mapView.element);

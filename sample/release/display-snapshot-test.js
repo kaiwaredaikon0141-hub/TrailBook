@@ -509,6 +509,8 @@ async function testLargeStartupTreeRestoreBatch() {
     let treeRowRefreshes = 0;
     let ancestorRefreshRequests = 0;
     let folderRescans = 0;
+    let folderPresentationApplications = 0;
+    let folderPresentationIdentity = null;
     let heartbeatCount = 0;
     let toggleEvents = 0;
     const originalRefreshFile = treeView.refreshFileRow.bind(treeView);
@@ -522,7 +524,17 @@ async function testLargeStartupTreeRestoreBatch() {
         eventBus,
         mapView: { removeGPX: () => {} },
         selectionState: new SelectionState(),
-        getColor: () => "#795548"
+        getColor: () => "#795548",
+        getLastKnownFolderPresentations: identity => {
+            folderPresentationIdentity = identity;
+            return new Map(folderPaths.map(path => [path, "#8F8300"]));
+        },
+        applyProvisionalFolderPresentations: presentations => {
+            folderPresentationApplications += 1;
+            assert(presentations.size === folderPaths.length,
+                "provisional Folder cache was not applied as an O(F) set");
+            return presentations.size;
+        }
     });
 
     eventBus.on("gpx:display-toggled", () => { toggleEvents += 1; });
@@ -589,8 +601,15 @@ async function testLargeStartupTreeRestoreBatch() {
     assert(restoreDiagnostic.totalEntryCount === trackCount &&
         restoreDiagnostic.restoredTrackCount === trackCount &&
         restoreDiagnostic.displayPublicationCount === 1 &&
+        restoreDiagnostic.cachedFolderPresentationCount ===
+            folderPaths.length &&
+        restoreDiagnostic.cachedFolderPresentationUpdateCount ===
+            folderPaths.length &&
         restoreDiagnostic.geometryLoadCount === 0,
     "1123 Track startup phase diagnostic counts are incorrect");
+    assert(folderPresentationIdentity === "local:large" &&
+        folderPresentationApplications === 1,
+    "provisional startup did not apply its Library-scoped Folder cache once");
     assert(treeRowRefreshes <= (trackCount * 2) + 1 &&
         ancestorRefreshRequests === 0 &&
         folderRescans === folderPaths.length + 1,

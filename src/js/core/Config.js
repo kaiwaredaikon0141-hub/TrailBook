@@ -22,6 +22,11 @@ const Config = {
         schemaVersion: 1
     },
 
+    folderPresentationCache: {
+        storageKey: "trailbook.folderPresentationCache",
+        schemaVersion: 1
+    },
+
     discoveryView: {
         storageKey: "trailbook.discoveryView",
         schemaVersion: 1

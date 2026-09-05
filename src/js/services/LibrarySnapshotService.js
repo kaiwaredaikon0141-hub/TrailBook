@@ -138,6 +138,8 @@ export default class LibrarySnapshotService {
         selectionState,
         getColor,
         trackCatalogCoordinator = null,
+        getLastKnownFolderPresentations = () => new Map(),
+        applyProvisionalFolderPresentations = () => {},
         statusBar = null,
         performanceNow = () => globalThis.performance?.now?.() ?? Date.now()
     }) {
@@ -152,6 +154,8 @@ export default class LibrarySnapshotService {
             selectionState,
             getColor,
             trackCatalogCoordinator,
+            getLastKnownFolderPresentations,
+            applyProvisionalFolderPresentations,
             statusBar,
             performanceNow
         });
@@ -221,6 +225,12 @@ export default class LibrarySnapshotService {
         this.treeView.expandedPaths = new Set(state.expandedPaths);
         this.treeView.focusedPath = "";
         await this.treeView.render(model.library, { preserveNavigation: true });
+        const folderPresentations = this.getLastKnownFolderPresentations(
+            state.identity
+        );
+
+        const folderPresentationUpdateCount =
+            this.applyProvisionalFolderPresentations(folderPresentations) || 0;
         const treeReadyAt = this.performanceNow();
         this.trackCatalogCoordinator?.replaceProvisional(
             cacheNamespace,
@@ -274,6 +284,8 @@ export default class LibrarySnapshotService {
             displayPublicationCount: 1,
             treeRowUpdateCount: restoredTreeCount,
             folderAggregateCount: this.treeView.folderNodes.size,
+            cachedFolderPresentationCount: folderPresentations.size,
+            cachedFolderPresentationUpdateCount: folderPresentationUpdateCount,
             geometryLoadCount: 0,
             modelMs: modelReadyAt - startedAt,
             treeRenderMs: treeReadyAt - modelReadyAt,

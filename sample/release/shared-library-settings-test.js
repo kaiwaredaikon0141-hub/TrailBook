@@ -10,6 +10,8 @@ import TrackColorMapProjection from
     "../../src/js/core/TrackColorMapProjection.js";
 import LibrarySettingsCoordinator from
     "../../src/js/core/LibrarySettingsCoordinator.js";
+import LastKnownFolderPresentationCache from
+    "../../src/js/services/LastKnownFolderPresentationCache.js";
 import TrackStyleService from "../../src/js/services/TrackStyleService.js";
 import DisplayState from "../../src/js/state/DisplayState.js";
 import LibrarySettingsRepository from
@@ -17,6 +19,7 @@ import LibrarySettingsRepository from
 import LibrarySettingsState from
     "../../src/js/state/LibrarySettingsState.js";
 import FolderColorState from "../../src/js/state/FolderColorState.js";
+import FolderColorControl from "../../src/js/ui/FolderColorControl.js";
 import {
     normalizeSharedSettings
 } from "../../src/js/utils/SharedSettingsSchema.js";
@@ -103,6 +106,20 @@ function createRepository(overrides = {}) {
         ...Config.sharedLibrarySettings,
         ...overrides
     });
+}
+
+function createMemoryStorage() {
+
+    const values = new Map();
+
+    return {
+        writes: 0,
+        getItem(key) { return values.get(key) ?? null; },
+        setItem(key, value) {
+            this.writes += 1;
+            values.set(key, value);
+        }
+    };
 }
 
 function stateResult(status, overrides = {}) {
@@ -858,6 +875,207 @@ async function testActualSharedSettingsConvergence() {
     projection.destroy();
 }
 
+async function testLastKnownFolderPresentationCache() {
+
+    const libraryA = "root-name:GPXLog";
+    const libraryB = "root-name:Other";
+    const folderPath = "レンタルバイク";
+    const cachedColor = "#8F8300";
+    const changedColor = "#D9E534";
+    const autoColor = "#6D4C41";
+    const storage = createMemoryStorage();
+    let cache = new LastKnownFolderPresentationCache({ storage });
+
+    assert(cache.replace(libraryA, new Map([
+        [folderPath, { resolvedColor: cachedColor }],
+        ["Removed", { resolvedColor: "#123456" }]
+    ])) === 2, "formal Folder presentations were not cached");
+    cache = new LastKnownFolderPresentationCache({ storage });
+    assert(cache.get(libraryA).get(folderPath) === cachedColor &&
+        cache.get(libraryB).size === 0,
+    "Folder presentation cache leaked across Library identities");
+    assert(cache.merge(libraryA, new Map([
+        [folderPath, { resolvedColor: changedColor }]
+    ])) === 1 && cache.get(libraryA).has("Removed"),
+    "incremental presentation merge removed an unobserved Folder");
+    assert(cache.replace(libraryA, new Map([
+        [folderPath, { resolvedColor: changedColor }]
+    ])) === 1 && !cache.get(libraryA).has("Removed"),
+    "complete presentation replace did not clean a removed Folder");
+
+    const restartStorage = createMemoryStorage();
+    const restartCache = new LastKnownFolderPresentationCache({
+        storage: restartStorage
+    });
+    const rootAutoColor = new FolderAutoColorResolver(
+        Config.map.displayPalette
+    ).resolve("");
+
+    restartCache.replace(libraryA, new Map([
+        ["", { resolvedColor: rootAutoColor }],
+        [folderPath, { resolvedColor: cachedColor }]
+    ]));
+    const displaySettingsStore = {
+        setActiveLibrary: () => libraryA,
+        getFolderColors: () => ({})
+    };
+    const folderColorState = new FolderColorState({
+        store: displaySettingsStore,
+        fallbackColor: Config.map.trackStyle.lineColor,
+        autoPalette: Config.map.displayPalette
+    });
+    const treeElement = document.createElement("aside");
+    const folderRow = document.createElement("div");
+
+    folderRow.className = "tree-row folder-row";
+    folderRow.dataset.treePath = folderPath;
+    folderRow.innerHTML = '<span class="tree-label">レンタルバイク</span>';
+    treeElement.append(folderRow);
+    const treeView = {
+        element: treeElement,
+        folderNodes: new Map([[folderPath, folderRow]]),
+        fileNodes: new Map(),
+        nodeMetadata: new Map()
+    };
+    const control = new FolderColorControl(
+        treeView,
+        { emit() {} },
+        null,
+        null,
+        path => folderColorState.resolveAutoColor(path)
+    );
+
+    folderColorState.setActiveLibrary(libraryA, ["", folderPath], {});
+    const provisionalFolderUpdates = control.setProvisionalPresentations(
+        restartCache.get(libraryA)
+    );
+    const provisionalIndicator = folderRow.querySelector(
+        ".folder-color-readonly"
+    );
+
+    assert(folderColorState.getExplicitColor(folderPath) === null &&
+        folderColorState.getResolvedFolderColor(folderPath).toUpperCase() ===
+            autoColor &&
+        control.getResolvedFolderColor(folderPath) === cachedColor &&
+        provisionalIndicator?.dataset.resolvedColor === cachedColor &&
+        provisionalFolderUpdates === 1,
+    "provisional cache changed Folder authority or failed to restore swatch");
+    assert(folderRow.querySelector(".folder-color-readonly-mode")
+        ?.textContent === "Cached",
+    "provisional Folder presentation was mislabelled as authority");
+
+    const displayState = new DisplayState();
+    let displayNotifications = 0;
+    let mapStyleUpdates = 0;
+    let geometryLoads = 0;
+
+    displayState.setLibrary({});
+    for (let index = 0; index < 1123; index += 1) {
+        displayState.registerFile(
+            `${folderPath}/cached-${index}.gpx`,
+            {},
+            cachedColor
+        );
+    }
+    displayState.subscribe(({ change }) => {
+        if (change === "colors") displayNotifications += 1;
+    });
+    const projection = new TrackColorMapProjection({
+        displayState,
+        mapView: {
+            hasDisplay: () => true,
+            updateTrackColor() {
+                mapStyleUpdates += 1;
+                return 1;
+            },
+            displayGPX() { geometryLoads += 1; }
+        },
+        getStyles: color => ({ normalStyle: { color } })
+    });
+    let sharedColor = cachedColor;
+    const coordinator = new LibrarySettingsCoordinator({
+        config: Config.sharedLibrarySettings,
+        displaySettingsStore,
+        folderColorState,
+        folderPresentationCache: restartCache,
+        repository: {
+            async load() {
+                return stateResult("loaded", {
+                    snapshot: {
+                        schemaVersion: 1,
+                        folderColors: { [folderPath]: sharedColor }
+                    },
+                    fallbackAllowed: false
+                });
+            }
+        }
+    });
+    const writesBeforeConvergence = restartStorage.writes;
+
+    await coordinator.reconcileActual({}, {
+        libraryName: "GPXLog",
+        folderPaths: ["", folderPath],
+        generation: 1,
+        isCurrent: () => true
+    });
+    const actualFolderUpdates = control.setPresentations(
+        folderColorState.getFolderPresentations()
+    );
+    const unchangedTrackColors = projection.converge(path =>
+        folderColorState.resolveTrackColor(path)
+    );
+
+    assert(folderColorState.getExplicitColor(folderPath) === cachedColor &&
+        control.getResolvedFolderColor(folderPath) === cachedColor &&
+        provisionalIndicator.dataset.resolvedColor === cachedColor &&
+        folderRow.querySelector(".folder-color-readonly-mode")?.textContent ===
+            "Explicit",
+    "actual shared state did not replace provisional presentation authority");
+    assert(unchangedTrackColors === 0 && displayNotifications === 0 &&
+        mapStyleUpdates === 0 && geometryLoads === 0 &&
+        restartStorage.writes === writesBeforeConvergence &&
+        actualFolderUpdates === 1,
+    `same cached/shared color caused redundant Track/Map/cache mutation: ${
+        JSON.stringify({
+            unchangedTrackColors,
+            displayNotifications,
+            mapStyleUpdates,
+            geometryLoads,
+            writes: restartStorage.writes,
+            writesBeforeConvergence
+        })
+    }`);
+    assert(control.setPresentations(
+        folderColorState.getFolderPresentations()
+    ) === 0,
+    "unchanged actual Folder presentation caused a redundant DOM update");
+
+    sharedColor = changedColor;
+    await coordinator.reconcileActual({}, {
+        libraryName: "GPXLog",
+        folderPaths: ["", folderPath],
+        generation: 1,
+        isCurrent: () => true
+    });
+    const changedFolderUpdates = control.setPresentations(
+        folderColorState.getFolderPresentations()
+    );
+    projection.converge(path => folderColorState.resolveTrackColor(path));
+    assert(control.getResolvedFolderColor(folderPath) === changedColor &&
+        provisionalIndicator.dataset.resolvedColor === changedColor &&
+        restartCache.get(libraryA).get(folderPath) === changedColor &&
+        displayNotifications === 1 && mapStyleUpdates === 1123 &&
+        geometryLoads === 0 && changedFolderUpdates === 1,
+    "changed shared Folder color did not replace and update the cache");
+
+    const missingCacheUpdates = control.setProvisionalPresentations(new Map());
+    assert(control.getResolvedFolderColor(folderPath).toUpperCase() ===
+        autoColor && provisionalIndicator.dataset.resolvedColor.toUpperCase() ===
+        autoColor && missingCacheUpdates === 1,
+    "provisional startup without cache did not retain Auto presentation");
+    projection.destroy();
+}
+
 async function testAppIntegration() {
 
     const app = new App();
@@ -1046,6 +1264,7 @@ export async function runSharedLibrarySettingsTests() {
     testStartupTrackColorConvergence();
     testStartupTrackColorBatchScale();
     await testActualSharedSettingsConvergence();
+    await testLastKnownFolderPresentationCache();
     await testAppIntegration();
 
     return { assertions };

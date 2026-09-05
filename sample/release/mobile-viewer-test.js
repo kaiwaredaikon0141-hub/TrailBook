@@ -728,6 +728,19 @@ async function run() {
     assert(trackSwatch.getAttribute("aria-label").includes("#123456") &&
         fileRow.querySelector(".tree-color-mode").textContent === "Auto",
     "mobile resolved Track color is missing");
+    colorControl.setProvisionalPresentations(new Map([
+        ["Trips", "#8F8300"]
+    ]));
+    assert(colorControl.getResolvedFolderColor("Trips") === "#8F8300" &&
+        readonly.dataset.resolvedColor === "#8F8300" &&
+        readonly.querySelector(".folder-color-readonly-mode").textContent ===
+            "Cached",
+    "mobile provisional Folder cache did not update presentation only");
+    colorControl.setPresentations(new Map([["Trips", {
+        mode: "auto", explicitColor: null, resolvedColor: "#123456"
+    }]]));
+    assert(readonly.dataset.resolvedColor === "#123456",
+        "actual Folder state did not replace provisional presentation cache");
     const eventCount = colorEvents.events.length;
 
     readonly.click();

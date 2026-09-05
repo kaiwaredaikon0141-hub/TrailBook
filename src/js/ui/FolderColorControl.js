@@ -1,7 +1,8 @@
 const MODE_LABELS = {
     explicit: "Explicit",
     inherited: "Inherited",
-    auto: "Auto"
+    auto: "Auto",
+    cached: "Cached"
 };
 
 /**
@@ -24,6 +25,7 @@ export default class FolderColorControl {
         this.getResolvedColor = getResolvedColor;
         this.getAutoFolderColor = getAutoFolderColor;
         this.presentations = new Map();
+        this.provisionalPresentations = new Map();
         this.persistenceStatus = "available";
         this.observer = typeof MutationObserver === "function"
             ? new MutationObserver(records => {
@@ -48,8 +50,33 @@ export default class FolderColorControl {
 
     setPresentations(presentations) {
 
-        const previous = this.presentations;
+        const previous = this.#getEffectivePresentations();
         const next = new Map(presentations);
+
+        this.presentations = next;
+        this.provisionalPresentations = new Map();
+        return this.#projectPresentationChanges(previous, next, true);
+    }
+
+    setProvisionalPresentations(folderColors) {
+
+        const previous = this.#getEffectivePresentations();
+        const next = new Map([...(folderColors || [])].map(([path, color]) => [
+            path,
+            {
+                mode: "cached",
+                explicitColor: null,
+                resolvedColor: color
+            }
+        ]));
+
+        this.presentations = new Map();
+        this.provisionalPresentations = next;
+        return this.#projectPresentationChanges(previous, next, false);
+    }
+
+    #projectPresentationChanges(previous, next, includeFileRows) {
+
         const changedPaths = new Set([...previous.keys(), ...next.keys()]);
 
         changedPaths.forEach(path => {
@@ -57,22 +84,26 @@ export default class FolderColorControl {
                 changedPaths.delete(path);
             }
         });
-        this.presentations = next;
         const folderRows = [...this.treeView.folderNodes.values()].filter(
             row =>
                 changedPaths.has(row.dataset.treePath) ||
                 !row.querySelector(".folder-color-readonly")
         );
-        const fileRows = [...this.treeView.fileNodes.values()].filter(row => {
-            const metadata = this.treeView.nodeMetadata.get(row.dataset.treePath);
+        const fileRows = includeFileRows
+            ? [...this.treeView.fileNodes.values()].filter(row => {
+                const metadata = this.treeView.nodeMetadata.get(
+                    row.dataset.treePath
+                );
 
-            return changedPaths.has(metadata?.parentPath) ||
-                !row.querySelector(".tree-color-mode");
-        });
+                return changedPaths.has(metadata?.parentPath) ||
+                    !row.querySelector(".tree-color-mode");
+            })
+            : [];
 
-        if (folderRows.length === 0 && fileRows.length === 0) return;
+        if (folderRows.length === 0 && fileRows.length === 0) return 0;
         folderRows.forEach(row => this.#refreshRow(row));
         fileRows.forEach(row => this.#refreshFileRow(row.dataset.treePath));
+        return folderRows.length + fileRows.length;
     }
 
     setPersistenceStatus(status) {
@@ -117,7 +148,7 @@ export default class FolderColorControl {
 
     getResolvedFolderColor(folderPath) {
 
-        const presentation = this.presentations.get(folderPath);
+        const presentation = this.#getPresentation(folderPath);
 
         return presentation?.resolvedColor ||
             this.getAutoFolderColor?.(folderPath) || null;
@@ -126,7 +157,7 @@ export default class FolderColorControl {
     #refreshRow(row) {
 
         const folderPath = row.dataset.treePath;
-        const presentation = this.presentations.get(folderPath) || {
+        const presentation = this.#getPresentation(folderPath) || {
             mode: "auto",
             explicitColor: null,
             resolvedColor: this.getAutoFolderColor?.(folderPath) || null
@@ -204,7 +235,7 @@ export default class FolderColorControl {
 
         if (!row || metadata?.kind !== "file") return;
 
-        const presentation = this.presentations.get(metadata.parentPath) || {
+        const presentation = this.#getPresentation(metadata.parentPath) || {
             mode: "auto"
         };
         const modeLabel = MODE_LABELS[presentation.mode] || MODE_LABELS.auto;
@@ -247,6 +278,19 @@ export default class FolderColorControl {
         return left.mode === right.mode &&
             left.explicitColor === right.explicitColor &&
             left.resolvedColor === right.resolvedColor;
+    }
+
+    #getPresentation(folderPath) {
+
+        return this.presentations.get(folderPath) ||
+            this.provisionalPresentations.get(folderPath) || null;
+    }
+
+    #getEffectivePresentations() {
+
+        return this.presentations.size > 0
+            ? this.presentations
+            : this.provisionalPresentations;
     }
 
     #isOwnedMutation(record) {
