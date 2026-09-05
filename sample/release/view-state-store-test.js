@@ -828,8 +828,8 @@ function testSelectedTrackProjection() {
         path: "deep/folder/selected.gpx",
         reason: "view-state-restore"
     });
-    assert(treeOptions[0].options.reveal === true,
-        "restored selection did not reveal ancestors");
+    assert(treeOptions[0].options.reveal === false,
+        "restored selection unexpectedly revealed ancestors");
     assert(treeOptions[0].options.scroll === false,
         "restored selection forced Tree scroll");
     assert(treeOptions[0].options.moveFocus === false,
@@ -1454,13 +1454,14 @@ async function testLibraryRestoreOrdering() {
         isCurrent: () => true,
         cacheNamespace: "cache:ready"
     };
+    const restoredTreeSelections = [];
     const app = Object.assign(new App(), {
         librarySettingsCoordinator: {
             async load() { return { source: "none" }; },
             applyLoad() { return true; }
         },
         librarySnapshotService: {
-            isProvisionalFor() { return false; },
+            isProvisionalFor() { return true; },
             reconcileActual() {}
         },
         libraryTrackCatalogCoordinator: {
@@ -1477,12 +1478,18 @@ async function testLibraryRestoreOrdering() {
         },
         treeView: {
             async render() { order.push("tree-ready"); },
+            setSelectedPath(path, options) {
+                restoredTreeSelections.push({ path, options });
+            },
             getSearchSourceEntries() { return []; },
             getFileEntries() {
                 return [{ path: "visible.gpx", fileHandle }];
             }
         },
         displaySettingsStore: { setActiveLibrary() { return "root-name:Ready"; } },
+        selectionState: {
+            getSelectedPath() { return "ロードスター/visible.gpx"; }
+        },
         updateFolderColorPresentation() {},
         getColor() { return "#123456"; },
         statusBar: { showLibraryLoaded() {} },
@@ -1509,6 +1516,9 @@ async function testLibraryRestoreOrdering() {
         "display restore started before file registration");
     assert(order.indexOf("discovery-ready") < order.indexOf("view-state-restore"),
         "display restore started before Discovery ready");
+    assert(restoredTreeSelections.length === 1 &&
+        restoredTreeSelections[0].options.reveal === false,
+    "actual Library hydration revealed the cached selection ancestors");
 }
 
 async function testPreviousLibraryCoordinator() {

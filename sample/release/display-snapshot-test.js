@@ -449,6 +449,8 @@ async function testLibrarySnapshotService() {
     "cached Tree display state was not restored");
     assert(selected[0].path === "Trips/one.gpx",
         "cached selected Track was not restored");
+    assert(selected[0].options.reveal === false,
+        "cached selection restore requested ancestor expansion");
     assert(service.isProvisionalFor("local-cache"),
         "cached Library was not marked provisional");
     assert(trackCatalog.get("local-cache", "Trips/one.gpx")
@@ -477,6 +479,79 @@ async function testLibrarySnapshotService() {
     assert(events.at(-1).name === "library:provisional-state-changed" &&
         events.at(-1).value.provisional === false,
     "actual Library reconciliation did not announce ready availability");
+}
+
+async function testFolderExpansionRestoreIsolation() {
+    const folderPath = "ロードスター";
+    const trackPath = `${folderPath}/selected.gpx`;
+    const restore = async expandedPaths => {
+        const eventBus = new EventBus();
+        const treeView = new TreeView(eventBus);
+        const displayState = new DisplayState();
+        const service = new LibrarySnapshotService({
+            treeView,
+            discoveryCoordinator: { setProvisionalLibrary() {} },
+            displayState,
+            searchView: { setAvailable() {} },
+            accessPanel: { setProvisionalLibrary() {} },
+            eventBus,
+            mapView: { removeGPX() {} },
+            selectionState: new SelectionState(),
+            getColor: () => "#8F8300"
+        });
+
+        await service.restore({
+            identity: "local:roadster",
+            rootName: "GPX",
+            folders: [folderPath],
+            entries: [{
+                relativePath: trackPath,
+                folderPath,
+                originalFileName: "selected.gpx",
+                displayName: "selected",
+                trackNames: [],
+                pointCount: 2,
+                distance: 100,
+                status: "ready",
+                color: "#8F8300"
+            }],
+            mode: "folder",
+            filter: null,
+            expandedPaths,
+            expandedDateIds: []
+        }, {
+            cacheNamespace: "local:roadster",
+            restoredTracks: [{
+                path: trackPath,
+                color: "#8F8300",
+                result: geometry()
+            }],
+            selectedPath: trackPath
+        });
+
+        return { treeView, trackPath, folderPath };
+    };
+
+    const closed = await restore([""]);
+
+    assert(!closed.treeView.expandedPaths.has(closed.folderPath) &&
+        closed.treeView.folderNodes.get(closed.folderPath)
+            ?.getAttribute("aria-expanded") === "false",
+    "closed ロードスター Folder was expanded during startup restore");
+    assert(closed.treeView.nodeMetadata.get(closed.trackPath)?.checked &&
+        !closed.treeView.fileNodes.has(closed.trackPath),
+    "visible Track restore expanded its closed ancestor Folder");
+    closed.treeView.setSelectedPath(closed.trackPath, { reveal: true });
+    assert(closed.treeView.expandedPaths.has(closed.folderPath) &&
+        closed.treeView.fileNodes.has(closed.trackPath),
+    "explicit reveal did not expand the selected Track ancestors");
+
+    const opened = await restore(["", folderPath]);
+
+    assert(opened.treeView.expandedPaths.has(folderPath) &&
+        opened.treeView.folderNodes.get(folderPath)
+            ?.getAttribute("aria-expanded") === "true",
+    "saved open Folder state was not restored");
 }
 
 async function testLargeStartupTreeRestoreBatch() {
@@ -816,6 +891,7 @@ try {
     await testOptimisticGeometryRead();
     await testCoordinator();
     await testLibrarySnapshotService();
+    await testFolderExpansionRestoreIsolation();
     await testLargeStartupTreeRestoreBatch();
     await testLastKnownGoodAcrossRestarts();
     await testEmptyPhaseBDoesNotReplaceKnownGood();

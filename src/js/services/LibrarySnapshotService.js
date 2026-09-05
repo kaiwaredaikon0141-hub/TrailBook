@@ -252,7 +252,7 @@ export default class LibrarySnapshotService {
         const displayReadyAt = this.performanceNow();
         const restoredTreeCount = this.#restoreTreeDisplayStates(restoredTracks);
         const treeDisplayReadyAt = this.performanceNow();
-        this.treeView.setSelectedPath(selectedPath, { reveal: true });
+        this.treeView.setSelectedPath(selectedPath, { reveal: false });
         const selectionReadyAt = this.performanceNow();
         this.discoveryCoordinator.setProvisionalLibrary({
             namespace: cacheNamespace,

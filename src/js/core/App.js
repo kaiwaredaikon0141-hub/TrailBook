@@ -374,7 +374,7 @@ export default class App {
         this.displayState.setLibrary(library.rootFolder.handle);
 
         await this.treeView.render(library, { preserveNavigation: preserveCached });
-        if (preserveCached) this.treeView.setSelectedPath(this.selectionState.getSelectedPath(), { reveal: true });
+        if (preserveCached) this.treeView.setSelectedPath(this.selectionState.getSelectedPath(), { reveal: false });
 
         if (!isCurrent()) return false;
         this.libraryTrackCatalogCoordinator.replaceFromCompleteScan(cacheNamespace, this.treeView.getFileEntries());
@@ -494,11 +494,8 @@ export default class App {
     handleSelectionChanged({ path, reason }) {
 
         const revealFromMap = reason === "map" && path !== null;
-        const revealFromRestore = reason === "view-state-restore" &&
-            path !== null;
-
         this.treeView.setSelectedPath(path, {
-            reveal: revealFromMap || revealFromRestore,
+            reveal: revealFromMap,
             scroll: revealFromMap,
             moveFocus: false
         });
