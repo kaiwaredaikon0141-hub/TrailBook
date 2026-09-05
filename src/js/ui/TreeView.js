@@ -275,7 +275,7 @@ export default class TreeView {
         );
         item.append(row);
         this.fileNodes.set(path, row);
-        this.refreshFileRow(path);
+        this.refreshFileRow(path, false);
 
         return item;
     }
@@ -705,7 +705,7 @@ export default class TreeView {
         }
 
         metadata.checked = checked;
-        this.refreshFileRow(path);
+        this.refreshFileRow(path, false);
         this.refreshFolderAncestors(metadata.parentPath);
     }
 
@@ -836,18 +836,18 @@ export default class TreeView {
     }
 
     setSelectedPath(path, options = {}) {
-
         if (path !== null && !this.hasFile(path)) {
             return false;
         }
-
         if (path && options.reveal) {
             this.#expandAncestors(path);
         }
 
-        this.selectedFilePath = path;
+        const previousPath = this.selectedFilePath;
 
-        this.refreshAllFileRows();
+        this.selectedFilePath = path;
+        if (previousPath) this.refreshFileRow(previousPath, false);
+        if (path) this.refreshFileRow(path, false);
 
         const row = path ? this.fileNodes.get(path) : null;
 
@@ -923,13 +923,13 @@ export default class TreeView {
             return;
         }
 
-        const files = [...this.nodeMetadata.values()].filter(metadata => {
-            return metadata.kind === "file" &&
-                (path === ROOT_PATH ||
-                    metadata.path.startsWith(`${path}/`));
-        });
-
-        const checkedCount = files.filter(metadata => metadata.checked).length;
+        const folder = this.nodeMetadata.get(path)?.model;
+        const files = folder
+            ? this.metadataBuilder.collectDescendantFiles(folder, path)
+            : [];
+        const checkedCount = files.reduce((count, entry) =>
+            count + Boolean(this.nodeMetadata.get(entry.path)?.checked), 0
+        );
         const checkbox = row.querySelector(".folder-display-toggle");
 
         if (!checkbox) {
@@ -942,7 +942,7 @@ export default class TreeView {
             checkedCount < files.length;
     }
 
-    refreshFileRow(path) {
+    refreshFileRow(path, refreshAncestors = true) {
 
         const row = this.fileNodes.get(path);
         const metadata = this.nodeMetadata.get(path);
@@ -971,7 +971,7 @@ export default class TreeView {
             colorIndicator.style.backgroundColor = metadata.color || "";
         }
 
-        this.refreshFolderAncestors(metadata.parentPath);
+        if (refreshAncestors) this.refreshFolderAncestors(metadata.parentPath);
     }
 
     findRenderedRow(path) {

@@ -16,9 +16,11 @@ import LibraryTrackCatalog from
     "../../src/js/core/LibraryTrackCatalog.js";
 import LibraryTrackCatalogCoordinator from
     "../../src/js/core/LibraryTrackCatalogCoordinator.js";
+import TreeView from "../../src/js/ui/TreeView.js";
 
 const output = document.getElementById("result");
 let assertions = 0;
+let startupRestoreDiagnostic = null;
 
 function assert(condition, message) {
     assertions += 1;
@@ -229,6 +231,10 @@ async function testCoordinator() {
             order.push(`tree:${state.entries.length}`);
             return true;
         },
+        getLibraryRestoreDiagnostic: () => ({
+            status: "completed", totalMs: 5,
+            displayPublicationCount: 1, geometryLoadCount: 0
+        }),
         captureLibrarySnapshot: () => snapshot(["one.gpx"]).library,
         markLibraryReady: () => { libraryReady += 1; },
         setTimer: callback => { timers.push(callback); return timers.length; },
@@ -253,6 +259,8 @@ async function testCoordinator() {
         "cached tree restored before geometry selection was ready");
     assert(coordinator.getStatus().restoreState === "phaseA",
         "phase-A lifecycle state missing");
+    assert(coordinator.getStatus().libraryRestoreDiagnostic?.totalMs === 5,
+        "Library restore timing was not attached to startup diagnostics");
 
     displayState.setLibrary({});
     displayState.registerFile("one.gpx", {}, "#123456");
@@ -332,6 +340,8 @@ async function testLibrarySnapshotService() {
     const accessStates = [];
     const removed = [];
     const statusLibraries = [];
+    const treeMetadata = new Map();
+    const refreshedTreePaths = [];
     let actualFileEntries = [];
     const displayState = new DisplayState();
     const selectionState = new SelectionState();
@@ -352,9 +362,19 @@ async function testLibrarySnapshotService() {
             { kind: "file", path: "Trips/one.gpx", name: "one.gpx" }
         ],
         getFileEntries: () => actualFileEntries,
-        async render(library, options) { rendered.push({ library, options }); },
-        setDisplayChecked: () => {},
-        setDisplayLoaded: () => {},
+        async render(library, options) {
+            rendered.push({ library, options });
+            treeMetadata.set("Trips/one.gpx", {
+                kind: "file", path: "Trips/one.gpx", parentPath: "Trips",
+                checked: false, state: "idle", error: null, color: null
+            });
+        },
+        nodeMetadata: treeMetadata,
+        folderNodes: new Map(),
+        parentPath: path => path.split("/").slice(0, -1).join("/"),
+        refreshFileRow: (path, refreshAncestors) => {
+            refreshedTreePaths.push({ path, refreshAncestors });
+        },
         setSelectedPath: (path, options) => selected.push({ path, options })
     };
     const discoveryCoordinator = {
@@ -416,6 +436,17 @@ async function testLibrarySnapshotService() {
         "visible Track check/load state was not restored");
     assert(displayState.getDisplay("Trips/one.gpx")?.color === "#123456",
         "cached Library Track color was not restored");
+    assert(service.getLastRestoreDiagnostic().displayPublicationCount === 1 &&
+        service.getLastRestoreDiagnostic().treeRowUpdateCount === 1 &&
+        service.getLastRestoreDiagnostic().geometryLoadCount === 0,
+    "cached Library startup diagnostic counts are incorrect");
+    assert(refreshedTreePaths.length === 1 &&
+        refreshedTreePaths[0].path === "Trips/one.gpx" &&
+        refreshedTreePaths[0].refreshAncestors === false,
+    "cached Tree display state repeated ancestor refreshes");
+    assert(treeMetadata.get("Trips/one.gpx").checked &&
+        treeMetadata.get("Trips/one.gpx").state === "loaded",
+    "cached Tree display state was not restored");
     assert(selected[0].path === "Trips/one.gpx",
         "cached selected Track was not restored");
     assert(service.isProvisionalFor("local-cache"),
@@ -446,6 +477,141 @@ async function testLibrarySnapshotService() {
     assert(events.at(-1).name === "library:provisional-state-changed" &&
         events.at(-1).value.provisional === false,
     "actual Library reconciliation did not announce ready availability");
+}
+
+async function testLargeStartupTreeRestoreBatch() {
+    const trackCount = 1123;
+    const eventBus = new EventBus();
+    const treeView = new TreeView(eventBus);
+    const displayState = new DisplayState();
+    const folderPaths = Array.from(
+        { length: Math.ceil(trackCount / 20) },
+        (_, index) => `Folder-${index}`
+    );
+    const entries = Array.from({ length: trackCount }, (_, index) => ({
+        relativePath: `${folderPaths[Math.floor(index / 20)]}/track-${index}.gpx`,
+        folderPath: folderPaths[Math.floor(index / 20)],
+        originalFileName: `track-${index}.gpx`,
+        displayName: `track-${index}`,
+        trackNames: [],
+        pointCount: 2,
+        distance: 100,
+        status: "ready",
+        color: "#795548"
+    }));
+    const restoredTracks = entries.map(({ relativePath }) => ({
+        path: relativePath,
+        color: "#795548",
+        result: geometry()
+    }));
+    let displayPublications = 0;
+    let restoredPathCount = 0;
+    let treeRowRefreshes = 0;
+    let ancestorRefreshRequests = 0;
+    let folderRescans = 0;
+    let heartbeatCount = 0;
+    let toggleEvents = 0;
+    const originalRefreshFile = treeView.refreshFileRow.bind(treeView);
+    const originalRefreshFolder = treeView.refreshFolderRow.bind(treeView);
+    const service = new LibrarySnapshotService({
+        treeView,
+        discoveryCoordinator: { setProvisionalLibrary: () => {} },
+        displayState,
+        searchView: { setAvailable: () => {} },
+        accessPanel: { setProvisionalLibrary: () => {} },
+        eventBus,
+        mapView: { removeGPX: () => {} },
+        selectionState: new SelectionState(),
+        getColor: () => "#795548"
+    });
+
+    eventBus.on("gpx:display-toggled", () => { toggleEvents += 1; });
+    displayState.subscribe(({ change, paths = [] }) => {
+        if (change !== "restore") return;
+        displayPublications += 1;
+        restoredPathCount += paths.length;
+    });
+    treeView.refreshFileRow = (path, refreshAncestors = true) => {
+        treeRowRefreshes += 1;
+        if (refreshAncestors) ancestorRefreshRequests += 1;
+        return originalRefreshFile(path, refreshAncestors);
+    };
+    treeView.refreshFolderRow = path => {
+        folderRescans += 1;
+        return originalRefreshFolder(path);
+    };
+    const heartbeat = setInterval(() => { heartbeatCount += 1; }, 10);
+    const startedAt = performance.now();
+    const restored = await service.restore({
+        identity: "local:large",
+        rootName: "GPX",
+        folders: folderPaths,
+        entries,
+        mode: "folder",
+        filter: null,
+        expandedPaths: ["", ...folderPaths],
+        expandedDateIds: []
+    }, {
+        cacheNamespace: "local:large",
+        restoredTracks,
+        selectedPath: `${folderPaths[0]}/track-0.gpx`
+    });
+    const duration = performance.now() - startedAt;
+    const restoreDiagnostic = service.getLastRestoreDiagnostic();
+
+    await new Promise(resolve => setTimeout(resolve, 30));
+    clearInterval(heartbeat);
+    startupRestoreDiagnostic = Object.freeze({
+        trackCount,
+        durationMs: duration,
+        displayPublications,
+        treeRowRefreshes,
+        ancestorRefreshRequests,
+        folderRescans,
+        heartbeatCount,
+        serviceTotalMs: restoreDiagnostic.totalMs,
+        phaseMs: {
+            model: restoreDiagnostic.modelMs,
+            treeRender: restoreDiagnostic.treeRenderMs,
+            catalog: restoreDiagnostic.catalogSyncMs,
+            display: restoreDiagnostic.displayRestoreMs,
+            treeProjection: restoreDiagnostic.treeProjectionMs,
+            selection: restoreDiagnostic.selectionMs,
+            discovery: restoreDiagnostic.discoveryMs,
+            finalization: restoreDiagnostic.finalizationMs
+        }
+    });
+
+    assert(restored && displayState.getDisplays().size === trackCount,
+        "1123 Track startup restore did not apply every cached state");
+    assert(displayPublications === 1 && restoredPathCount === trackCount,
+        "1123 Track startup restore amplified DisplayState publications");
+    assert(restoreDiagnostic.totalEntryCount === trackCount &&
+        restoreDiagnostic.restoredTrackCount === trackCount &&
+        restoreDiagnostic.displayPublicationCount === 1 &&
+        restoreDiagnostic.geometryLoadCount === 0,
+    "1123 Track startup phase diagnostic counts are incorrect");
+    assert(treeRowRefreshes <= (trackCount * 2) + 1 &&
+        ancestorRefreshRequests === 0 &&
+        folderRescans === folderPaths.length + 1,
+        `1123 Track startup restore repeated full Tree/Folder scans (${treeRowRefreshes}/${ancestorRefreshRequests}/${folderRescans})`);
+    assert([...displayState.getDisplays().values()].every(display =>
+        display.checked && display.state === "loaded" && !display.error
+    ), "1123 Track DisplayState restore was incomplete");
+    assert([...treeView.nodeMetadata.values()]
+        .filter(metadata => metadata.kind === "file")
+        .every(metadata => metadata.checked && metadata.state === "loaded" &&
+            !metadata.error),
+    "1123 Track Tree state restore was incomplete");
+    assert(heartbeatCount > 0 && duration < 2000,
+        "startup restore blocked the UI heartbeat");
+    const input = treeView.fileNodes.get(`${folderPaths[0]}/track-0.gpx`)
+        .querySelector(".gpx-display-toggle");
+
+    input.checked = false;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    assert(toggleEvents === 1,
+        "Map-visible startup completion left Tree input unresponsive");
 }
 
 async function testLastKnownGoodAcrossRestarts() {
@@ -631,10 +797,12 @@ try {
     await testOptimisticGeometryRead();
     await testCoordinator();
     await testLibrarySnapshotService();
+    await testLargeStartupTreeRestoreBatch();
     await testLastKnownGoodAcrossRestarts();
     await testEmptyPhaseBDoesNotReplaceKnownGood();
     await testDriveIdentityAndNoHandleDependency();
-    output.textContent = `PASS: ${assertions} assertions`;
+    output.textContent = `PASS: ${assertions} assertions\n` +
+        `Startup restore: ${JSON.stringify(startupRestoreDiagnostic)}`;
     document.documentElement.dataset.testStatus = "pass";
 } catch (error) {
     output.textContent = `FAIL: ${error.message}\n${error.stack}`;

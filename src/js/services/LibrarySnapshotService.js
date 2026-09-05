@@ -138,7 +138,8 @@ export default class LibrarySnapshotService {
         selectionState,
         getColor,
         trackCatalogCoordinator = null,
-        statusBar = null
+        statusBar = null,
+        performanceNow = () => globalThis.performance?.now?.() ?? Date.now()
     }) {
         Object.assign(this, {
             treeView,
@@ -151,11 +152,13 @@ export default class LibrarySnapshotService {
             selectionState,
             getColor,
             trackCatalogCoordinator,
-            statusBar
+            statusBar,
+            performanceNow
         });
         this.provisional = false;
         this.cacheNamespace = null;
         this.provisionalPaths = new Set();
+        this.lastRestoreDiagnostic = Object.freeze({ status: "idle" });
     }
 
     capture({ libraryIdentity, rootName }) {
@@ -203,36 +206,44 @@ export default class LibrarySnapshotService {
         selectedPath = null
     } = {}) {
 
+        const startedAt = this.performanceNow();
+
         const state = normalizeLibrarySnapshot(snapshot, snapshot?.identity);
 
-        if (!state || state.entries.length === 0) return false;
+        if (!state || state.entries.length === 0) {
+            this.lastRestoreDiagnostic = Object.freeze({ status: "skipped" });
+            return false;
+        }
 
         const model = this.#createLibrary(state);
+        const modelReadyAt = this.performanceNow();
 
         this.treeView.expandedPaths = new Set(state.expandedPaths);
         this.treeView.focusedPath = "";
         await this.treeView.render(model.library, { preserveNavigation: true });
+        const treeReadyAt = this.performanceNow();
         this.trackCatalogCoordinator?.replaceProvisional(
             cacheNamespace,
             state.entries
         );
-        this.displayState.setLibrary(model.library.rootFolder.handle);
-        model.fileEntries.forEach(({ path, fileHandle }) => {
-            const entry = state.entries.find(item => item.relativePath === path);
-            this.displayState.registerFile(
+        const catalogReadyAt = this.performanceNow();
+        const entriesByPath = new Map(
+            state.entries.map(entry => [entry.relativePath, entry])
+        );
+        this.displayState.restoreSnapshotLibrary(
+            model.library.rootFolder.handle,
+            model.fileEntries.map(({ path, fileHandle }) => ({
                 path,
                 fileHandle,
-                entry?.color || this.getColor(path)
-            );
-        });
-        restoredTracks.forEach(({ path, result, color }) => {
-            this.displayState.setChecked(path, true);
-            this.displayState.setLoaded(path, result);
-            this.displayState.setCachedResult(path, result);
-            this.treeView.setDisplayChecked(path, true);
-            this.treeView.setDisplayLoaded(path, color);
-        });
+                color: entriesByPath.get(path)?.color || this.getColor(path)
+            })),
+            restoredTracks
+        );
+        const displayReadyAt = this.performanceNow();
+        const restoredTreeCount = this.#restoreTreeDisplayStates(restoredTracks);
+        const treeDisplayReadyAt = this.performanceNow();
         this.treeView.setSelectedPath(selectedPath, { reveal: true });
+        const selectionReadyAt = this.performanceNow();
         this.discoveryCoordinator.setProvisionalLibrary({
             namespace: cacheNamespace,
             libraryId: state.identity,
@@ -242,6 +253,7 @@ export default class LibrarySnapshotService {
             filter: state.filter,
             expandedDateIds: state.expandedDateIds
         });
+        const discoveryReadyAt = this.performanceNow();
         this.searchView.setAvailable(true);
         this.accessPanel.setProvisionalLibrary(true);
         this.statusBar?.showLibraryLoaded(model.library);
@@ -253,7 +265,83 @@ export default class LibrarySnapshotService {
         this.eventBus?.emit("library:provisional-state-changed", {
             provisional: true
         });
+        const completedAt = this.performanceNow();
+
+        this.lastRestoreDiagnostic = Object.freeze({
+            status: "completed",
+            totalEntryCount: state.entries.length,
+            restoredTrackCount: restoredTracks.length,
+            displayPublicationCount: 1,
+            treeRowUpdateCount: restoredTreeCount,
+            folderAggregateCount: this.treeView.folderNodes.size,
+            geometryLoadCount: 0,
+            modelMs: modelReadyAt - startedAt,
+            treeRenderMs: treeReadyAt - modelReadyAt,
+            catalogSyncMs: catalogReadyAt - treeReadyAt,
+            displayRestoreMs: displayReadyAt - catalogReadyAt,
+            treeProjectionMs: treeDisplayReadyAt - displayReadyAt,
+            selectionMs: selectionReadyAt - treeDisplayReadyAt,
+            discoveryMs: discoveryReadyAt - selectionReadyAt,
+            finalizationMs: completedAt - discoveryReadyAt,
+            totalMs: completedAt - startedAt
+        });
         return true;
+    }
+
+    getLastRestoreDiagnostic() {
+
+        return this.lastRestoreDiagnostic;
+    }
+
+    #restoreTreeDisplayStates(entries) {
+
+        const restoredPaths = [];
+
+        entries.forEach(({ path, color }) => {
+            const metadata = this.treeView.nodeMetadata.get(path);
+
+            if (metadata?.kind !== "file") return;
+            metadata.state = "loaded";
+            metadata.error = null;
+            metadata.checked = true;
+            metadata.color = color;
+            restoredPaths.push(path);
+        });
+        restoredPaths.forEach(path => this.treeView.refreshFileRow(path, false));
+
+        const folderCounts = new Map(
+            [...this.treeView.folderNodes.keys()].map(path => [path, {
+                total: 0,
+                checked: 0
+            }])
+        );
+
+        this.treeView.nodeMetadata.forEach(metadata => {
+            if (metadata.kind !== "file") return;
+            let folderPath = metadata.parentPath;
+
+            while (true) {
+                const count = folderCounts.get(folderPath);
+
+                if (count) {
+                    count.total += 1;
+                    if (metadata.checked) count.checked += 1;
+                }
+                if (!folderPath) break;
+                folderPath = this.treeView.parentPath(folderPath);
+            }
+        });
+        folderCounts.forEach(({ total, checked }, path) => {
+            const checkbox = this.treeView.folderNodes.get(path)
+                ?.querySelector(".folder-display-toggle");
+
+            if (!checkbox) return;
+            checkbox.disabled = total === 0;
+            checkbox.checked = total > 0 && checked === total;
+            checkbox.indeterminate = checked > 0 && checked < total;
+        });
+
+        return restoredPaths.length;
     }
 
     isProvisional() {

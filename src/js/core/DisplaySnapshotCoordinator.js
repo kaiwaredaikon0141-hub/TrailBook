@@ -49,6 +49,7 @@ export default class DisplaySnapshotCoordinator {
         getSelectionStyles,
         captureLibrarySnapshot = () => null,
         restoreLibrarySnapshot = async () => false,
+        getLibraryRestoreDiagnostic = () => null,
         markLibraryReady = () => {},
         debounceMs = 750,
         setTimer = globalThis.setTimeout.bind(globalThis),
@@ -71,6 +72,7 @@ export default class DisplaySnapshotCoordinator {
             getSelectionStyles,
             captureLibrarySnapshot,
             restoreLibrarySnapshot,
+            getLibraryRestoreDiagnostic,
             markLibraryReady,
             debounceMs,
             setTimer,
@@ -205,10 +207,12 @@ export default class DisplaySnapshotCoordinator {
                 selectedPath
             }
         );
+        const libraryRestoreDiagnostic = this.getLibraryRestoreDiagnostic();
         this.#updateDiagnostic({
             treeSource: treeRestored ? "cached" : "none",
             treeEntryCount: snapshot.library?.entries?.length ?? 0,
-            libraryAvailability: treeRestored ? "provisional" : "none"
+            libraryAvailability: treeRestored ? "provisional" : "none",
+            libraryRestoreDiagnostic
         });
 
         return this.phaseARestored;
@@ -474,6 +478,7 @@ export default class DisplaySnapshotCoordinator {
             selectedTrack: this.lastKnownGood?.selectedTrack ?? null,
             lastWriteReason: this.lastWriteReason,
             lastWriteStatus: this.lastWriteStatus,
+            libraryRestoreDiagnostic: this.libraryRestoreDiagnostic ?? null,
             ...this.metrics
         };
     }
@@ -556,6 +561,16 @@ export default class DisplaySnapshotCoordinator {
             `tree source: ${this.treeSource || "none"}`,
             `tree entries: ${this.treeEntryCount ?? 0}`,
             `library: ${this.libraryAvailability || "none"}`,
+            ...(this.libraryRestoreDiagnostic ? [
+                `tree restore total: ${this.libraryRestoreDiagnostic.totalMs?.toFixed(1) ?? "-"} ms`,
+                `tree render: ${this.libraryRestoreDiagnostic.treeRenderMs?.toFixed(1) ?? "-"} ms`,
+                `display restore: ${this.libraryRestoreDiagnostic.displayRestoreMs?.toFixed(1) ?? "-"} ms`,
+                `tree projection: ${this.libraryRestoreDiagnostic.treeProjectionMs?.toFixed(1) ?? "-"} ms`,
+                `restore publications: ${this.libraryRestoreDiagnostic.displayPublicationCount ?? "-"}`,
+                `tree row updates: ${this.libraryRestoreDiagnostic.treeRowUpdateCount ?? "-"}`,
+                `folder aggregates: ${this.libraryRestoreDiagnostic.folderAggregateCount ?? "-"}`,
+                `restore geometry loads: ${this.libraryRestoreDiagnostic.geometryLoadCount ?? "-"}`
+            ] : []),
             `snapshot write: ${this.lastWriteStatus}`,
             `write reason: ${this.lastWriteReason || "-"}`
         ].join("\n");

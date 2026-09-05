@@ -219,6 +219,7 @@ export default class App {
                 .capture({ libraryIdentity, rootName: this.currentLibrary?.name }),
             restoreLibrarySnapshot: (state, context) => this.librarySnapshotService
                 .restore(state, context),
+            getLibraryRestoreDiagnostic: () => this.librarySnapshotService.getLastRestoreDiagnostic(),
             markLibraryReady: () => this.librarySnapshotService.markReady(),
             debounceMs: this.config.displaySnapshot.debounceMs,
             diagnosticRoot: sidebar

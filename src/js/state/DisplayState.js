@@ -253,6 +253,57 @@ export default class DisplayState {
         this.evictCache();
     }
 
+    restoreSnapshotLibrary(rootHandle, fileEntries = [], cachedEntries = []) {
+
+        const changedPaths = [];
+        const restoredAt = Date.now();
+        const cachedByPath = new Map(
+            cachedEntries.map(entry => [entry.path, entry])
+        );
+
+        this.libraryGeneration += 1;
+        this.libraryRootHandle = rootHandle;
+        this.displays.clear();
+        this.cache.clear();
+        this.requestIds.clear();
+
+        fileEntries.forEach(({ path, fileHandle, color }) => {
+            const cached = cachedByPath.get(path);
+            const restored = Boolean(cached);
+            const display = {
+                path,
+                fileHandle,
+                checked: restored,
+                state: restored ? "loaded" : IDLE,
+                color,
+                error: null,
+                requestId: 0,
+                lastUsedAt: restored ? restoredAt : 0
+            };
+
+            this.displays.set(path, display);
+            if (!cached) return;
+            this.cache.set(path, {
+                path,
+                fileHandle,
+                result: cached.result,
+                color,
+                lastUsedAt: restoredAt
+            });
+            changedPaths.push(path);
+        });
+
+        this.evictCache();
+        this.#notify(null, "restore", {
+            paths: Object.freeze([...changedPaths])
+        });
+
+        return Object.freeze({
+            registeredCount: this.displays.size,
+            restoredCount: changedPaths.length
+        });
+    }
+
     invalidateCachedResult(path) {
 
         return this.cache.delete(path);
