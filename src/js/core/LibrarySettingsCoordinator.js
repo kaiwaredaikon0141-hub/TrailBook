@@ -1,12 +1,21 @@
 import LibrarySettingsRepository from
     "../services/LibrarySettingsRepository.js";
 import LibrarySettingsState from "../state/LibrarySettingsState.js";
+import { createLibraryId } from "../utils/LibraryIdentity.js";
 
 const CONFLICT_ERRORS = new Set([
     "conflict",
     "conflict-check-unavailable",
     "invalid-current-file"
 ]);
+
+function folderColorToken(snapshot) {
+
+    return Object.entries(snapshot?.folderColors || {})
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([path, color]) => `${path}\u0000${color}`)
+        .join("\u0001");
+}
 
 /**
  * Coordinates shared settings load, recovery, persistence, and projection.
@@ -107,6 +116,73 @@ export default class LibrarySettingsCoordinator {
         this.#render();
 
         return true;
+    }
+
+    async reconcileActual(rootHandle, {
+        libraryName,
+        folderPaths,
+        generation,
+        isCurrent
+    } = {}) {
+
+        const previousStatus = this.state.getStatus();
+        const previousColorToken = folderColorToken(this.state.getSnapshot());
+        const libraryId = createLibraryId(libraryName);
+
+        if (
+            previousStatus.dirty ||
+            previousStatus.saving ||
+            previousStatus.reloading
+        ) {
+            return Object.freeze({
+                applied: true,
+                stale: false,
+                skipped: true,
+                source: previousStatus.source,
+                sourceChanged: false,
+                colorsChanged: false,
+                libraryId
+            });
+        }
+        const loadContext = await this.load(rootHandle, {
+            generation,
+            isCurrent
+        });
+
+        if (!loadContext) return Object.freeze({
+            applied: false,
+            stale: true,
+            source: previousStatus.source,
+            sourceChanged: false,
+            colorsChanged: false,
+            libraryId: null
+        });
+
+        if (!this.applyLoad(loadContext, { libraryId, folderPaths })) {
+            return Object.freeze({
+                applied: false,
+                stale: true,
+                source: previousStatus.source,
+                sourceChanged: false,
+                colorsChanged: false,
+                libraryId: null
+            });
+        }
+
+        const status = this.state.getStatus();
+        const colorsChanged = previousColorToken !==
+            folderColorToken(this.state.getSnapshot());
+
+        this.displaySettingsStore.setActiveLibrary(libraryName);
+
+        return Object.freeze({
+            applied: true,
+            stale: false,
+            source: status.source,
+            sourceChanged: previousStatus.source !== status.source,
+            colorsChanged,
+            libraryId
+        });
     }
 
     markDirty() {

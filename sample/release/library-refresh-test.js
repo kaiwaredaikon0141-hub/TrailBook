@@ -557,6 +557,8 @@ async function testRefreshAndReconciliation() {
     let scanCount = 0;
     let previousOpenCount = 0;
     let snapshotUpdates = 0;
+    let sharedSettingsReconciliations = 0;
+    let sharedSettingsReady = false;
     const colorMutations = [];
     let updateContext = null;
     let persistedLibrarySnapshot = null;
@@ -622,7 +624,24 @@ async function testRefreshAndReconciliation() {
         getNamespace: () => "local:GPX",
         getLibrary: () => currentLibrary,
         setLibrary: value => { currentLibrary = value; },
-        getColor: () => "#f08000",
+        getColor: () => {
+            assert(sharedSettingsReady,
+                "Track color resolved before shared settings reconciliation");
+            return "#f08000";
+        },
+        reconcileSharedSettings: async ({
+            library: scannedLibrary,
+            rootHandle,
+            folderPaths
+        }) => {
+            sharedSettingsReconciliations += 1;
+            assert(scannedLibrary === actualLibrary &&
+                rootHandle === actualLibrary.rootFolder.handle &&
+                folderPaths.includes(""),
+            "manual incremental refresh did not reconcile actual shared settings");
+            sharedSettingsReady = true;
+            return { applied: true, source: "shared-json" };
+        },
         getEntryPresentationDiagnostic: () => ({
             folderResolvedColor: "#f08000",
             folderDomColor: "rgb(240, 128, 0)",
@@ -655,6 +674,8 @@ async function testRefreshAndReconciliation() {
 
     assert(first === duplicate, "simultaneous sidebar refresh was duplicated");
     const result = await first;
+    assert(sharedSettingsReconciliations === 1,
+        "manual incremental refresh did not load shared settings exactly once");
     assert(scanCount === 1, "sidebar open did not run exactly one scan");
     assert(previousOpenCount === 0,
         "manual refresh called the full previous-Library reopen path");
@@ -1083,6 +1104,7 @@ async function testNoOpRefreshPresentationInvariance() {
     let displayNotifications = 0;
     let snapshotUpdates = 0;
     let presentationRefreshes = 0;
+    let sharedSettingsReconciliations = 0;
     const folderPresentations = new Map([
         ["", { mode: "auto", resolvedColor: "#AA5500" }],
         ["Trips", { mode: "explicit", resolvedColor: "#0055AA" }]
@@ -1175,6 +1197,10 @@ async function testNoOpRefreshPresentationInvariance() {
         getLibrary: () => currentLibrary,
         setLibrary: value => { currentLibrary = value; },
         getColor: () => "#FF0000",
+        reconcileSharedSettings: async () => {
+            sharedSettingsReconciliations += 1;
+            return { applied: true, colorsChanged: false };
+        },
         removePath() {},
         reloadVisiblePath() {},
         onLibraryUpdated: (value, context = {}) => {
@@ -1204,6 +1230,8 @@ async function testNoOpRefreshPresentationInvariance() {
         displayNotifications === 0 &&
         presentationRefreshes === 0,
         "no-op refresh re-registered Tracks or rebuilt Folder presentation");
+    assert(sharedSettingsReconciliations === 1,
+        "no-op manual refresh skipped shared settings revalidation");
     assert(snapshotUpdates === 1,
         "no-op refresh skipped required Snapshot/Phase B completion work");
     assert([...beforeDisplays].every(([path, previous]) => {

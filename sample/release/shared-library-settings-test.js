@@ -8,6 +8,8 @@ import TrackColorResolver, {
 } from "../../src/js/core/TrackColorResolver.js";
 import TrackColorMapProjection from
     "../../src/js/core/TrackColorMapProjection.js";
+import LibrarySettingsCoordinator from
+    "../../src/js/core/LibrarySettingsCoordinator.js";
 import TrackStyleService from "../../src/js/services/TrackStyleService.js";
 import DisplayState from "../../src/js/state/DisplayState.js";
 import LibrarySettingsRepository from
@@ -673,6 +675,189 @@ function testStartupTrackColorBatchScale() {
     });
 }
 
+async function testActualSharedSettingsConvergence() {
+
+    const folderPath = "レンタルバイク";
+    const autoColor = "#6d4c41";
+    const sharedColor = "#8F8300";
+    const trackCount = 1123;
+    const rootHandle = { kind: "directory", name: "GPXLog" };
+    const activeLibraries = [];
+    let legacyFolderColors = {};
+    const displaySettingsStore = {
+        setActiveLibrary(name) {
+            activeLibraries.push(name);
+            return `root-name:${name}`;
+        },
+        getFolderColors() { return legacyFolderColors; }
+    };
+    const folderColorState = new FolderColorState({
+        store: displaySettingsStore,
+        fallbackColor: Config.map.trackStyle.lineColor,
+        autoPalette: Config.map.displayPalette
+    });
+    const state = new LibrarySettingsState({ schemaVersion: 1 });
+    let repositoryResult = stateResult("loaded", {
+        snapshot: {
+            schemaVersion: 1,
+            folderColors: { [folderPath]: sharedColor }
+        },
+        fingerprint: "shared-colors",
+        fallbackAllowed: false
+    });
+    const coordinator = new LibrarySettingsCoordinator({
+        config: Config.sharedLibrarySettings,
+        displaySettingsStore,
+        folderColorState,
+        state,
+        repository: {
+            async load(handle) {
+                assert(handle === rootHandle,
+                    "shared settings reconcile used the wrong actual root");
+                return repositoryResult;
+            }
+        }
+    });
+    const libraryId = "root-name:GPXLog";
+
+    folderColorState.setActiveLibrary(libraryId, ["", folderPath], {});
+    assert(folderColorState.getResolvedFolderColor(folderPath) === autoColor,
+        "Android provisional fixture did not begin with deterministic Auto");
+
+    const displayState = new DisplayState();
+    let notifications = 0;
+    let mapStyleUpdates = 0;
+    let geometryLoads = 0;
+
+    displayState.setLibrary(rootHandle);
+    for (let index = 0; index < trackCount; index += 1) {
+        displayState.registerFile(
+            `${folderPath}/track-${index}.gpx`,
+            {},
+            autoColor
+        );
+    }
+    displayState.subscribe(({ change }) => {
+        if (change === "colors") notifications += 1;
+    });
+    const projection = new TrackColorMapProjection({
+        displayState,
+        mapView: {
+            hasDisplay: path => path.endsWith("track-0.gpx"),
+            updateTrackColor() {
+                mapStyleUpdates += 1;
+                return 1;
+            },
+            displayGPX() { geometryLoads += 1; }
+        },
+        getStyles: color => ({ normalStyle: { color } })
+    });
+    const result = await coordinator.reconcileActual(rootHandle, {
+        libraryName: "GPXLog",
+        folderPaths: ["", folderPath],
+        generation: displayState.getLibraryGeneration(),
+        isCurrent: () => true
+    });
+    const changed = projection.converge(path =>
+        folderColorState.resolveTrackColor(path)
+    );
+
+    assert(result.applied && result.source === "shared-json" &&
+        result.colorsChanged && result.libraryId === libraryId,
+    "actual Library access did not select shared-json settings");
+    assert(folderColorState.getExplicitColor(folderPath) === sharedColor &&
+        folderColorState.getResolvedFolderColor(folderPath) === sharedColor,
+    "shared explicit Folder color did not replace provisional Auto");
+    assert(changed === trackCount && notifications === 1 &&
+        mapStyleUpdates === 1 && geometryLoads === 0,
+    "1123 Track shared-color convergence was not batched/style-only");
+    assert([...displayState.getDisplays().values()].every(
+        display => display.color === sharedColor
+    ), "Track colors did not converge to the shared explicit Folder color");
+
+    const unchanged = await coordinator.reconcileActual(rootHandle, {
+        libraryName: "GPXLog",
+        folderPaths: ["", folderPath],
+        generation: displayState.getLibraryGeneration(),
+        isCurrent: () => true
+    });
+
+    assert(unchanged.applied && !unchanged.colorsChanged &&
+        !unchanged.sourceChanged &&
+        projection.converge(path =>
+            folderColorState.resolveTrackColor(path)
+        ) === 0 && notifications === 1 && mapStyleUpdates === 1,
+    "unchanged shared settings emitted duplicate color mutations");
+
+    const changedSharedColor = "#D9E534";
+
+    repositoryResult = stateResult("loaded", {
+        snapshot: {
+            schemaVersion: 1,
+            folderColors: { [folderPath]: changedSharedColor }
+        },
+        fingerprint: "updated-shared-colors",
+        fallbackAllowed: false
+    });
+    const changedSettings = await coordinator.reconcileActual(rootHandle, {
+        libraryName: "GPXLog",
+        folderPaths: ["", folderPath],
+        generation: displayState.getLibraryGeneration(),
+        isCurrent: () => true
+    });
+    const changedAgain = projection.converge(path =>
+        folderColorState.resolveTrackColor(path)
+    );
+
+    assert(changedSettings.colorsChanged && changedAgain === trackCount &&
+        folderColorState.getResolvedFolderColor(folderPath) ===
+            changedSharedColor && notifications === 2 &&
+        mapStyleUpdates === 2 && geometryLoads === 0,
+    "manual shared settings revalidation did not apply a changed JSON color");
+
+    repositoryResult = stateResult("missing");
+    const missing = await coordinator.reconcileActual(rootHandle, {
+        libraryName: "GPXLog",
+        folderPaths: ["", folderPath],
+        generation: displayState.getLibraryGeneration(),
+        isCurrent: () => true
+    });
+
+    assert(missing.source === "auto" &&
+        folderColorState.getExplicitColor(folderPath) === null,
+    "missing trailbook.json did not retain the existing Auto fallback policy");
+
+    legacyFolderColors = { [folderPath]: "#123456" };
+    repositoryResult = stateResult("read-failed");
+    const readFailed = await coordinator.reconcileActual(rootHandle, {
+        libraryName: "GPXLog",
+        folderPaths: ["", folderPath],
+        generation: displayState.getLibraryGeneration(),
+        isCurrent: () => true
+    });
+
+    assert(readFailed.source === "legacy-local" &&
+        folderColorState.getExplicitColor(folderPath) === "#123456",
+    "shared settings read failure did not retain the legacy-local fallback");
+
+    repositoryResult = stateResult("invalid", {
+        errorCode: "malformed-json",
+        fallbackAllowed: false
+    });
+    const invalid = await coordinator.reconcileActual(rootHandle, {
+        libraryName: "GPXLog",
+        folderPaths: ["", folderPath],
+        generation: displayState.getLibraryGeneration(),
+        isCurrent: () => true
+    });
+
+    assert(invalid.source === "auto" &&
+        folderColorState.getExplicitColor(folderPath) === null &&
+        activeLibraries.length === 6,
+    "invalid shared settings changed the established fallback policy");
+    projection.destroy();
+}
+
 async function testAppIntegration() {
 
     const app = new App();
@@ -860,6 +1045,7 @@ export async function runSharedLibrarySettingsTests() {
     testTrackColorResolution();
     testStartupTrackColorConvergence();
     testStartupTrackColorBatchScale();
+    await testActualSharedSettingsConvergence();
     await testAppIntegration();
 
     return { assertions };

@@ -60,6 +60,7 @@ export default class LibraryRefreshCoordinator {
         eventBus, scanner, previousLibraryCoordinator, librarySnapshotService,
         treeView, discoveryCoordinator, displayState, selectionState, accessPanel,
         repository, getNamespace, getLibrary, setLibrary, getColor,
+        reconcileSharedSettings = async () => true,
         getEntryPresentationDiagnostic = () => ({}),
         removePath, reloadVisiblePath, onLibraryUpdated,
         canRefresh = () => true,
@@ -75,7 +76,7 @@ export default class LibraryRefreshCoordinator {
             eventBus, scanner, previousLibraryCoordinator,
             librarySnapshotService, treeView, discoveryCoordinator,
             displayState, selectionState, accessPanel, repository, getNamespace,
-            getLibrary, setLibrary, getColor,
+            getLibrary, setLibrary, getColor, reconcileSharedSettings,
             getEntryPresentationDiagnostic,
             removePath, reloadVisiblePath,
             onLibraryUpdated, canRefresh, now, performanceNow, minimumIntervalMs,
@@ -373,6 +374,17 @@ export default class LibraryRefreshCoordinator {
         const fileEntries = this.metadataBuilder.getFileEntries(
             prepared.nodeMetadata
         );
+        const folderPaths = [...prepared.nodeMetadata.values()]
+            .filter(metadata => metadata.kind === "folder")
+            .map(metadata => metadata.path);
+        const settingsReconciled = await this.reconcileSharedSettings({
+            library,
+            rootHandle: library.rootFolder.handle,
+            folderPaths
+        });
+
+        if (settingsReconciled === false ||
+            this.getLibrary() !== expectedLibrary) return false;
         const oldEntries = new Map(
             this.discoveryCoordinator.getSnapshotState().entries.map(entry => [
                 normalizeRelativePath(entry.relativePath),

@@ -136,6 +136,42 @@ window.addEventListener("DOMContentLoaded", () => {
         getLibrary: () => app.currentLibrary,
         setLibrary: library => { app.currentLibrary = library; },
         getColor: path => app.getColor(path),
+        reconcileSharedSettings: async ({
+            library,
+            rootHandle,
+            folderPaths
+        }) => {
+            const expectedLibrary = app.currentLibrary;
+            const namespace = app.gpxGeometryLoader.namespace;
+            const generation = app.displayState.getLibraryGeneration();
+            const isCurrent = () => (
+                app.gpxGeometryLoader.namespace === namespace &&
+                (
+                    app.currentLibrary === expectedLibrary ||
+                    app.currentLibrary?.rootFolder?.handle === rootHandle
+                )
+            );
+            const result = await app.librarySettingsCoordinator
+                .reconcileActual(rootHandle, {
+                    libraryName: library.name,
+                    folderPaths,
+                    generation,
+                    isCurrent
+                });
+
+            if (!result.applied) return false;
+            app.currentLibraryId = result.libraryId;
+            app.displaySnapshotCoordinator.setLibraryContext({
+                libraryIdentity: result.libraryId,
+                cacheNamespace: namespace
+            });
+            app.updateFolderColorPresentation();
+            const colorMutationCount = app.trackColorMapProjection.converge(
+                path => app.getColor(path)
+            );
+
+            return Object.freeze({ ...result, colorMutationCount });
+        },
         getEntryPresentationDiagnostic: path => {
             const metadata = app.treeView.nodeMetadata.get(path);
             const folderPath = metadata?.parentPath;
