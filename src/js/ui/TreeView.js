@@ -1,4 +1,5 @@
 import TreeMetadataBuilder from "./TreeMetadataBuilder.js";
+import { applyTreeDisplayBatch } from "./TreeDisplayBatch.js";
 
 const ROOT_PATH = "";
 const NODE_SELECTOR = "[data-tree-path]";
@@ -295,28 +296,23 @@ export default class TreeView {
     }
 
     setFolderDisplay(path, checked) {
-
         const folder = this.nodeMetadata.get(path)?.model;
 
         if (!folder) {
             return;
         }
 
+        const startedAt = performance.now();
         const fileEntries = this.metadataBuilder.collectDescendantFiles(
             folder,
             path
         );
-
-        fileEntries.forEach(entry => {
-            this.setDisplayChecked(entry.path, checked);
-        });
-
-        this.refreshFolderAncestors(path);
-
         this.eventBus.emit("folder:display-toggled", {
             path,
             fileEntries,
-            checked
+            checked,
+            displayStateBatch: true,
+            descendantEnumerationMs: performance.now() - startedAt
         });
     }
 
@@ -666,7 +662,7 @@ export default class TreeView {
         }
 
         metadata.state = "loading";
-        this.refreshAllFileRows();
+        this.refreshFileRow(path, false);
     }
 
     setDisplayLoaded(path, color) {
@@ -680,7 +676,7 @@ export default class TreeView {
         metadata.state = "loaded";
         metadata.error = null;
         metadata.color = color;
-        this.refreshAllFileRows();
+        this.refreshFileRow(path, false);
     }
 
     setDisplayError(path) {
@@ -693,7 +689,7 @@ export default class TreeView {
 
         metadata.state = "error";
         metadata.checked = false;
-        this.refreshAllFileRows();
+        this.refreshFileRow(path);
     }
 
     setDisplayChecked(path, checked) {
@@ -707,6 +703,10 @@ export default class TreeView {
         metadata.checked = checked;
         this.refreshFileRow(path, false);
         this.refreshFolderAncestors(metadata.parentPath);
+    }
+
+    setDisplayBatch(displays = []) {
+        return applyTreeDisplayBatch(this, displays);
     }
 
     setDisplayIdle(path) {

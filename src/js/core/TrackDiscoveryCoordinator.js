@@ -35,7 +35,8 @@ export default class TrackDiscoveryCoordinator {
         this.sidebarShell = null;
         this.controls = this.#createControls();
         this.#updateControls();
-        this.displayState.subscribe(({ path }) => this.#scheduleDisplaySync(path));
+        this.displayState.subscribe(({ path, paths }) =>
+            this.#scheduleDisplaySync(path, paths));
     }
 
     attach({ folderTree, searchView = null }) {
@@ -438,11 +439,13 @@ export default class TrackDiscoveryCoordinator {
         }, this.activeFilter);
     }
 
-    #scheduleDisplaySync(path) {
+    #scheduleDisplaySync(path, paths = []) {
 
-        if (path === null) {
+        if (path === null && paths.length === 0) {
             this.pendingDisplayPaths.clear();
             this.pendingDisplayPaths.add(null);
+        } else if (paths.length > 0 && !this.pendingDisplayPaths.has(null)) {
+            paths.forEach(candidate => this.pendingDisplayPaths.add(candidate));
         } else if (!this.pendingDisplayPaths.has(null)) {
             this.pendingDisplayPaths.add(path);
         }
@@ -455,7 +458,7 @@ export default class TrackDiscoveryCoordinator {
 
             this.pendingDisplayPaths.clear();
             this.displaySyncScheduled = false;
-            paths.forEach(candidate => this.dateTree.syncDisplay(candidate));
+            this.dateTree.syncDisplays(paths.includes(null) ? null : paths);
             this.#showFilterResults();
         });
     }

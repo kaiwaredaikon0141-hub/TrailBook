@@ -132,7 +132,12 @@ export default class DateTreeView {
 
     syncDisplay(path = null) {
 
-        if (path === null) {
+        return this.syncDisplays(path === null ? null : [path]);
+    }
+
+    syncDisplays(paths = null) {
+
+        if (paths === null) {
             this.renderedTrackRows.forEach((row, candidate) =>
                 this.#applyDisplay(row, candidate)
             );
@@ -142,18 +147,17 @@ export default class DateTreeView {
             return;
         }
 
-        const row = this.renderedTrackRows.get(path);
+        const groupIds = new Set();
+        new Set(paths).forEach(path => {
+            const row = this.renderedTrackRows.get(path);
 
-        if (row) {
-            this.#applyDisplay(row, path);
-        }
-
-        this.visibilityIndex.getGroupIds(path).forEach(id => {
+            if (row) this.#applyDisplay(row, path);
+            this.visibilityIndex.getGroupIds(path).forEach(id => groupIds.add(id));
+        });
+        groupIds.forEach(id => {
             const groupRow = this.renderedGroupRows.get(id);
 
-            if (groupRow) {
-                this.#applyGroupDisplay(groupRow, id);
-            }
+            if (groupRow) this.#applyGroupDisplay(groupRow, id);
         });
     }
 
@@ -362,6 +366,7 @@ export default class DateTreeView {
 
     #emitGroupDisplayToggle(row, checkbox) {
 
+        const startedAt = performance.now();
         const fileEntries = this.visibilityIndex.getFileEntries(
             row?.dataset.dateNodeId,
             this.fileHandles
@@ -377,7 +382,9 @@ export default class DateTreeView {
             checked: checkbox.checked,
             source: "date-tree",
             preserveMapView: true,
-            preserveSelection: true
+            preserveSelection: true,
+            displayStateBatch: true,
+            descendantEnumerationMs: performance.now() - startedAt
         });
     }
 

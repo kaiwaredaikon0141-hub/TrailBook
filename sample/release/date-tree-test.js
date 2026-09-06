@@ -1,5 +1,7 @@
 import EventBus from "../../src/js/core/EventBus.js";
 import App from "../../src/js/core/App.js";
+import { applyFolderDisplayBatch } from "../../src/js/core/FolderDisplayBatch.js";
+import { settleUnavailableTrackDisplay } from "../../src/js/core/TrackDisplaySourceBoundary.js";
 import TrackDiscoveryCoordinator from "../../src/js/core/TrackDiscoveryCoordinator.js";
 import TrackDiscoveryEntry, {
     DATE_SOURCES
@@ -8,6 +10,7 @@ import DateTreeBuilder from "../../src/js/services/DateTreeBuilder.js";
 import DiscoveryViewStateStore from "../../src/js/services/DiscoveryViewStateStore.js";
 import DisplayState from "../../src/js/state/DisplayState.js";
 import DateTreeView from "../../src/js/ui/DateTreeView.js";
+import { applyTreeDisplayBatch } from "../../src/js/ui/TreeDisplayBatch.js";
 
 const output = document.getElementById("result");
 let assertions = 0;
@@ -260,6 +263,10 @@ function testGroupBulk() {
     assert(bulk?.fileEntries.length === 3,
         "collapsed descendants missing from bulk event");
     assert(selections === 0, "Date group bulk changed selection");
+    displayState.prepareDisplayBatch(items.map(item => item.relativePath), false);
+    view.syncDisplays(items.map(item => item.relativePath));
+    assert(!checkbox.checked && !checkbox.indeterminate,
+        "Date batch did not refresh its group aggregate once");
 }
 
 function testMapPreservationContract() {
@@ -309,6 +316,167 @@ function testMapPreservationContract() {
     });
     assert(keepApp.selectionState.isSelected("selected.gpx"),
         "Date bulk OFF cleared selected Track");
+}
+
+function testFolderDisplayBatchScale() {
+
+    const timings = [];
+
+    for (const count of [10, 100, 500, 1123]) {
+        const displayState = new DisplayState();
+        const files = Array.from({ length: count }, (_, index) => ({
+            path: `bulk/folder-${count}/track-${index}.gpx`,
+            fileHandle: { name: `track-${index}.gpx` }
+        }));
+        let notifications = 0;
+        let treeRefreshes = 0;
+        let starts = 0;
+        let stops = 0;
+        let statusUpdates = 0;
+        let searchUpdates = 0;
+        let refocuses = 0;
+
+        displayState.setLibrary({ name: "Bulk" });
+        files.forEach(({ path, fileHandle }) =>
+            displayState.registerFile(path, fileHandle, "#123456"));
+        const cachedCount = Math.min(5, count);
+        files.slice(0, cachedCount).forEach(({ path }) =>
+            displayState.setCachedResult(path, { points: [] }));
+        displayState.subscribe(change => {
+            notifications += 1;
+            assert(change.change === "display-batch" &&
+                change.paths.length === count,
+            `${count} Track batch notification was not atomic`);
+        });
+        const app = {
+            displayState,
+            getColor: () => "#123456",
+            treeView: {
+                setDisplayBatch(displays) {
+                    treeRefreshes += 1;
+                    assert(displays.length === count,
+                        `${count} Track Tree batch was incomplete`);
+                }
+            },
+            startDisplay(_path, _handle, options) {
+                starts += 1;
+                assert(options.prepared && options.batch,
+                    "Folder ON replayed the single-Track mutation path");
+            },
+            stopDisplay(_path, options) {
+                stops += 1;
+                assert(options.prepared && options.batch,
+                    "Folder OFF replayed the single-Track mutation path");
+            },
+            scheduleRefocus() { refocuses += 1; },
+            updateDisplayStatus() { statusUpdates += 1; },
+            scheduleSearchRefresh() { searchUpdates += 1; }
+        };
+        const on = applyFolderDisplayBatch(app, {
+            fileEntries: files,
+            checked: true
+        });
+        const off = applyFolderDisplayBatch(app, {
+            fileEntries: files,
+            checked: false
+        });
+
+        assert(notifications === 2 && treeRefreshes === 2,
+            `${count} Track Folder toggle amplified notifications or Tree refresh`);
+        assert(starts === count && stops === count,
+            `${count} Track Map delta requests were incomplete`);
+        assert(statusUpdates === 2 && searchUpdates === 0 && refocuses === 2,
+            `${count} Track Folder toggle amplified aggregate refresh`);
+        assert(on.displayNotificationCount === 1 &&
+            on.snapshotScheduleCount === 1 &&
+            on.geometryLoadRequestCount === count - cachedCount &&
+            on.mapUpdateRequestCount === cachedCount,
+        `${count} Track Folder ON diagnostic was not bounded`);
+        assert(off.displayNotificationCount === 1 &&
+            off.snapshotScheduleCount === 1 &&
+            off.geometryLoadRequestCount === 0,
+        `${count} Track Folder OFF reloaded geometry`);
+        assert(files.every(({ path }) => {
+            const display = displayState.getDisplay(path);
+
+            return !display.checked && display.state === "idle" && !display.error;
+        }), `${count} Track Folder OFF final state mismatch`);
+        timings.push(`${count}:${on.totalMs.toFixed(2)}/${off.totalMs.toFixed(2)}ms`);
+    }
+    console.info(`Folder toggle ON/OFF ${timings.join(", ")}`);
+}
+
+function testTreeDisplayBatchScale() {
+
+    const count = 1123;
+    const displays = Array.from({ length: count }, (_, index) => ({
+        path: `bulk/track-${index}.gpx`,
+        checked: true,
+        state: "loading",
+        error: null,
+        color: "#123456"
+    }));
+    let fileRefreshes = 0;
+    let folderRefreshes = 0;
+    const tree = {
+        nodeMetadata: new Map(displays.map(display => [display.path, {
+            kind: "file",
+            parentPath: "bulk",
+            checked: false,
+            state: "idle",
+            error: null,
+            color: null
+        }])),
+        refreshFileRow() { fileRefreshes += 1; },
+        refreshFolderRow() { folderRefreshes += 1; },
+        parentPath(path) { return path === "bulk" ? "" : undefined; }
+    };
+
+    assert(applyTreeDisplayBatch(tree, displays) === count,
+        "Tree display batch omitted Tracks");
+    assert(fileRefreshes === count && folderRefreshes === 2,
+        "Tree display batch recalculated Folder aggregates per Track");
+}
+
+async function testProvisionalFolderBatchRollback() {
+
+    const displayState = new DisplayState();
+    const paths = Array.from({ length: 100 }, (_, index) =>
+        `provisional/track-${index}.gpx`);
+    let notifications = 0;
+    let treeRefreshes = 0;
+    let statusUpdates = 0;
+    let searchUpdates = 0;
+
+    displayState.setLibrary({ name: "Provisional" });
+    paths.forEach(path => displayState.registerFile(
+        path,
+        { name: path, provisional: true },
+        "#123456"
+    ));
+    displayState.prepareDisplayBatch(paths, true);
+    displayState.subscribe(() => { notifications += 1; });
+    const app = {
+        displayState,
+        treeView: { setDisplayBatch() { treeRefreshes += 1; } },
+        updateDisplayStatus() { statusUpdates += 1; },
+        scheduleSearchRefresh() { searchUpdates += 1; }
+    };
+
+    paths.forEach(path => settleUnavailableTrackDisplay(app, path, {
+        status: "unavailable",
+        relativePath: path,
+        reason: "provisional-only"
+    }, { rollbackRequested: true, batchRequested: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert(notifications === 1 && treeRefreshes === 1 &&
+        statusUpdates === 1 && searchUpdates === 0,
+    "provisional-only Folder rollback was amplified per Track");
+    assert(paths.every(path => {
+        const display = displayState.getDisplay(path);
+
+        return !display.checked && display.state === "idle" && !display.error;
+    }), "provisional-only Folder rollback created an error state");
 }
 
 async function testCoordinator() {
@@ -437,6 +605,9 @@ try {
     testView();
     testGroupBulk();
     testMapPreservationContract();
+    testFolderDisplayBatchScale();
+    testTreeDisplayBatchScale();
+    await testProvisionalFolderBatchRollback();
     await testCoordinator();
     output.textContent = `PASS: ${assertions} assertions`;
 } catch (error) {

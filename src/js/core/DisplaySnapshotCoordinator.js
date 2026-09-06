@@ -313,8 +313,11 @@ export default class DisplaySnapshotCoordinator {
             }
             this.#scheduleSave("map-change");
         });
-        ["gpx:display-toggled", "folder:display-toggled"].forEach(name => {
-            this.eventBus.on(name, () => this.#scheduleSave("visible-change"));
+        this.eventBus.on("gpx:display-toggled", () => {
+            this.#scheduleSave("visible-change");
+        });
+        this.eventBus.on("folder:display-toggled", ({ displayStateBatch } = {}) => {
+            if (!displayStateBatch) this.#scheduleSave("visible-change");
         });
         this.eventBus.on("map:clear-requested", () => {
             this.#scheduleSave("visible-change");

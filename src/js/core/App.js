@@ -21,6 +21,7 @@ import DisplaySnapshotCoordinator from "./DisplaySnapshotCoordinator.js";
 import TrackDiscoveryCoordinator from "./TrackDiscoveryCoordinator.js";
 import LibraryTrackCatalogCoordinator from "./LibraryTrackCatalogCoordinator.js";
 import TrackColorMapProjection from "./TrackColorMapProjection.js";
+import { applyFolderDisplayBatch } from "./FolderDisplayBatch.js";
 import { settleUnavailableTrackDisplay } from "./TrackDisplaySourceBoundary.js";
 import DisplayState from "../state/DisplayState.js";
 import SelectionState from "../state/SelectionState.js";
@@ -554,56 +555,26 @@ export default class App {
         this.startDisplay(path, fileHandle, { refocus: !preserveMapView, rollbackUnavailable });
     }
 
-    handleFolderDisplayToggled({
-        fileEntries,
-        checked,
-        preserveMapView = false,
-        preserveSelection = false
-    }) {
+    handleFolderDisplayToggled(data) {
 
-        fileEntries.forEach(({ path, fileHandle }) => {
-
-            let display = this.displayState.getDisplay(path);
-
-            if (!display) {
-                this.displayState.registerFile(
-                    path,
-                    fileHandle,
-                    this.getColor(path)
-                );
-
-                display = this.displayState.getDisplay(path);
-            }
-
-            if (
-                checked &&
-                display.checked &&
-                (display.state === "loading" || display.state === "loaded")
-            ) {
-                return;
-            }
-
-            this.handleDisplayToggled({
-                path,
-                fileHandle,
-                checked,
-                preserveMapView,
-                preserveSelection
-            });
-        });
-
-        this.updateDisplayStatus();
+        this.lastFolderDisplayDiagnostic = applyFolderDisplayBatch(this, data);
+        return this.lastFolderDisplayDiagnostic;
     }
 
-    startDisplay(path, fileHandle, { refocus = true, rollbackUnavailable = false } = {}) {
+    startDisplay(path, fileHandle, {
+        refocus = true, rollbackUnavailable = false,
+        prepared = false, batch = false
+    } = {}) {
 
         const display = this.displayState.getDisplay(path);
         const cachedResult = this.displayState.getCachedResult(path);
         const color = display.color;
 
         if (cachedResult) {
-            this.displayState.setLoaded(path, cachedResult);
-            this.treeView.setDisplayLoaded(path, color);
+            if (!prepared) {
+                this.displayState.setLoaded(path, cachedResult);
+                this.treeView.setDisplayLoaded(path, color);
+            }
             this.mapView.displayGPX(
                 path,
                 cachedResult,
@@ -612,19 +583,27 @@ export default class App {
             );
             this.applySelectionHighlight(path);
             if (refocus) this.scheduleRefocus();
-            this.updateDisplayStatus();
-            this.scheduleSearchRefresh();
+            if (!batch) {
+                this.updateDisplayStatus();
+                this.scheduleSearchRefresh();
+            }
             return;
         }
 
-        const requestId = this.displayState.nextRequestId(path);
+        const requestId = prepared
+            ? display.requestId
+            : this.displayState.nextRequestId(path);
         const generation = this.displayState.getLibraryGeneration();
 
-        this.displayState.setChecked(path, true);
-        this.displayState.setLoading(path, requestId);
-        this.treeView.setDisplayLoading(path);
-        this.updateDisplayStatus();
-        this.scheduleSearchRefresh();
+        if (!prepared) {
+            this.displayState.setChecked(path, true);
+            this.displayState.setLoading(path, requestId);
+            this.treeView.setDisplayLoading(path);
+        }
+        if (!batch) {
+            this.updateDisplayStatus();
+            this.scheduleSearchRefresh();
+        }
 
         this.displayQueue.enqueue({
             path,
@@ -637,7 +616,7 @@ export default class App {
                 result,
                 generation,
                 requestId,
-                { refocus, rollbackUnavailable }
+                { refocus, rollbackUnavailable, batch }
             ),
             onFailure: error => this.handleDisplayFailed(
                 path,
@@ -653,7 +632,7 @@ export default class App {
         result,
         generation,
         requestId,
-        { refocus = true, rollbackUnavailable = false } = {}
+        { refocus = true, rollbackUnavailable = false, batch = false } = {}
     ) {
 
         const display = this.displayState.getDisplay(path);
@@ -666,7 +645,10 @@ export default class App {
             return;
         }
 
-        if (settleUnavailableTrackDisplay(this, path, result, { rollbackRequested: rollbackUnavailable })) return;
+        if (settleUnavailableTrackDisplay(this, path, result, {
+            rollbackRequested: rollbackUnavailable,
+            batchRequested: batch
+        })) return;
 
         this.displayState.setCachedResult(path, result);
 
@@ -720,7 +702,10 @@ export default class App {
 
     stopDisplay(
         path,
-        { refocus = true, preserveSelection = false } = {}
+        {
+            refocus = true, preserveSelection = false,
+            prepared = false, batch = false, requestId = null
+        } = {}
     ) {
 
         const display = this.displayState.getDisplay(path);
@@ -733,18 +718,19 @@ export default class App {
             this.clearSelection("hidden");
         }
 
-        this.displayQueue.invalidate(path, display.requestId);
-        this.displayState.invalidateRequest(path);
+        this.displayQueue.invalidate(path, requestId ?? display.requestId);
+        if (!prepared) this.displayState.invalidateRequest(path);
         this.mapView.removeGPX(path);
-        this.treeView.setDisplayChecked(path, false);
-
-        if (display.state !== "error") {
-            this.treeView.setDisplayIdle(path);
+        if (!prepared) {
+            this.treeView.setDisplayChecked(path, false);
+            if (display.state !== "error") this.treeView.setDisplayIdle(path);
         }
 
         if (refocus) this.scheduleRefocus();
-        this.updateDisplayStatus();
-        this.scheduleSearchRefresh();
+        if (!batch) {
+            this.updateDisplayStatus();
+            this.scheduleSearchRefresh();
+        }
     }
 
     clearPresentation() {

@@ -176,6 +176,61 @@ export default class DisplayState {
         }
     }
 
+    prepareDisplayBatch(paths, checked) {
+
+        const changedPaths = [];
+        const previousRequestIds = new Map();
+        const previousChecked = new Map();
+        const changedAt = Date.now();
+
+        for (const path of new Set(paths || [])) {
+            const display = this.displays.get(path);
+
+            if (!display) continue;
+            if (checked && display.checked &&
+                (display.state === "loading" || display.state === "loaded")) {
+                continue;
+            }
+            if (!checked && !display.checked && display.state === IDLE) continue;
+
+            previousRequestIds.set(path, display.requestId);
+            previousChecked.set(path, display.checked);
+            display.checked = checked;
+            if (checked) {
+                display.lastUsedAt = changedAt;
+                display.error = null;
+                if (this.cache.has(path)) {
+                    display.state = "loaded";
+                } else {
+                    const requestId = (this.requestIds.get(path) || 0) + 1;
+
+                    this.requestIds.set(path, requestId);
+                    display.requestId = requestId;
+                    display.state = "loading";
+                }
+            } else {
+                const requestId = (this.requestIds.get(path) || 0) + 1;
+
+                this.requestIds.set(path, requestId);
+                display.requestId = requestId;
+                display.state = IDLE;
+            }
+            changedPaths.push(path);
+        }
+
+        if (changedPaths.length > 0) {
+            this.#notify(null, "display-batch", {
+                paths: Object.freeze([...changedPaths])
+            });
+        }
+
+        return Object.freeze({
+            paths: Object.freeze(changedPaths),
+            previousRequestIds,
+            previousChecked
+        });
+    }
+
     setLoading(path, requestId) {
 
         const display = this.displays.get(path);
