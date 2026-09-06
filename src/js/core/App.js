@@ -422,6 +422,8 @@ export default class App {
             libraryIdentity: this.currentLibraryId,
             cacheNamespace
         });
+        await this.displaySnapshotCoordinator?.commitLibrarySwitch?.();
+        if (!isCurrent()) return false;
         void this.viewStateCoordinator.restoreLibrary({
             libraryId: this.currentLibraryId,
             libraryName: library.name,

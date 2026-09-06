@@ -369,6 +369,9 @@ async function testCoordinator() {
         libraryIdentity: "root-name:OTHER",
         cacheNamespace: "other-cache"
     });
+    assert(await coordinator.commitLibrarySwitch() &&
+        writes.at(-1).libraryIdentity === "root-name:OTHER",
+    "Library switch did not replace the previous Snapshot before Phase B");
     assert(await coordinator.completePhaseB({ restored: true }),
         "Library switch snapshot was not committed");
     assert(writes.at(-1).libraryIdentity === "root-name:OTHER",
@@ -386,6 +389,76 @@ async function testCoordinator() {
     assert(metrics.length === 1, "startup metrics emitted more than once");
     assert(metrics[0].restoredTrackCount === 1 &&
         metrics[0].cacheMissCount === 1, "startup metrics incorrect");
+}
+
+async function testLatestLibrarySwitchWinsDelayedSnapshotWrite() {
+    let releaseFirstWrite;
+    const firstWriteGate = new Promise(resolve => {
+        releaseFirstWrite = resolve;
+    });
+    const writes = [];
+    let persisted = null;
+    let rootName = "レンタカー";
+    const coordinator = new DisplaySnapshotCoordinator({
+        eventBus: new EventBus(),
+        store: {
+            config: Config.displaySnapshot,
+            async save(value) {
+                writes.push(value);
+                if (writes.length === 1) await firstWriteGate;
+                persisted = value;
+                return true;
+            }
+        },
+        repository: {},
+        mapView: {
+            getViewState: () => ({ lat: 35, lng: 135, zoom: 10 }),
+            invalidateSize() {}
+        },
+        controls: {
+            isSidebarOpen: () => true,
+            getSidebarWidth: () => 320,
+            getTrackInfoHeight: () => 180
+        },
+        displayState: { getCheckedPaths: () => [] },
+        selectionState: { getSelectedPath: () => null },
+        getTrackStyle: color => ({ color }),
+        getSelectionStyles: color => ({ color }),
+        captureLibrarySnapshot: ({ libraryIdentity }) => ({
+            identity: libraryIdentity,
+            rootName,
+            folders: [], entries: [], expandedPaths: [""]
+        }),
+        documentTarget: new EventTargetMock(),
+        windowTarget: new EventTargetMock(),
+        reportMetrics: () => {}
+    });
+
+    coordinator.beginPhaseB();
+    coordinator.setLibraryContext({
+        libraryIdentity: "root-name:%E3%83%AC%E3%83%B3%E3%82%BF%E3%82%AB%E3%83%BC",
+        cacheNamespace: "rental-cache"
+    });
+    const oldWrite = coordinator.commitLibrarySwitch();
+
+    await Promise.resolve();
+    rootName = "GPX";
+    coordinator.setLibraryContext({
+        libraryIdentity: "root-name:GPX",
+        cacheNamespace: "gpx-cache"
+    });
+    const latestWrite = coordinator.commitLibrarySwitch();
+
+    assert(writes.length === 1,
+        "new Library Snapshot write bypassed ordered persistence");
+    releaseFirstWrite();
+    assert(!await oldWrite,
+        "delayed old Library Snapshot was accepted as current");
+    assert(await latestWrite && writes.length === 2 &&
+        persisted.libraryIdentity === "root-name:GPX" &&
+        persisted.cacheNamespace === "gpx-cache" &&
+        persisted.library.rootName === "GPX",
+    "delayed old Snapshot overwrote the latest Library selection");
 }
 
 async function testProvisionalFolderExpansionSave() {
@@ -1043,6 +1116,7 @@ try {
     await testFolderExpansionRestoreIsolation();
     await testLargeStartupTreeRestoreBatch();
     await testLastKnownGoodAcrossRestarts();
+    await testLatestLibrarySwitchWinsDelayedSnapshotWrite();
     await testEmptyPhaseBDoesNotReplaceKnownGood();
     await testDriveIdentityAndNoHandleDependency();
     output.textContent = `PASS: ${assertions} assertions\n` +

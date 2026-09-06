@@ -1497,6 +1497,19 @@ async function testLibraryRestoreOrdering() {
         trackDiscoveryCoordinator: {
             setLibrary() { order.push("discovery-ready"); }
         },
+        displaySnapshotCoordinator: {
+            setLibraryContext(value) {
+                assert(value.libraryIdentity === "root-name:Ready" &&
+                    value.cacheNamespace === "cache:ready",
+                "Display Snapshot identity diverged from the active Library");
+                order.push("snapshot-context");
+            },
+            async commitLibrarySwitch() {
+                order.push("snapshot-baseline");
+                return true;
+            },
+            completePhaseB: async () => true
+        },
         viewStateCoordinator: {
             restoreLibrary() {
                 order.push("view-state-restore");
@@ -1516,6 +1529,11 @@ async function testLibraryRestoreOrdering() {
         "display restore started before file registration");
     assert(order.indexOf("discovery-ready") < order.indexOf("view-state-restore"),
         "display restore started before Discovery ready");
+    assert(order.indexOf("snapshot-context") <
+        order.indexOf("snapshot-baseline") &&
+        order.indexOf("snapshot-baseline") <
+        order.indexOf("view-state-restore"),
+    "Library switch returned before its active Snapshot identity was committed");
     assert(restoredTreeSelections.length === 1 &&
         restoredTreeSelections[0].options.reveal === false,
     "actual Library hydration revealed the cached selection ancestors");

@@ -91,6 +91,8 @@ export default class DisplaySnapshotCoordinator {
         this.pendingExpandedPaths = null;
         this.lastWriteReason = null;
         this.lastWriteStatus = "none";
+        this.libraryContextGeneration = 0;
+        this.writeQueue = Promise.resolve();
         this.metricsReported = false;
         this.snapshotView = null;
         this.mapChangedDuringRestore = false;
@@ -265,8 +267,26 @@ export default class DisplaySnapshotCoordinator {
         return true;
     }
 
+    commitLibrarySwitch() {
+
+        if (this.restoreState !== "phaseB") return Promise.resolve(false);
+        if (
+            this.lastKnownGood?.libraryIdentity === this.libraryIdentity &&
+            this.lastKnownGood?.cacheNamespace === this.cacheNamespace
+        ) {
+            return Promise.resolve(true);
+        }
+        return this.#save("library-switch");
+    }
+
     setLibraryContext({ libraryIdentity, cacheNamespace }) {
 
+        if (
+            libraryIdentity !== this.libraryIdentity ||
+            cacheNamespace !== this.cacheNamespace
+        ) {
+            this.libraryContextGeneration += 1;
+        }
         this.libraryIdentity = libraryIdentity;
         this.cacheNamespace = cacheNamespace;
         this.#updateDiagnostic();
@@ -355,7 +375,7 @@ export default class DisplaySnapshotCoordinator {
         }
         const phaseBCommit =
             this.restoreState === "phaseB" &&
-            reason === "phaseB-complete";
+            ["library-switch", "phaseB-complete"].includes(reason);
 
         if (
             (this.restoreState !== "ready" && !phaseBCommit) ||
@@ -369,6 +389,7 @@ export default class DisplaySnapshotCoordinator {
 
         const libraryIdentity = this.libraryIdentity;
         const cacheNamespace = this.cacheNamespace;
+        const libraryContextGeneration = this.libraryContextGeneration;
         const visibleTracks = [];
         const sameKnownLibrary =
             this.lastKnownGood?.libraryIdentity === libraryIdentity &&
@@ -472,7 +493,23 @@ export default class DisplaySnapshotCoordinator {
             library: this.captureLibrarySnapshot({ libraryIdentity })
         };
         this.treeEntryCount = snapshot.library?.entries?.length ?? 0;
-        const saved = await this.store.save(snapshot);
+        const write = this.writeQueue.then(
+            () => this.store.save(snapshot),
+            () => this.store.save(snapshot)
+        );
+
+        this.writeQueue = write.catch(() => false);
+        const saved = await write;
+
+        if (
+            libraryContextGeneration !== this.libraryContextGeneration ||
+            libraryIdentity !== this.libraryIdentity ||
+            cacheNamespace !== this.cacheNamespace
+        ) {
+            this.lastWriteStatus = "stale-context";
+            this.#updateDiagnostic();
+            return false;
+        }
 
         if (saved) {
             this.lastKnownGood = snapshot;
