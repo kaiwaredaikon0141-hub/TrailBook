@@ -881,16 +881,16 @@ async function testRefreshAndReconciliation() {
 }
 
 async function testIncrementalTreeDomReconcile() {
-    const createNestedLibrary = tripFiles => {
-        const rootHandle = directoryHandle("GPX", []);
-        const root = new Folder("GPX", rootHandle);
+    const createNestedLibrary = (tripFiles, rootName = "GPX") => {
+        const rootHandle = directoryHandle(rootName, []);
+        const root = new Folder(rootName, rootHandle);
         const trips = new Folder("Trips", directoryHandle("Trips", []));
         const other = new Folder("Other", directoryHandle("Other", []));
 
         trips.gpxFiles.push(...tripFiles);
         other.gpxFiles.push(fileHandle("Other.gpx", 1, 1));
         root.folders.push(trips, other);
-        return new Library("GPX", root, 3, tripFiles.length + 1);
+        return new Library(rootName, root, 3, tripFiles.length + 1);
     };
     const before = createNestedLibrary([fileHandle("A.gpx", 1, 1)]);
     const after = createNestedLibrary([
@@ -911,6 +911,20 @@ async function testIncrementalTreeDomReconcile() {
         "new Track was not inserted into the currently opened Folder DOM");
     assert(tree.folderNodes.get("Other") === unaffectedFolderRow,
         "incremental DOM reconcile rebuilt an unaffected Folder");
+
+    const previousRootRow = tree.folderNodes.get("");
+    const previousRootLabel = previousRootRow.querySelector(".tree-label");
+    const switchedLibrary = createNestedLibrary([
+        fileHandle("A.gpx", 1, 1),
+        fileHandle("NEW.gpx", 2, 2)
+    ], "レンタカー");
+
+    await new TreeIncrementalReconciler().reconcile(tree, switchedLibrary);
+    assert(tree.folderNodes.get("") === previousRootRow &&
+        tree.nodeMetadata.get("")?.name === "レンタカー" &&
+        previousRootLabel.textContent === "レンタカー" &&
+        previousRootRow.title === "レンタカー",
+    "incremental Library promotion mixed the old root presentation with the new Tree");
 
     const detachedTripsRow = document.createElement("div");
 

@@ -40,6 +40,7 @@ export default class TreeIncrementalReconciler {
             fileHandlesByPath: prepared.fileHandlesByPath,
             pathsByFileHandle: prepared.pathsByFileHandle
         });
+        this.#synchronizeFolderIdentity(treeView, ROOT_PATH);
         treeView.expandedPaths = treeView.metadataBuilder.filterExpandedPaths(
             treeView.expandedPaths,
             prepared.nodeMetadata
@@ -82,6 +83,20 @@ export default class TreeIncrementalReconciler {
                 this.#hasLiveFileRow(treeView, path)
             )
         });
+    }
+
+    #synchronizeFolderIdentity(treeView, path) {
+
+        const row = treeView.folderNodes.get(path);
+        const metadata = treeView.nodeMetadata.get(path);
+
+        if (!row || metadata?.kind !== "folder") return;
+        row.title = metadata.name;
+        const label = row.querySelector(".tree-label");
+
+        if (label && label.textContent !== metadata.name) {
+            label.textContent = metadata.name;
+        }
     }
 
     #rebuildFolder(treeView, path) {
