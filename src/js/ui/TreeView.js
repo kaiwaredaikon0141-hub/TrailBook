@@ -564,7 +564,6 @@ export default class TreeView {
     }
 
     toggleFolder(path) {
-
         const metadata = this.nodeMetadata.get(path);
 
         if (!metadata || metadata.kind !== "folder") {
@@ -576,6 +575,7 @@ export default class TreeView {
         } else {
             this.expandFolder(path);
         }
+        this.eventBus.emit("tree:folder-expansion-changed", { path, expanded: this.expandedPaths.has(path) });
     }
 
     expandFolder(path) {

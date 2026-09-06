@@ -62,6 +62,7 @@ export default class LibraryRefreshCoordinator {
         repository, getNamespace, getLibrary, setLibrary, getColor,
         reconcileSharedSettings = async () => true,
         getEntryPresentationDiagnostic = () => ({}),
+        getSnapshotPathDiagnostic = () => null,
         removePath, reloadVisiblePath, onLibraryUpdated,
         canRefresh = () => true,
         now = () => Date.now(),
@@ -77,7 +78,7 @@ export default class LibraryRefreshCoordinator {
             librarySnapshotService, treeView, discoveryCoordinator,
             displayState, selectionState, accessPanel, repository, getNamespace,
             getLibrary, setLibrary, getColor, reconcileSharedSettings,
-            getEntryPresentationDiagnostic,
+            getEntryPresentationDiagnostic, getSnapshotPathDiagnostic,
             removePath, reloadVisiblePath,
             onLibraryUpdated, canRefresh, now, performanceNow, minimumIntervalMs,
             metadataBuilder, summaryBuilder, treeReconciler,
@@ -95,7 +96,8 @@ export default class LibraryRefreshCoordinator {
             addedCount: null, recoveredCount: null,
             removedCount: null, modifiedCount: null,
             reason: "none", result: "idle", performance: null,
-            entryTrace: null, enumerationDiagnostic: null
+            entryTrace: null, enumerationDiagnostic: null,
+            pathDifferences: Object.freeze([])
         });
         this.refreshPerformance = null;
         this.refreshPerformanceActive = false;
@@ -197,7 +199,9 @@ export default class LibraryRefreshCoordinator {
         );
         this.refreshPerformanceActive = true;
         this.#publishRefreshState({ performance: this.refreshPerformance });
-        this.#publishRefreshState({ reason, result: "checking" });
+        this.#publishRefreshState({
+            reason, result: "checking", pathDifferences: Object.freeze([])
+        });
         this.activeRefresh = (reconnect ? this.#reconnect() : this.#refresh())
             .catch(error => {
                 console.error("Library refresh failed.", error);
@@ -404,6 +408,9 @@ export default class LibraryRefreshCoordinator {
             typeof this.librarySnapshotService.hasProvisionalPath ===
                 "function" &&
             this.librarySnapshotService.hasProvisionalPath(path);
+        const snapshotPaths = new Set([
+            ...(this.librarySnapshotService.getProvisionalPaths?.() || [])
+        ].map(normalizeRelativePath));
         const candidatePaths = [...newPaths].filter(path =>
             !oldEntries.has(path) || !oldPaths.has(path) ||
             (snapshotContext.provisional === true && !snapshotHasPath(path))
@@ -446,6 +453,65 @@ export default class LibraryRefreshCoordinator {
         const addedPaths = new Set(added.map(({ path }) =>
             normalizeRelativePath(path)
         ));
+        const useSnapshotPaths = snapshotContext.provisional === true && (
+            snapshotPaths.size > 0 ||
+            typeof this.librarySnapshotService.hasProvisionalPath === "function"
+        );
+        const wasCached = path => useSnapshotPaths
+            ? snapshotPaths.size > 0
+                ? snapshotPaths.has(path)
+                : snapshotHasPath(path)
+            : oldPaths.has(path);
+        const differenceSeeds = [...new Set([
+            ...oldPaths, ...snapshotPaths, ...newPaths
+        ])]
+            .filter(path => wasCached(path) !== newPaths.has(path))
+            .sort((first, second) =>
+                Number(newPaths.has(first)) - Number(newPaths.has(second)) ||
+                first.localeCompare(second)
+            ).slice(0, 10).map(path => Object.freeze({
+                path,
+                cachedProvisional: wasCached(path),
+                actualFound: newPaths.has(path),
+                classification: !newPaths.has(path)
+                    ? "removed"
+                    : recoveredPaths.has(path)
+                        ? "recovered"
+                        : addedPaths.has(path) ? "added" : "unchanged"
+            }));
+        const capturePathDifferences = ({
+            refreshContext = "current",
+            snapshotCommit = "skipped",
+            discoveryPaths = new Set(oldEntries.keys()),
+            snapshotFinal = false
+        } = {}) => Object.freeze(differenceSeeds.map(seed => {
+            const treeExists = this.treeView.hasFile(seed.path);
+            let snapshotDiagnostic = null;
+
+            if (snapshotFinal) {
+                try {
+                    snapshotDiagnostic = this.getSnapshotPathDiagnostic(
+                        seed.path
+                    );
+                } catch {
+                    // Diagnostic collection must never alter refresh behavior.
+                }
+            }
+            return Object.freeze({
+                ...seed,
+                treeExists,
+                displayExists: Boolean(this.displayState.getDisplay(seed.path)),
+                discoveryExists: discoveryPaths.has(seed.path),
+                snapshotExists: typeof snapshotDiagnostic?.exists === "boolean"
+                    ? snapshotDiagnostic.exists
+                    : snapshotFinal && snapshotCommit === "success"
+                        ? treeExists
+                        : seed.cachedProvisional,
+                refreshContext,
+                snapshotCommit: snapshotDiagnostic?.commitStatus ||
+                    snapshotCommit
+            });
+        }));
         const previousDisplays = new Map(
             [...this.displayState.getDisplays().values()].map(display => [
                 normalizeRelativePath(display.path),
@@ -476,7 +542,14 @@ export default class LibraryRefreshCoordinator {
         // The normal refresh is path-discovery-first. Existing file identity
         // validation is reserved for a separate complete/background refresh.
         const validationMs = 0;
-        if (this.getLibrary() !== expectedLibrary) return false;
+        if (this.getLibrary() !== expectedLibrary) {
+            this.#publishRefreshState({
+                pathDifferences: capturePathDifferences({
+                    refreshContext: "stale-discarded"
+                })
+            });
+            return false;
+        }
         const changed = [];
         const unchangedCount = fileEntries.length - added.length;
         const selectedPath = this.selectionState.getSelectedPath();
@@ -610,6 +683,17 @@ export default class LibraryRefreshCoordinator {
                 snapshotUpdateMs: this.performanceNow() - snapshotStartedAt
             });
         }
+        const discoveryPaths = new Set(discoveryEntries.map(entry =>
+            normalizeRelativePath(entry.relativePath)
+        ));
+
+        this.#publishRefreshState({
+            pathDifferences: capturePathDifferences({
+                discoveryPaths,
+                snapshotCommit: snapshotCommitted ? "success" : "failed",
+                snapshotFinal: true
+            })
+        });
         this.lastResult = Object.freeze({
             added: added.length - recoveredPaths.size,
             recovered: recoveredPaths.size,

@@ -46,7 +46,7 @@ export default class LibraryAccessPanel {
             cachedCount: null, scannedCount: null,
             addedCount: null, recoveredCount: null,
             removedCount: null, modifiedCount: null,
-            reason: "none", result: "idle"
+            reason: "none", result: "idle", pathDifferences: Object.freeze([])
         });
         this.libraryRefreshFeedbackTimer = null;
         this.previousLibraryButton.addEventListener("click", () => {
@@ -475,6 +475,19 @@ export default class LibraryAccessPanel {
                         `  ${item.path} [known:${item.known ? "yes" : "no"} Tree:${item.tree ? "yes" : "no"} Snapshot:${item.snapshot === null ? "-" : item.snapshot ? "yes" : "no"}]`
                     )
                     : ["  -"])
+            ] : []),
+            ...(state.pathDifferences?.length ? [
+                "",
+                "Refresh Path Differences (up to 10)",
+                ...state.pathDifferences.flatMap(item => [
+                    `relativePath: ${item.path}`,
+                    `  cached/provisional: ${item.cachedProvisional ? "yes" : "no"}`,
+                    `  actual enumeration: ${item.actualFound ? "found" : "missing"}`,
+                    `  diff classification: ${item.classification}`,
+                    `  Tree / DisplayState / Discovery: ${item.treeExists ? "exists" : "missing"} / ${item.displayExists ? "exists" : "missing"} / ${item.discoveryExists ? "exists" : "missing"}`,
+                    `  Snapshot after commit: ${item.snapshotExists ? "exists" : "missing"}`,
+                    `  refresh context / snapshot commit: ${item.refreshContext} / ${item.snapshotCommit}`
+                ])
             ] : []),
             ...(state.entryTrace ? [
                 "",

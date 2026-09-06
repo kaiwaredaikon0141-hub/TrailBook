@@ -369,6 +369,13 @@ export default class LibrarySnapshotService {
         return this.provisional && this.provisionalPaths.has(relativePath);
     }
 
+    getProvisionalPaths() {
+
+        return this.provisional
+            ? new Set(this.provisionalPaths)
+            : new Set();
+    }
+
     getRefreshContext() {
 
         return Object.freeze({

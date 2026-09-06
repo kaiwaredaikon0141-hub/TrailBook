@@ -647,6 +647,12 @@ async function testRefreshAndReconciliation() {
             folderDomColor: "rgb(240, 128, 0)",
             trackDomColor: "rgb(240, 128, 0)"
         }),
+        getSnapshotPathDiagnostic: path => ({
+            exists: Boolean(persistedLibrarySnapshot?.entries.some(
+                entry => entry.relativePath === path
+            )),
+            commitStatus: "success"
+        }),
         removePath: path => removed.push(path),
         reloadVisiblePath: async value => reloaded.push(value.path),
         onLibraryUpdated: (value, context) => {
@@ -713,6 +719,29 @@ async function testRefreshAndReconciliation() {
         "selected Track was not preserved");
     assert(removed.includes("D.gpx") && !displayState.getDisplay("D.gpx"),
         "removed GPX was not reconciled");
+    const pathDifferences = coordinator.getDiagnostic().pathDifferences;
+    const addedDifference = pathDifferences.find(item => item.path === "C.gpx");
+    const recoveredDifference = pathDifferences.find(item => item.path === "E.gpx");
+    const removedDifference = pathDifferences.find(item => item.path === "D.gpx");
+
+    assert(pathDifferences.length === 3 &&
+        addedDifference?.classification === "added" &&
+        recoveredDifference?.classification === "recovered" &&
+        removedDifference?.classification === "removed",
+    "refresh path differences did not classify added/recovered/removed paths");
+    assert(!removedDifference.actualFound &&
+        removedDifference.cachedProvisional &&
+        !removedDifference.treeExists &&
+        !removedDifference.displayExists &&
+        !removedDifference.discoveryExists &&
+        !removedDifference.snapshotExists,
+    "removed path diagnostic did not trace actual through Snapshot removal");
+    assert(addedDifference.actualFound && addedDifference.treeExists &&
+        addedDifference.displayExists && addedDifference.discoveryExists &&
+        addedDifference.snapshotExists &&
+        pathDifferences.every(item => item.refreshContext === "current" &&
+            item.snapshotCommit === "success"),
+    "refresh path diagnostic did not report final layer/commit state");
     assert(invalidated.length === 0 && reloaded.length === 0,
         "fast refresh performed blocking modified-file validation/reload");
     assert(discoveryCalls[0].entries.some(entry => entry.relativePath === "C.gpx"),
@@ -1298,6 +1327,25 @@ function testRefreshCompletionFeedback() {
     panel.setLibraryRefreshState({ ...base, result: "failure" });
     assert(panel.libraryRefreshButton.textContent === "更新失敗",
         "refresh failure feedback was not visible");
+    panel.setLibraryRefreshState({
+        ...base,
+        result: "success",
+        pathDifferences: [{
+            path: "Trips/copy.gpx", cachedProvisional: true,
+            actualFound: false, classification: "removed",
+            treeExists: false, displayExists: false,
+            discoveryExists: false, snapshotExists: false,
+            refreshContext: "current", snapshotCommit: "success"
+        }]
+    });
+    const diagnostic = panel.libraryRefreshDiagnostic.querySelector("pre")
+        .textContent;
+
+    assert(diagnostic.includes("relativePath: Trips/copy.gpx") &&
+        diagnostic.includes("actual enumeration: missing") &&
+        diagnostic.includes("Tree / DisplayState / Discovery: missing / missing / missing") &&
+        diagnostic.includes("refresh context / snapshot commit: current / success"),
+    "removed Cached Track diagnostic was not rendered");
     clearTimeout(panel.libraryRefreshFeedbackTimer);
 }
 

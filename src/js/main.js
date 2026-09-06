@@ -197,6 +197,8 @@ window.addEventListener("DOMContentLoaded", () => {
                     : null
             };
         },
+        getSnapshotPathDiagnostic: path => app.displaySnapshotCoordinator
+            .getLibraryPathDiagnostic(path),
         removePath: path => app.stopDisplay(path, { refocus: false }),
         reloadVisiblePath: async ({ path, fileHandle }) => {
             app.stopDisplay(path, { refocus: false, preserveSelection: true });

@@ -88,6 +88,7 @@ export default class DisplaySnapshotCoordinator {
         this.phaseARestored = false;
         this.restoreState = "idle";
         this.lastKnownGood = null;
+        this.pendingExpandedPaths = null;
         this.lastWriteReason = null;
         this.lastWriteStatus = "none";
         this.metricsReported = false;
@@ -121,6 +122,9 @@ export default class DisplaySnapshotCoordinator {
         }
 
         this.lastKnownGood = snapshot;
+        this.pendingExpandedPaths = new Set(
+            snapshot.library?.expandedPaths || [""]
+        );
         this.libraryIdentity = snapshot.libraryIdentity;
         this.cacheNamespace = snapshot.cacheNamespace;
         this.snapshotView = snapshot.map;
@@ -298,6 +302,9 @@ export default class DisplaySnapshotCoordinator {
         this.eventBus.on("selection:changed", () => {
             this.#scheduleSave("selection-change");
         });
+        this.eventBus.on("tree:folder-expansion-changed", change => {
+            this.#handleFolderExpansionChange(change);
+        });
         [
             "view-state:sidebar-toggled",
             "view-state:sidebar-width-changed",
@@ -321,8 +328,11 @@ export default class DisplaySnapshotCoordinator {
 
     #scheduleSave(reason) {
 
+        const provisionalFolderChange = reason === "folder-expansion-change" &&
+            this.lastKnownGood?.library;
+
         if (
-            this.restoreState !== "ready" ||
+            (this.restoreState !== "ready" && !provisionalFolderChange) ||
             !this.libraryIdentity ||
             !this.cacheNamespace
         ) {
@@ -339,6 +349,10 @@ export default class DisplaySnapshotCoordinator {
     async #save(reason) {
 
         this.lastWriteReason = reason;
+        if (reason === "folder-expansion-change" &&
+            this.restoreState !== "ready") {
+            return this.#saveProvisionalFolderExpansion();
+        }
         const phaseBCommit =
             this.restoreState === "phaseB" &&
             reason === "phaseB-complete";
@@ -462,7 +476,47 @@ export default class DisplaySnapshotCoordinator {
 
         if (saved) {
             this.lastKnownGood = snapshot;
+            this.pendingExpandedPaths = new Set(
+                snapshot.library?.expandedPaths || [""]
+            );
         }
+        this.lastWriteStatus = saved ? "committed" : "failed";
+        this.#updateDiagnostic();
+        return saved;
+    }
+
+    #handleFolderExpansionChange({ path, expanded } = {}) {
+
+        if (typeof path !== "string" || !this.lastKnownGood?.library) return;
+        this.pendingExpandedPaths ??= new Set(
+            this.lastKnownGood.library.expandedPaths || [""]
+        );
+        if (expanded) this.pendingExpandedPaths.add(path);
+        else this.pendingExpandedPaths.delete(path);
+        this.pendingExpandedPaths.add("");
+        this.#scheduleSave("folder-expansion-change");
+    }
+
+    async #saveProvisionalFolderExpansion() {
+
+        if (!this.lastKnownGood?.library || !this.pendingExpandedPaths ||
+            this.lastKnownGood.libraryIdentity !== this.libraryIdentity ||
+            this.lastKnownGood.cacheNamespace !== this.cacheNamespace) {
+            this.lastWriteStatus = "suppressed";
+            return false;
+        }
+        const snapshot = {
+            ...this.lastKnownGood,
+            revision: this.lastKnownGood.revision + 1,
+            savedAt: Date.now(),
+            library: {
+                ...this.lastKnownGood.library,
+                expandedPaths: [...this.pendingExpandedPaths]
+            }
+        };
+        const saved = await this.store.save(snapshot);
+
+        if (saved) this.lastKnownGood = snapshot;
         this.lastWriteStatus = saved ? "committed" : "failed";
         this.#updateDiagnostic();
         return saved;
@@ -481,6 +535,21 @@ export default class DisplaySnapshotCoordinator {
             libraryRestoreDiagnostic: this.libraryRestoreDiagnostic ?? null,
             ...this.metrics
         };
+    }
+
+    getLibraryPathDiagnostic(path) {
+
+        const normalized = String(path || "").replaceAll("\\", "/");
+        const exists = Boolean(this.lastKnownGood?.library?.entries?.some(
+            entry => entry.relativePath === normalized
+        ));
+        const commitStatus = this.lastWriteStatus === "committed"
+            ? "success"
+            : this.lastWriteStatus === "failed"
+                ? "failed"
+                : "skipped";
+
+        return Object.freeze({ exists, commitStatus });
     }
 
     #restoreSidebar(state) {

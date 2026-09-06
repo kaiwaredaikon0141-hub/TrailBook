@@ -169,6 +169,8 @@ async function testCoordinator() {
     const windowTarget = new EventTargetMock();
     const timers = [];
     const writes = [];
+    const folderExpansionPaths = new Set(["", "Trips"]);
+    let clearedTimers = 0;
     const store = {
         config: Config.displaySnapshot,
         async load() {
@@ -235,10 +237,13 @@ async function testCoordinator() {
             status: "completed", totalMs: 5,
             displayPublicationCount: 1, geometryLoadCount: 0
         }),
-        captureLibrarySnapshot: () => snapshot(["one.gpx"]).library,
+        captureLibrarySnapshot: () => ({
+            ...snapshot(["one.gpx"]).library,
+            expandedPaths: [...folderExpansionPaths]
+        }),
         markLibraryReady: () => { libraryReady += 1; },
         setTimer: callback => { timers.push(callback); return timers.length; },
-        clearTimer: () => {},
+        clearTimer: () => { clearedTimers += 1; },
         documentTarget,
         windowTarget,
         reportMetrics: value => metrics.push(value)
@@ -303,9 +308,61 @@ async function testCoordinator() {
         "phase-B replaced the snapshot map view");
     assert(writes[0].library.entries.length === 1,
         "phase-B omitted lightweight Library metadata");
+    assert(coordinator.getLibraryPathDiagnostic("one.gpx").exists &&
+        coordinator.getLibraryPathDiagnostic("one.gpx").commitStatus ===
+            "success" &&
+        !coordinator.getLibraryPathDiagnostic("removed.gpx").exists,
+    "Snapshot path diagnostic did not reflect the committed Library metadata");
     assert(libraryReady === 1, "actual Library did not leave provisional mode");
     assert(coordinator.getStatus().restoreState === "ready",
         "ready lifecycle state missing");
+
+    let timerCount = timers.length;
+    let writeCount = writes.length;
+
+    folderExpansionPaths.delete("Trips");
+    eventBus.emit("tree:folder-expansion-changed", {
+        path: "Trips", expanded: false
+    });
+    assert(timers.length === timerCount + 1 && writes.length === writeCount,
+        "Folder close bypassed the debounced snapshot schedule");
+    timers.at(-1)();
+    await Promise.resolve();
+    await Promise.resolve();
+    assert(!writes.at(-1).library.expandedPaths.includes("Trips"),
+        "closed Folder remained in the saved expanded paths");
+
+    timerCount = timers.length;
+    folderExpansionPaths.add("Trips");
+    eventBus.emit("tree:folder-expansion-changed", {
+        path: "Trips", expanded: true
+    });
+    assert(timers.length === timerCount + 1,
+        "Folder open did not schedule a snapshot save");
+    timers.at(-1)();
+    await Promise.resolve();
+    await Promise.resolve();
+    assert(writes.at(-1).library.expandedPaths.includes("Trips"),
+        "open Folder was absent from the saved expanded paths");
+
+    timerCount = timers.length;
+    writeCount = writes.length;
+    const clearsBefore = clearedTimers;
+    ["A", "B", "C"].forEach(path => folderExpansionPaths.add(path));
+    ["A", "B", "C"].forEach(path => {
+        folderExpansionPaths.delete(path);
+        eventBus.emit("tree:folder-expansion-changed", {
+            path, expanded: false
+        });
+    });
+    assert(timers.length === timerCount + 3 &&
+        clearedTimers === clearsBefore + 2 && writes.length === writeCount,
+    "three Folder closes were not coalesced behind one pending save");
+    timers.at(-1)();
+    await Promise.resolve();
+    await Promise.resolve();
+    assert(writes.length === writeCount + 1,
+        "debounced Folder expansion change saved more than once");
 
     coordinator.beginPhaseB();
     coordinator.setLibraryContext({
@@ -329,6 +386,77 @@ async function testCoordinator() {
     assert(metrics.length === 1, "startup metrics emitted more than once");
     assert(metrics[0].restoredTrackCount === 1 &&
         metrics[0].cacheMissCount === 1, "startup metrics incorrect");
+}
+
+async function testProvisionalFolderExpansionSave() {
+    const initial = snapshot(["one.gpx"]);
+
+    initial.library.expandedPaths = ["", "A", "B", "C"];
+    const adapter = new MemoryAdapter(initial);
+    const store = new DisplaySnapshotStore(Config.displaySnapshot, { adapter });
+    const eventBus = new EventBus();
+    const pendingTimers = new Map();
+    let nextTimerId = 0;
+    const coordinator = new DisplaySnapshotCoordinator({
+        eventBus,
+        store,
+        repository: { getDisplaySnapshot: async () => null },
+        mapView: {
+            isValidViewState: () => false,
+            invalidateSize() {},
+            getViewState: () => null
+        },
+        controls: {
+            setSidebarOpen() {}, setSidebarWidth() {},
+            setTrackInfoHeight() {}, isSidebarOpen: () => true,
+            getSidebarWidth: () => 300,
+            getTrackInfoHeight: () => 180
+        },
+        displayState: new DisplayState(),
+        selectionState: new SelectionState(),
+        getTrackStyle: color => ({ color }),
+        getSelectionStyles: () => ({}),
+        restoreLibrarySnapshot: async () => true,
+        setTimer(callback) {
+            nextTimerId += 1;
+            pendingTimers.set(nextTimerId, callback);
+            return nextTimerId;
+        },
+        clearTimer: id => pendingTimers.delete(id),
+        documentTarget: null,
+        windowTarget: null
+    });
+    const runPending = async () => {
+        const callback = [...pendingTimers.values()].at(-1);
+
+        pendingTimers.clear();
+        callback();
+        await Promise.resolve();
+        await Promise.resolve();
+    };
+
+    await coordinator.initialize();
+    assert(pendingTimers.size === 0 && adapter.writes.length === 0,
+        "startup expandedPaths restore scheduled a save loop");
+    ["A", "B", "C"].forEach(path => eventBus.emit(
+        "tree:folder-expansion-changed", { path, expanded: false }
+    ));
+    assert(pendingTimers.size === 1 && adapter.writes.length === 0,
+        "three provisional Folder closes were not debounced");
+    await runPending();
+    let restored = await store.load();
+
+    assert(adapter.writes.length === 1 &&
+        restored.library.expandedPaths.length === 1 &&
+        restored.library.expandedPaths[0] === "",
+    "provisional Folder closes were not saved without rewriting restore state");
+    eventBus.emit("tree:folder-expansion-changed", {
+        path: "B", expanded: true
+    });
+    await runPending();
+    restored = await store.load();
+    assert(restored.library.expandedPaths.includes("B"),
+        "provisional Folder open was not available to the next restart");
 }
 
 async function testLibrarySnapshotService() {
@@ -453,6 +581,8 @@ async function testLibrarySnapshotService() {
         "cached selection restore requested ancestor expansion");
     assert(service.isProvisionalFor("local-cache"),
         "cached Library was not marked provisional");
+    assert(service.getProvisionalPaths().has("Trips/one.gpx"),
+        "cached Library path was unavailable to refresh diagnostics");
     assert(trackCatalog.get("local-cache", "Trips/one.gpx")
         ?.actualFileHandle === null &&
         trackCatalog.get("local-cache", "Trips/one.gpx")
@@ -476,6 +606,8 @@ async function testLibrarySnapshotService() {
     "removed actual file left stale geometry or selection");
     assert(!service.isProvisional() && accessStates.at(-1) === false,
         "actual Library reconciliation did not restore write availability");
+    assert(service.getProvisionalPaths().size === 0,
+        "ready Library retained provisional diagnostic paths");
     assert(events.at(-1).name === "library:provisional-state-changed" &&
         events.at(-1).value.provisional === false,
     "actual Library reconciliation did not announce ready availability");
@@ -488,6 +620,11 @@ async function testFolderExpansionRestoreIsolation() {
         const eventBus = new EventBus();
         const treeView = new TreeView(eventBus);
         const displayState = new DisplayState();
+        let expansionEvents = 0;
+
+        eventBus.on("tree:folder-expansion-changed", () => {
+            expansionEvents += 1;
+        });
         const service = new LibrarySnapshotService({
             treeView,
             discoveryCoordinator: { setProvisionalLibrary() {} },
@@ -529,7 +666,10 @@ async function testFolderExpansionRestoreIsolation() {
             selectedPath: trackPath
         });
 
-        return { treeView, trackPath, folderPath };
+        return {
+            treeView, trackPath, folderPath,
+            getExpansionEvents: () => expansionEvents
+        };
     };
 
     const closed = await restore([""]);
@@ -541,10 +681,18 @@ async function testFolderExpansionRestoreIsolation() {
     assert(closed.treeView.nodeMetadata.get(closed.trackPath)?.checked &&
         !closed.treeView.fileNodes.has(closed.trackPath),
     "visible Track restore expanded its closed ancestor Folder");
+    assert(closed.getExpansionEvents() === 0,
+        "startup restore emitted a user Folder expansion event");
     closed.treeView.setSelectedPath(closed.trackPath, { reveal: true });
     assert(closed.treeView.expandedPaths.has(closed.folderPath) &&
         closed.treeView.fileNodes.has(closed.trackPath),
     "explicit reveal did not expand the selected Track ancestors");
+    assert(closed.getExpansionEvents() === 0,
+        "programmatic reveal scheduled a user Folder expansion save");
+    closed.treeView.folderNodes.get(closed.folderPath).click();
+    closed.treeView.folderNodes.get(closed.folderPath).click();
+    assert(closed.getExpansionEvents() === 2,
+        "explicit user Folder toggles did not publish expansion changes");
 
     const opened = await restore(["", folderPath]);
 
@@ -890,6 +1038,7 @@ try {
     await testStore();
     await testOptimisticGeometryRead();
     await testCoordinator();
+    await testProvisionalFolderExpansionSave();
     await testLibrarySnapshotService();
     await testFolderExpansionRestoreIsolation();
     await testLargeStartupTreeRestoreBatch();
