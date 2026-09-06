@@ -11,6 +11,8 @@ const CORE_ASSETS = [
     "./favicon.svg",
     "./icons/trailbook-192.png",
     "./icons/trailbook-512.png",
+    "./icons/trailbook-maskable-192.png",
+    "./icons/trailbook-maskable-512.png",
     "./css/base.css",
     "./css/layout.css",
     "./css/theme.css",

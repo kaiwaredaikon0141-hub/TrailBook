@@ -59,7 +59,7 @@ async function testManifestAndAssets() {
     assert(manifest.scope === "./", "scope is not relative");
     assert(manifest.display === "standalone", "standalone display missing");
     assert(manifest.orientation === "any", "orientation changed");
-    assert(manifest.icons.length === 2, "PWA icon count");
+    assert(manifest.icons.length === 4, "PWA icon count");
     assert(manifest.icons.every(icon => !icon.src.startsWith("/")),
         "absolute manifest icon URL");
 
@@ -72,6 +72,38 @@ async function testManifestAndAssets() {
 
     assert(icon192.width === 192 && icon192.height === 192, "192 icon size");
     assert(icon512.width === 512 && icon512.height === 512, "512 icon size");
+    assert(new Set(manifest.icons.map(icon => icon.src)).size === 4,
+        "normal and maskable icons must use separate assets");
+    for (const purpose of ["any", "maskable"]) {
+        for (const size of [192, 512]) {
+            const icon = manifest.icons.find(item =>
+                item.purpose === purpose && item.sizes === `${size}x${size}`);
+            assert(icon?.type === "image/png", `${purpose} ${size} missing`);
+            const response = await fetch(new URL(icon.src, manifestUrl));
+            assert(response.ok, `missing icon asset: ${icon.src}`);
+            const bitmap = await createImageBitmap(await response.blob());
+            assert(bitmap.width === size && bitmap.height === size,
+                `incorrect dimensions: ${icon.src}`);
+            if (purpose === "maskable") {
+                const canvas = document.createElement("canvas");
+                canvas.width = canvas.height = size;
+                const context = canvas.getContext("2d");
+                context.drawImage(bitmap, 0, 0);
+                const pixels = context.getImageData(0, 0, size, size).data;
+                let opaque = true, safe = true;
+                for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+                    const offset = (y * size + x) * 4;
+                    opaque &&= pixels[offset + 3] === 255;
+                    if (Math.hypot(x + 0.5 - size / 2, y + 0.5 - size / 2) > size * 0.4) {
+                        safe &&= pixels[offset] === 22 && pixels[offset + 1] === 78 && pixels[offset + 2] === 99;
+                    }
+                }
+                assert(opaque, "maskable icon has transparent pixels");
+                assert(safe, "maskable artwork extends outside the safe circle");
+            }
+            bitmap.close();
+        }
+    }
 
     const index = await fetch(new URL("../../src/index.html", location.href))
         .then(response => response.text());
@@ -582,6 +614,8 @@ async function testServiceWorkerCache() {
         "vendor/leaflet/leaflet.js",
         "icons/trailbook-192.png",
         "icons/trailbook-512.png",
+        "icons/trailbook-maskable-192.png",
+        "icons/trailbook-maskable-512.png",
         "js/main.js"
     ];
 
