@@ -31,6 +31,12 @@ function cloneSnapshot(snapshot, schemaVersion) {
     };
 }
 
+function sameColors(left, right) {
+    const keys = Object.keys(left || {});
+    return keys.length === Object.keys(right || {}).length &&
+        keys.every(key => left[key] === right[key]);
+}
+
 /**
  * Owns the active Library shared-settings load result without filesystem or UI.
  */
@@ -60,6 +66,7 @@ export default class LibrarySettingsState {
         this.saveErrorCode = null;
         this.fileExists = false;
         this.snapshot = createEmptySharedSettingsSnapshot(this.schemaVersion);
+        this.savedSnapshot = cloneSnapshot(this.snapshot, this.schemaVersion);
         this.fingerprint = null;
         this.lastModified = null;
         this.size = null;
@@ -178,6 +185,7 @@ export default class LibrarySettingsState {
         this.saveErrorCode = null;
         this.fileExists = result.fileExists;
         this.snapshot = snapshot;
+        this.savedSnapshot = cloneSnapshot(snapshot, this.schemaVersion);
         this.fingerprint = result.fingerprint ?? null;
         this.lastModified = result.lastModified ?? null;
         this.size = result.size ?? null;
@@ -201,14 +209,15 @@ export default class LibrarySettingsState {
             }
         });
 
+        if (sameColors(this.snapshot.folderColors, folderColors)) return false;
         this.snapshot = {
             schemaVersion: this.schemaVersion,
             folderColors
         };
-        this.dirty = true;
+        this.dirty = !sameColors(this.savedSnapshot.folderColors, folderColors);
 
         if (this.saveStatus !== "conflict") {
-            this.saveStatus = "unsaved";
+            this.saveStatus = this.dirty ? "unsaved" : "saved";
             this.saveErrorCode = null;
         }
 
@@ -258,6 +267,7 @@ export default class LibrarySettingsState {
 
         this.saveRequestId += 1;
         this.saving = true;
+        this.savingSnapshot = cloneSnapshot(this.snapshot, this.schemaVersion);
         this.saveOperation = operation;
         this.saveStatus = "saving";
         this.saveErrorCode = null;
@@ -282,13 +292,17 @@ export default class LibrarySettingsState {
 
         this.source = "shared-json";
         this.status = "loaded";
-        this.dirty = false;
+        const editedDuringSave = !sameColors(
+            this.snapshot.folderColors, this.savingSnapshot?.folderColors);
+        this.savedSnapshot = cloneSnapshot(loadResult.snapshot, this.schemaVersion);
+        this.dirty = editedDuringSave && !sameColors(
+            this.snapshot.folderColors, loadResult.snapshot.folderColors);
         this.saving = false;
         this.saveOperation = null;
-        this.saveStatus = "saved";
+        this.saveStatus = this.dirty ? "unsaved" : "saved";
         this.saveErrorCode = null;
         this.fileExists = true;
-        this.snapshot = cloneSnapshot(loadResult.snapshot, this.schemaVersion);
+        if (!editedDuringSave) this.snapshot = cloneSnapshot(loadResult.snapshot, this.schemaVersion);
         this.fingerprint = loadResult.fingerprint ?? null;
         this.lastModified = loadResult.lastModified ?? null;
         this.size = loadResult.size ?? null;

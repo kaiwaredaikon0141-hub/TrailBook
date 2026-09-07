@@ -235,7 +235,7 @@ export default class App {
             accessPanel: this.libraryAccessPanel,
             statusBar: this.statusBar,
             canSwitchLibrary: () =>
-                this.librarySettingsCoordinator.canSwitchLibrary(),
+                this.librarySettingsCoordinator.prepareLibrarySwitch(),
             flushViewState: () => this.viewStateCoordinator.flush(),
             beforeLoad: () => {
                 this.displaySnapshotCoordinator.beginPhaseB();

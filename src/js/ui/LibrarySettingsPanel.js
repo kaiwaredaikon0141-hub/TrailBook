@@ -3,7 +3,7 @@ import SettingsConflictDialog from "./SettingsConflictDialog.js";
 const STATUS_ID = "library-settings-status";
 
 /**
- * Presents shared-settings save state and emits explicit save requests.
+ * Presents autosave status and the existing conflict recovery controls.
  */
 export default class LibrarySettingsPanel {
 
@@ -12,14 +12,8 @@ export default class LibrarySettingsPanel {
         this.eventBus = eventBus;
         this.element = this.#create();
         this.status = this.element.querySelector(".library-settings-message");
-        this.saveButton = this.element.querySelector(
-            ".library-settings-save"
-        );
         this.reloadButton = this.element.querySelector(
             ".library-settings-reload"
-        );
-        this.migrationButton = this.element.querySelector(
-            ".library-settings-migrate"
         );
         this.conflictDialog = new SettingsConflictDialog(eventBus);
         this.element.append(this.conflictDialog.element);
@@ -42,29 +36,16 @@ export default class LibrarySettingsPanel {
         this.element.dataset.state = presentation.state;
         const busy = state.saving || state.reloading;
 
-        this.saveButton.hidden = state.migrationAvailable;
-        this.saveButton.disabled = !(
-            state.dirty || state.saveStatus === "conflict"
-        ) || busy;
-        this.saveButton.title = this.saveButton.disabled
-            ? busy
-                ? "Library設定を処理中です"
-                : "未保存の変更はありません"
-            : "現在のFolder色をtrailbook.jsonへ保存します";
         this.reloadButton.disabled = busy;
         this.reloadButton.title = busy
             ? "Library設定を処理中です"
             : "trailbook.jsonを手動で再読み込みします";
-        this.migrationButton.hidden = !state.migrationAvailable;
-        this.migrationButton.disabled = busy;
     }
 
     openConflict({ invalid = false } = {}) {
 
         this.conflictDialog.open({
-            origin: this.saveButton.hidden
-                ? this.reloadButton
-                : this.saveButton,
+            origin: this.reloadButton,
             invalid
         });
     }
@@ -79,9 +60,7 @@ export default class LibrarySettingsPanel {
         const section = document.createElement("section");
         const title = document.createElement("h4");
         const message = document.createElement("p");
-        const saveButton = document.createElement("button");
         const reloadButton = document.createElement("button");
-        const migrationButton = document.createElement("button");
         const actions = document.createElement("div");
 
         section.className = "library-access-panel library-settings-panel";
@@ -93,29 +72,15 @@ export default class LibrarySettingsPanel {
         message.setAttribute("role", "status");
         message.setAttribute("aria-live", "polite");
         message.setAttribute("aria-atomic", "true");
-        saveButton.className = "library-settings-save";
-        saveButton.type = "button";
-        saveButton.textContent = "Libraryへ保存";
-        saveButton.setAttribute("aria-describedby", STATUS_ID);
         reloadButton.className = "library-settings-reload";
         reloadButton.type = "button";
         reloadButton.textContent = "設定を再読み込み";
         reloadButton.setAttribute("aria-describedby", STATUS_ID);
-        migrationButton.className = "library-settings-migrate";
-        migrationButton.type = "button";
-        migrationButton.textContent = "現在の色設定をLibraryへ保存";
-        migrationButton.setAttribute("aria-describedby", STATUS_ID);
         actions.className = "library-settings-actions";
-        saveButton.addEventListener("click", () => {
-            this.eventBus.emit("library-settings:save-requested");
-        });
         reloadButton.addEventListener("click", () => {
             this.eventBus.emit("library-settings:reload-requested");
         });
-        migrationButton.addEventListener("click", () => {
-            this.eventBus.emit("library-settings:migrate-requested");
-        });
-        actions.append(saveButton, migrationButton, reloadButton);
+        actions.append(reloadButton);
         section.append(title, message, actions);
 
         return section;
@@ -178,8 +143,8 @@ export default class LibrarySettingsPanel {
             };
         }
 
-        if (state.dirty) {
-            return { state: "info", message: "Shared settings: Unsaved changes" };
+        if (state.dirty || state.saveStatus === "pending" || state.migrationAvailable) {
+            return { state: "info", message: "Shared settings: 保存待ち（変更は端末内に保持）" };
         }
 
         if (state.saveStatus === "saved") {

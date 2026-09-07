@@ -346,6 +346,7 @@ async function testConflictAndOverwrite() {
     await invalid.coordinator.overwrite();
     assert(invalid.repository.saveCalls[0].options.conflictPolicy === "explicit-overwrite", "invalid overwrite not explicit");
 
+    invalid.folderColorState.colors.car = "#555555";
     invalid.coordinator.markDirty();
     invalid.coordinator.state.markConflict(
         invalid.coordinator.state.beginSave(),
@@ -583,11 +584,9 @@ function testPanelAndDialog() {
             status: "missing",
             source: "legacy-local"
         });
-        assert(!panel.migrationButton.hidden, "migration button not shown");
-        assert(panel.saveButton.hidden, "duplicate save button shown during migration");
-        panel.migrationButton.click();
+        assert(!panel.migrationButton && !panel.saveButton, "explicit save UI remained");
         panel.reloadButton.click();
-        assert(events.includes("library-settings:migrate-requested"), "migration event missing");
+        assert(!events.includes("library-settings:migrate-requested"), "manual migration event remained");
         assert(events.includes("library-settings:reload-requested"), "reload event missing");
 
         panel.render({
@@ -600,7 +599,7 @@ function testPanelAndDialog() {
             status: "missing",
             source: "legacy-local"
         });
-        assert(!panel.saveButton.disabled, "migration conflict could not reopen recovery dialog");
+        assert(!panel.reloadButton.disabled, "conflict recovery is unavailable");
 
         panel.render({
             dirty: true,
@@ -622,7 +621,7 @@ function testPanelAndDialog() {
         }
         assert(cancelEvent.defaultPrevented, "Escape did not use safe Cancel");
         assert(!panel.isConflictOpen(), "Escape did not close dialog");
-        assert(globalThis.document.activeElement === panel.saveButton, "focus did not return to origin");
+        assert(globalThis.document.activeElement === panel.reloadButton, "focus did not return to origin");
 
         panel.openConflict({ invalid: true });
         panel.conflictDialog.element.querySelector(

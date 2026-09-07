@@ -56,7 +56,7 @@ export default class DriveLibraryCoordinator {
 
     async open() {
 
-        if (this.busy || !this.#isConfigured() || !this.canSwitchLibrary()) {
+        if (this.busy || !this.#isConfigured() || !await this.canSwitchLibrary()) {
             return false;
         }
 

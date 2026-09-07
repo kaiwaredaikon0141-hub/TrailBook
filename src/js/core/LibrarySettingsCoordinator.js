@@ -2,6 +2,7 @@ import LibrarySettingsRepository from
     "../services/LibrarySettingsRepository.js";
 import LibrarySettingsState from "../state/LibrarySettingsState.js";
 import { createLibraryId } from "../utils/LibraryIdentity.js";
+import { normalizeSharedSettings } from "../utils/SharedSettingsSchema.js";
 
 const CONFLICT_ERRORS = new Set([
     "conflict",
@@ -30,6 +31,10 @@ export default class LibrarySettingsCoordinator {
         confirmDiscard = message => globalThis.confirm?.(message) === true,
         setSaveInteraction = () => {},
         applyFolderColorChange = () => {},
+        debounceMs = 500,
+        storage = globalThis.localStorage,
+        lifecycleTarget = globalThis.window,
+        documentObject = globalThis.document,
         repository = new LibrarySettingsRepository(config),
         state = new LibrarySettingsState({
             schemaVersion: config.schemaVersion
@@ -50,16 +55,23 @@ export default class LibrarySettingsCoordinator {
         this.folderPaths = [];
         this.generation = null;
         this.isCurrentLibrary = () => false;
+        this.debounceMs = debounceMs;
+        this.storage = storage;
+        this.autosaveTimer = null;
+        this.autosavePromise = null;
+        this.pending = {};
+        try {
+            const stored = JSON.parse(storage?.getItem("trailbook.pendingSharedSettings") || "{}");
+            if (stored && typeof stored === "object" && !Array.isArray(stored)) this.pending = stored;
+        } catch (error) { console.warn("Shared settings pending cache unavailable", error); }
+        lifecycleTarget?.addEventListener?.("pagehide", () => void this.flushAutosave());
+        documentObject?.addEventListener?.("visibilitychange", () => {
+            if (documentObject.visibilityState === "hidden") void this.flushAutosave();
+        });
     }
 
     bindEvents(eventBus) {
 
-        eventBus.on("library-settings:save-requested", () => {
-            void this.save();
-        });
-        eventBus.on("library-settings:migrate-requested", () => {
-            void this.migrate();
-        });
         eventBus.on("library-settings:reload-requested", () => {
             void this.reload();
         });
@@ -79,6 +91,10 @@ export default class LibrarySettingsCoordinator {
 
     async load(rootHandle, { generation, isCurrent }) {
 
+        this.#rememberPending();
+        clearTimeout(this.autosaveTimer);
+        // Finish an already-started write before replacing its state object.
+        if (this.autosavePromise) await this.autosavePromise;
         const requestId = this.state.beginLoad();
 
         this.panel?.setAvailable(false);
@@ -114,6 +130,21 @@ export default class LibrarySettingsCoordinator {
         this.folderPaths = [...folderPaths];
         this.generation = loadContext.generation;
         this.isCurrentLibrary = loadContext.isCurrent;
+        const pending = this.pending[libraryId];
+        const pendingSnapshot = pending && normalizeSharedSettings(
+            { schemaVersion: pending.snapshot?.schemaVersion,
+                settings: { folderColors: pending.snapshot?.folderColors } },
+            this.state.schemaVersion).snapshot;
+        if (pendingSnapshot && folderColorToken(pendingSnapshot) !== folderColorToken(this.state.getSnapshot())) {
+            // Keep the original fingerprint: disk changes must still conflict.
+            this.state.snapshot = pendingSnapshot;
+            this.state.dirty = true;
+            this.state.saveStatus = "unsaved";
+            this.state.fileExists = pending.baseline?.fileExists ?? null;
+            this.state.fingerprint = pending.baseline?.fingerprint ?? null;
+            this.state.size = pending.baseline?.size ?? null;
+            this.state.lastModified = pending.baseline?.lastModified ?? null;
+        }
         this.folderColorState.setActiveLibrary(
             libraryId,
             folderPaths,
@@ -121,6 +152,8 @@ export default class LibrarySettingsCoordinator {
         );
         this.#cachePresentations(presentationCacheMode);
         this.#render();
+        this.#rememberPending();
+        this.scheduleAutosave();
 
         return true;
     }
@@ -141,12 +174,18 @@ export default class LibrarySettingsCoordinator {
             previousStatus.saving ||
             previousStatus.reloading
         ) {
+            if (libraryId === this.libraryId && isCurrent?.()) {
+                this.rootHandle = rootHandle;
+                this.generation = generation;
+                this.isCurrentLibrary = isCurrent;
+                await this.flushAutosave();
+            }
             return Object.freeze({
                 applied: true,
                 stale: false,
                 skipped: true,
-                source: previousStatus.source,
-                sourceChanged: false,
+                source: this.state.getStatus().source,
+                sourceChanged: previousStatus.source !== this.state.getStatus().source,
                 colorsChanged: false,
                 libraryId
             });
@@ -198,11 +237,89 @@ export default class LibrarySettingsCoordinator {
 
     markDirty() {
 
-        this.state.markDirty(
+        const activeId = this.folderColorState.activeLibraryId;
+        if (activeId && activeId !== this.libraryId) {
+            this.#rememberPending();
+            clearTimeout(this.autosaveTimer);
+            this.state.reset();
+            this.state.fileExists = null; // provisional: no verified disk baseline yet
+            this.libraryId = activeId;
+            this.rootHandle = null;
+            this.isCurrentLibrary = () => false;
+        }
+        const changed = this.state.markDirty(
             this.folderColorState.getExplicitColors(),
             this.folderColorState.getFolderPaths()
         );
+        if (!changed) return false;
+        this.#rememberPending();
         this.#render();
+        this.scheduleAutosave();
+        return true;
+    }
+
+    scheduleAutosave() {
+        clearTimeout(this.autosaveTimer);
+        if (!this.state.getStatus().dirty && !this.state.canMigrate()) return;
+        this.autosaveTimer = setTimeout(() => void this.flushAutosave(), this.debounceMs);
+    }
+
+    flushAutosave() {
+        clearTimeout(this.autosaveTimer);
+        if (this.autosavePromise) return this.autosavePromise;
+        this.autosavePromise = this.#autosave().catch(error => {
+            console.warn("Shared settings autosave failed", error);
+            this.#rememberPending();
+            return { status: "failed", errorCode: "write-failed" };
+        }).finally(() => { this.autosavePromise = null; });
+        return this.autosavePromise;
+    }
+
+    async #autosave() {
+        const status = this.state.getStatus();
+        const root = this.rootHandle;
+        const current = this.#createCurrentGuard();
+        if (status.dirty && status.status === "invalid" && current()) {
+            if (!this.panel?.isConflictOpen?.()) this.panel?.openConflict?.({ invalid: true });
+            return { status: "recovery-required" };
+        }
+        if ((!status.dirty && !this.state.canMigrate()) || status.saving ||
+            status.reloading || status.saveStatus === "conflict" ||
+            status.status === "invalid" || !root || root.provisional === true ||
+            !current()) return { status: "pending" };
+        let permission;
+        try { permission = await root.queryPermission?.({ mode: "readwrite" }); }
+        catch { permission = "denied"; }
+        if (!current() || root !== this.rootHandle) return { status: "stale" };
+        if (permission !== "granted") {
+            this.state.saveStatus = permission === "denied" ? "permission-denied" : "pending";
+            this.#rememberPending();
+            this.#render();
+            return { status: "pending" };
+        }
+        const result = await this.#startSave(
+            this.state.canMigrate() ? "migration" : "save", "require-match", true);
+        this.#rememberPending();
+        if (result.status === "saved" && this.state.getStatus().dirty) this.scheduleAutosave();
+        return result;
+    }
+
+    #rememberPending() {
+        if (!this.libraryId) return;
+        const status = this.state.getStatus();
+        if (status.status === "loading") return;
+        if (status.dirty) {
+            this.pending[this.libraryId] = {
+                snapshot: this.state.getSnapshot(),
+                baseline: { fileExists: status.fileExists, fingerprint: status.fingerprint,
+                    size: status.size, lastModified: status.lastModified }
+            };
+        } else delete this.pending[this.libraryId];
+        try {
+            const value = JSON.stringify(this.pending);
+            if (this.storage?.getItem("trailbook.pendingSharedSettings") !== value)
+                this.storage?.setItem("trailbook.pendingSharedSettings", value);
+        } catch (error) { console.warn("Shared settings pending cache write failed", error); }
     }
 
     reconcileFolderPaths(folderPaths) {
@@ -298,6 +415,7 @@ export default class LibrarySettingsCoordinator {
             }
 
             this.#projectFolderColors(oldPaths);
+            this.#rememberPending();
             this.#render();
 
             return { status: "reloaded", errorCode: result.errorCode };
@@ -331,6 +449,12 @@ export default class LibrarySettingsCoordinator {
         );
     }
 
+    async prepareLibrarySwitch() {
+        await this.flushAutosave();
+        this.#rememberPending();
+        return this.canSwitchLibrary();
+    }
+
     isSaving() {
 
         const status = this.state.getStatus();
@@ -338,7 +462,7 @@ export default class LibrarySettingsCoordinator {
         return status.saving || status.reloading;
     }
 
-    async #startSave(operation, conflictPolicy) {
+    async #startSave(operation, conflictPolicy, automatic = false) {
 
         const saveRequestId = operation === "migration"
             ? this.state.beginMigration()
@@ -353,13 +477,13 @@ export default class LibrarySettingsCoordinator {
         this.setSaveInteraction(true);
 
         try {
-            return await this.#performSave(saveRequestId, conflictPolicy);
+            return await this.#performSave(saveRequestId, conflictPolicy, automatic);
         } finally {
             this.setSaveInteraction(false);
         }
     }
 
-    async #performSave(saveRequestId, conflictPolicy) {
+    async #performSave(saveRequestId, conflictPolicy, automatic) {
 
         const shouldContinue = this.#createCurrentGuard();
 
@@ -369,7 +493,11 @@ export default class LibrarySettingsCoordinator {
             baseline: this.state.getStatus(),
             snapshot: this.state.getSnapshot(),
             conflictPolicy,
+            allowPermissionRequest: !automatic,
             shouldContinue
+        }).catch(error => {
+            console.warn("Shared settings write failed", error);
+            return { status: "failed", errorCode: "write-failed" };
         });
 
         if (!shouldContinue() || !this.state.isCurrentSave(saveRequestId)) {
@@ -378,7 +506,7 @@ export default class LibrarySettingsCoordinator {
 
         if (result.status === "saved") {
             this.state.applySaveSuccess(saveRequestId, result.loadResult);
-            this.#cachePresentations("replace");
+            if (!this.state.getStatus().dirty) this.#cachePresentations("replace");
         } else if (CONFLICT_ERRORS.has(result.errorCode)) {
             this.state.markConflict(saveRequestId, result.errorCode);
         } else {
@@ -386,6 +514,7 @@ export default class LibrarySettingsCoordinator {
         }
 
         this.#render();
+        this.#rememberPending();
 
         if (this.state.getStatus().saveStatus === "conflict") {
             this.panel?.openConflict?.({

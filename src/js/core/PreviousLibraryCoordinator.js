@@ -127,7 +127,7 @@ export default class PreviousLibraryCoordinator {
 
     async openManual() {
 
-        if (!this.canSwitchLibrary()) {
+        if (!await this.canSwitchLibrary()) {
             return false;
         }
 
@@ -161,7 +161,7 @@ export default class PreviousLibraryCoordinator {
 
         const handle = this.previousHandle ?? await this.store.load();
 
-        if (!handle || !this.canSwitchLibrary()) {
+        if (!handle || !await this.canSwitchLibrary()) {
             return false;
         }
 
@@ -303,7 +303,7 @@ export default class PreviousLibraryCoordinator {
 
     async #openHandle(handle, { remember }) {
 
-        if (!this.canSwitchLibrary()) {
+        if (!await this.canSwitchLibrary()) {
             return false;
         }
 

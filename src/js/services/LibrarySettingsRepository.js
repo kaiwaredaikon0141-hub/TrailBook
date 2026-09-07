@@ -221,6 +221,7 @@ export default class LibrarySettingsRepository {
         baseline,
         snapshot,
         conflictPolicy = "require-match",
+        allowPermissionRequest = true,
         shouldContinue = () => true
     } = {}) {
 
@@ -235,7 +236,7 @@ export default class LibrarySettingsRepository {
             });
         }
 
-        const permission = await this.#ensureWritePermission(rootHandle);
+        const permission = await this.#ensureWritePermission(rootHandle, allowPermissionRequest);
 
         if (permission !== "granted") {
             return createSaveResult({
@@ -386,7 +387,7 @@ export default class LibrarySettingsRepository {
         });
     }
 
-    async #ensureWritePermission(rootHandle) {
+    async #ensureWritePermission(rootHandle, allowPermissionRequest) {
 
         try {
             if (typeof rootHandle?.queryPermission !== "function") {
@@ -400,6 +401,7 @@ export default class LibrarySettingsRepository {
             if (permission === "granted") {
                 return permission;
             }
+            if (!allowPermissionRequest) return permission;
 
             if (typeof rootHandle.requestPermission !== "function") {
                 return permission === "denied" ? "denied" : "failed";

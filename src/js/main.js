@@ -311,7 +311,7 @@ window.addEventListener("DOMContentLoaded", () => {
         canSwitchLibrary: () =>
             !editor.isBusy() &&
             !batchSimplification.isBusy() &&
-            app.librarySettingsCoordinator.canSwitchLibrary(),
+            app.librarySettingsCoordinator.prepareLibrarySwitch(),
         flushViewState: () => app.viewStateCoordinator.flush(),
         beforeLoad: () => {
             app.displaySnapshotCoordinator.beginPhaseB();

@@ -482,6 +482,7 @@ async function testCoordinator() {
         setSaveInteraction: busy => saveInteractions.push(busy)
     });
     coordinator.setPanel(panel);
+    assert(coordinator.debounceMs === 500, "production autosave debounce changed");
     const context = await coordinator.load({}, {
         generation: 1,
         isCurrent: () => true
@@ -510,6 +511,7 @@ async function testCoordinator() {
     assert(panelStates.some(state => state.saving), "saving UI state missing");
     assert(panelStates.at(-1).saveStatus === "saved", "saved UI state missing");
 
+    folderColorState.getExplicitColors = () => ({ car: "#333333" });
     coordinator.markDirty();
     repository.save = async () => ({
         status: "permission-denied",
@@ -529,6 +531,158 @@ async function testCoordinator() {
     assert(coordinator.state.getStatus().saveStatus === "conflict", "Coordinator conflict state");
 }
 
+async function testAutosave() {
+    const pause = () => new Promise(resolve => setTimeout(resolve, 40));
+    async function harness(root, legacy = {}, storage = null) {
+        let colors = {};
+        const eventTarget = () => ({
+            listeners: new Map(),
+            addEventListener(type, callback) { this.listeners.set(type, callback); },
+            dispatchEvent(event) { this.listeners.get(event.type)?.(event); }
+        });
+        const lifecycle = eventTarget();
+        const documentObject = eventTarget();
+        const coordinator = new LibrarySettingsCoordinator({
+            config: Config.sharedLibrarySettings, debounceMs: 15, storage,
+            lifecycleTarget: lifecycle, documentObject,
+            displaySettingsStore: { getFolderColors: () => legacy, setActiveLibrary() {} },
+            folderColorState: {
+                setActiveLibrary(_id, _paths, value) { colors = { ...value }; },
+                getExplicitColors: () => colors,
+                getFolderPaths: () => ["", "car"]
+            }
+        });
+        const context = await coordinator.load(root, { generation: 1, isCurrent: () => true });
+        coordinator.applyLoad(context, { libraryId: "root-name:auto", folderPaths: ["", "car"] });
+        return { coordinator, lifecycle, documentObject,
+            edit(color) { colors = { car: color }; return coordinator.markDirty(); } };
+    }
+    const root = createMemoryRoot();
+    const h = await harness(root);
+    h.edit("#222222");
+    assert(h.coordinator.state.getStatus().dirty, "autosave was not immediately dirty");
+    await pause(); await h.coordinator.flushAutosave();
+    assert(root.state.writeCalls === 1 && !h.coordinator.state.getStatus().dirty,
+        "debounced missing file creation did not clear dirty");
+    assert(JSON.parse(root.state.content).settings.folderColors.car === "#222222", "saved color wrong");
+    for (let i = 0; i < 10; i++) h.edit(`#00000${i}`);
+    await pause(); await h.coordinator.flushAutosave();
+    assert(root.state.writeCalls === 2, "10 edits did not coalesce into one write");
+    assert(h.edit("#000009") === false, "identical edit was dirty");
+    await h.coordinator.flushAutosave();
+    assert(root.state.writeCalls === 2, "identical settings wrote a file");
+
+    for (const permission of ["prompt", "denied"]) {
+        const blocked = createMemoryRoot({ permission });
+        const b = await harness(blocked);
+        b.edit("#123456");
+        await b.coordinator.flushAutosave();
+        assert(blocked.state.requestCalls === 0 && blocked.state.writeCalls === 0 &&
+            b.coordinator.state.getStatus().dirty, `${permission} lost dirty or requested permission`);
+        await blocked.requestPermission({ mode: "readwrite" }); // explicit user operation
+        await b.coordinator.reconcileActual(blocked, {
+            libraryName: "auto", folderPaths: ["", "car"], generation: 1, isCurrent: () => true
+        });
+        assert(blocked.state.writeCalls === 1 && !b.coordinator.state.getStatus().dirty,
+            "explicit granted operation did not resume autosave");
+    }
+    const conflictRoot = createMemoryRoot({ content: documentText({ car: "#111111" }) });
+    const c = await harness(conflictRoot);
+    c.edit("#222222");
+    conflictRoot.state.content = documentText({ car: "#333333" });
+    await c.coordinator.flushAutosave();
+    assert(c.coordinator.state.getStatus().dirty && conflictRoot.state.writeCalls === 0 &&
+        c.coordinator.state.getStatus().saveStatus === "conflict", "conflict overwrote local or disk");
+    const verifyRoot = createMemoryRoot({ tamperAfterClose: documentText({ car: "#777777" }) });
+    const v = await harness(verifyRoot);
+    v.edit("#123456");
+    await v.coordinator.flushAutosave();
+    assert(v.coordinator.state.getStatus().dirty &&
+        v.coordinator.state.getStatus().saveErrorCode === "verification-failed", "verification cleared dirty");
+
+    const migrationRoot = createMemoryRoot();
+    const m = await harness(migrationRoot, { car: "#123456" });
+    await pause(); await m.coordinator.flushAutosave();
+    assert(migrationRoot.state.writeCalls === 1, "legacy migration did not autosave");
+    const raceRoot = createMemoryRoot();
+    let queries = 0;
+    raceRoot.queryPermission = async () => ++queries === 1 ? "granted" : "prompt";
+    const race = await harness(raceRoot);
+    race.edit("#123456");
+    await race.coordinator.flushAutosave();
+    assert(raceRoot.state.requestCalls === 0 && raceRoot.state.writeCalls === 0 &&
+        race.coordinator.state.getStatus().dirty, "permission race opened an automatic prompt");
+    h.edit("#444444"); h.lifecycle.dispatchEvent({ type: "pagehide" });
+    await h.coordinator.flushAutosave();
+    assert(root.state.writeCalls === 3, "pagehide did not flush");
+    h.edit("#555555"); h.documentObject.visibilityState = "hidden";
+    h.documentObject.dispatchEvent({ type: "visibilitychange" });
+    await h.coordinator.flushAutosave();
+    assert(root.state.writeCalls === 4, "hidden did not flush");
+    h.edit("#666666");
+    assert(await h.coordinator.prepareLibrarySwitch(), "switch failed to flush pending save");
+    assert(root.state.writeCalls === 5, "switch did not flush exactly once");
+
+    const delayedRoot = createMemoryRoot();
+    const d = await harness(delayedRoot);
+    const originalSave = d.coordinator.repository.save.bind(d.coordinator.repository);
+    let release;
+    d.coordinator.repository.save = async (...args) => {
+        await new Promise(resolve => { release = resolve; });
+        return originalSave(...args);
+    };
+    d.edit("#111111"); const first = d.coordinator.flushAutosave();
+    while (!release) await Promise.resolve();
+    d.edit("#222222"); release(); await first;
+    assert(d.coordinator.state.getStatus().dirty &&
+        d.coordinator.state.getSnapshot().folderColors.car === "#222222",
+    "edit during write was lost");
+    d.coordinator.repository.save = originalSave;
+    await d.coordinator.flushAutosave();
+    assert(JSON.parse(delayedRoot.state.content).settings.folderColors.car === "#222222" &&
+        delayedRoot.state.writeCalls === 2, "latest edit not persisted after in-flight save");
+    const android = await harness(root);
+    assert(android.coordinator.state.getStatus().source === "shared-json" &&
+        android.coordinator.state.getSnapshot().folderColors.car === "#666666",
+    "second device did not load PC shared settings");
+    const savedValues = new Map();
+    const storage = { getItem: key => savedValues.get(key) ?? null,
+        setItem: (key, value) => savedValues.set(key, value) };
+    const pendingRoot = createMemoryRoot({ permission: "prompt" });
+    const pending = await harness(pendingRoot, {}, storage);
+    pending.edit("#654321");
+    await pending.coordinator.flushAutosave();
+    const restarted = await harness(pendingRoot, {}, storage);
+    assert(restarted.coordinator.state.getStatus().dirty &&
+        restarted.coordinator.state.getSnapshot().folderColors.car === "#654321",
+    "restart lost locally pending edits");
+    const temporaryRoot = createMemoryRoot();
+    const temporaryContext = await restarted.coordinator.load(temporaryRoot,
+        { generation: 2, isCurrent: () => true });
+    restarted.coordinator.applyLoad(temporaryContext,
+        { libraryId: "root-name:temporary", folderPaths: ["", "car"] });
+    await restarted.coordinator.flushAutosave();
+    assert(temporaryRoot.state.writeCalls === 0, "pending write targeted the switched Library");
+    const returnContext = await restarted.coordinator.load(pendingRoot,
+        { generation: 3, isCurrent: () => true });
+    restarted.coordinator.applyLoad(returnContext,
+        { libraryId: "root-name:auto", folderPaths: ["", "car"] });
+    assert(restarted.coordinator.state.getStatus().dirty &&
+        restarted.coordinator.state.getSnapshot().folderColors.car === "#654321",
+    "A to B to A lost pending settings");
+    await pendingRoot.requestPermission({ mode: "readwrite" });
+    await restarted.coordinator.flushAutosave();
+    assert(!restarted.coordinator.state.getStatus().dirty && pendingRoot.state.writeCalls === 1,
+        "restored pending edit failed to save");
+    const otherRoot = createMemoryRoot();
+    const context = await restarted.coordinator.load(otherRoot, { generation: 2, isCurrent: () => true });
+    restarted.coordinator.applyLoad(context, { libraryId: "root-name:other", folderPaths: ["", "car"] });
+    await restarted.coordinator.flushAutosave();
+    assert(otherRoot.state.writeCalls === 0 && !restarted.coordinator.state.getStatus().dirty,
+        "old Library pending settings leaked into new Library");
+    clearTimeout(pending.coordinator.autosaveTimer);
+}
+
 export async function runSharedLibrarySettingsSaveTests() {
 
     await testSerialization();
@@ -537,6 +691,7 @@ export async function runSharedLibrarySettingsSaveTests() {
     await testConflicts();
     testState();
     await testCoordinator();
+    await testAutosave();
 
     return { assertions };
 }
