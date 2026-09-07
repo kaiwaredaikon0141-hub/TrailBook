@@ -73,7 +73,7 @@ export async function pickFolder(browserWindow = window) {
         throw error;
     }
 
-    return browserWindow.showDirectoryPicker({ mode: "read" });
+    return browserWindow.showDirectoryPicker({ mode: "readwrite" });
 }
 
 /**

@@ -76,26 +76,77 @@ export default class FolderColorState {
 
         if (
             !this.activeLibraryId ||
-            !this.folderPaths.has(folderPath) ||
-            !this.store?.setFolderColor(
-                this.activeLibraryId,
-                folderPath,
-                color
-            )
+            !this.folderPaths.has(folderPath)
         ) {
             return false;
         }
 
-        const normalizedColor = this.store.getFolderColor(
-            this.activeLibraryId,
-            folderPath
-        );
+        const normalizedColor = (() => {
+            if (typeof color !== "string") {
+                return null;
+            }
+
+            const normalized = color.trim();
+            const match = normalized.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+
+            if (!match) {
+                return null;
+            }
+
+            const hex = match[1];
+
+            return `#${(
+                hex.length === 3
+                    ? [...hex].map(character => character.repeat(2)).join("")
+                    : hex
+            ).toUpperCase()}`;
+        })();
 
         if (!normalizedColor) {
             return false;
         }
 
-        this.explicitColors.set(folderPath, normalizedColor);
+        const currentStoredColor = this.store?.getFolderColor(
+            this.activeLibraryId,
+            folderPath
+        );
+        const currentExplicitColor = this.getExplicitColor(folderPath);
+
+        if (currentStoredColor === normalizedColor) {
+            if (currentExplicitColor !== normalizedColor) {
+                this.explicitColors.set(folderPath, normalizedColor);
+            }
+            return true;
+        }
+
+        const storeResult = this.store?.setFolderColor(
+            this.activeLibraryId,
+            folderPath,
+            color
+        );
+
+        if (!storeResult) {
+            const storeColor = this.store?.getFolderColor(
+                this.activeLibraryId,
+                folderPath
+            );
+            if (storeColor === normalizedColor) {
+                this.explicitColors.set(folderPath, storeColor);
+                return true;
+            }
+            return false;
+        }
+
+        const storedColor = this.store.getFolderColor(
+            this.activeLibraryId,
+            folderPath
+        );
+
+        if (!storedColor) {
+            return false;
+        }
+
+        this.explicitColors.set(folderPath, storedColor);
 
         return true;
     }
