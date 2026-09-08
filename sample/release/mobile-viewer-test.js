@@ -2,6 +2,7 @@ import TrackInfoView from "../../src/js/ui/TrackInfoView.js";
 import ViewStateControls from "../../src/js/ui/ViewStateControls.js";
 import Toolbar from "../../src/js/ui/Toolbar.js";
 import LibraryAccessPanel from "../../src/js/ui/LibraryAccessPanel.js";
+import LibraryDiagnosticsPanel from "../../src/js/ui/LibraryDiagnosticsPanel.js";
 import FolderColorControl from "../../src/js/ui/FolderColorControl.js";
 import DisplayState from "../../src/js/state/DisplayState.js";
 
@@ -108,11 +109,20 @@ function createMobileSidebarProbe(trackCount = 1122) {
     drive.innerHTML = "<button>別のGoogle Drive Libraryに直接接続</button>" +
         '<p class="drive-library-description">TrailBookからGoogle Driveへ接続</p>' +
         '<p class="drive-library-status">Drive Library: 1122 GPX</p>';
-    const diagnostic = document.createElement("details");
+    const refreshDiagnostic = document.createElement("details");
+    const fastRestoreDiagnostic = document.createElement("details");
+    const previousLibraryStatus = document.createElement("small");
+    const diagnosticsPanel = new LibraryDiagnosticsPanel();
 
-    diagnostic.className = "library-refresh-diagnostic";
-    diagnostic.innerHTML = "<summary>Library Refresh</summary><pre>diagnostic</pre>";
-    fixed.append(search, modes, drive, diagnostic);
+    refreshDiagnostic.className = "library-refresh-diagnostic";
+    refreshDiagnostic.innerHTML =
+        "<summary>Library Refresh</summary><pre>diagnostic</pre>";
+    fastRestoreDiagnostic.className = "fast-restore-diagnostic";
+    fastRestoreDiagnostic.innerHTML =
+        "<summary>Fast Restore</summary><pre>diagnostic</pre>";
+    previousLibraryStatus.className = "previous-library-status";
+    previousLibraryStatus.textContent = "Previous Library: saved / prompt";
+    fixed.append(search, modes, drive);
     sidebar.className = "sidebar";
     tree.className = "tree-root";
 
@@ -134,11 +144,17 @@ function createMobileSidebarProbe(trackCount = 1122) {
     sidebar.append(tree);
     buildInfo.className = "trailbook-build-info";
     buildInfo.textContent = "TrailBook v1.8.0 · testbuild";
-    shell.append(close, fixed, sidebar, buildInfo);
+    diagnosticsPanel.appendBuildInfo(buildInfo);
+    diagnosticsPanel.attachPreviousLibrary(previousLibraryStatus);
+    diagnosticsPanel.attachFastRestore(fastRestoreDiagnostic);
+    diagnosticsPanel.attachLibraryRefresh(refreshDiagnostic);
+    shell.append(close, fixed, sidebar, diagnosticsPanel.element);
     document.body.append(shell);
     return {
-        shell, close, fixed, search, modes, drive, diagnostic,
-        sidebar, tree, buildInfo
+        shell, close, fixed, search, modes, drive,
+        diagnostic: diagnosticsPanel.disclosure,
+        diagnosticsPanel, refreshDiagnostic, fastRestoreDiagnostic,
+        previousLibraryStatus, sidebar, tree, buildInfo
     };
 }
 
@@ -331,17 +347,15 @@ async function run() {
         themeCss.includes("max-height:28dvh"),
     "mobile Search disclosure or active-filter presentation is missing");
     assert(themeCss.includes(
-        ".sidebar-shell:has(.library-refresh-diagnostic[open])"
+        ".sidebar-shell:has(.library-diagnostics-disclosure[open])"
     ) && themeCss.includes("overflow-y:visible") &&
         !themeCss.includes("max-height:min(42dvh, 360px)") &&
         !themeCss.includes("overscroll-behavior:contain") &&
         !themeCss.includes("touch-action:pan-y"),
     "mobile Library refresh diagnostic still owns a nested scroll area");
     assert(accessPanelSource.includes(
-        'matchMedia?.("(max-width:768px)").matches !== true'
-    ) && accessPanelSource.includes(
         '<details class="fast-restore-diagnostic library-refresh-diagnostic">'
-    ), "mobile Library refresh diagnostic is not collapsed by default");
+    ), "Library refresh diagnostic wiring was removed");
     assert(themeCss.includes("body.is-driving-mode .map-toolbar") &&
         !themeCss.includes("body.is-driving-mode .mobile-map-controls"),
     "driving mode hides the required mobile Map toggles");
@@ -769,7 +783,10 @@ async function run() {
 
     if (matchMedia("(max-width:768px)").matches) {
         const probe = createMobileSidebarProbe();
-        const flow = [probe.close, probe.fixed, probe.sidebar, probe.buildInfo]
+        const flow = [
+            probe.close, probe.fixed, probe.sidebar,
+            probe.diagnosticsPanel.element
+        ]
             .map(element => element.getBoundingClientRect());
         const row = probe.tree.querySelector(".tree-row");
         const label = row.querySelector(".tree-label").getBoundingClientRect();
@@ -796,17 +813,21 @@ async function run() {
             getComputedStyle(probe.sidebar).overflowY === "auto",
         "mobile shell or dedicated Tree scrolling contract is inactive");
         assert(!probe.diagnostic.open,
-            "mobile Library refresh diagnostic is not collapsed by default");
+            "mobile Library diagnostics are not collapsed by default");
+        assert(probe.refreshDiagnostic.open && probe.fastRestoreDiagnostic.open &&
+            probe.diagnosticsPanel.element.contains(probe.buildInfo) &&
+            probe.diagnosticsPanel.element.contains(probe.previousLibraryStatus),
+        "collapsed Library diagnostics did not retain all diagnostic blocks");
         probe.diagnostic.open = true;
         assert(getComputedStyle(probe.shell).overflowY === "auto" &&
             getComputedStyle(probe.sidebar).overflowY === "visible",
-        "expanded diagnostic did not move scrolling to the mobile sidebar");
+        "expanded diagnostics did not move scrolling to the mobile sidebar");
         probe.diagnostic.open = false;
         assert(!probe.search.querySelector(".search-disclosure").open,
             "mobile Search probe was not collapsed by default");
-        assert(probe.buildInfo.getBoundingClientRect().top >=
+        assert(probe.diagnosticsPanel.element.getBoundingClientRect().top >=
             probe.sidebar.getBoundingClientRect().bottom - 1,
-        "BuildInfo overlaps the mobile Folder Tree");
+        "Library diagnostics overlap the mobile Folder Tree");
         probe.shell.remove();
     }
 

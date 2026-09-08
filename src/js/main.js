@@ -16,6 +16,7 @@ import {
     createBuildInfoElement,
     resolveBuildInfoElements
 } from "./ui/BuildInfoView.js";
+import LibraryDiagnosticsPanel from "./ui/LibraryDiagnosticsPanel.js";
 
 window.addEventListener("DOMContentLoaded", () => {
 
@@ -31,8 +32,8 @@ window.addEventListener("DOMContentLoaded", () => {
     app.trackDiscoveryCoordinator.sidebarShell
         ?.querySelector(".sidebar-fixed-controls")
         ?.append(app.mapView.sidebarDisplayControls);
+    const libraryDiagnostics = new LibraryDiagnosticsPanel();
     const buildInfo = createBuildInfoElement();
-    app.trackDiscoveryCoordinator.sidebarShell?.append(buildInfo);
     const mapBuildInfo = createBuildInfoElement({
         compact: true,
         mapIndicator: true
@@ -48,8 +49,20 @@ window.addEventListener("DOMContentLoaded", () => {
     if (developmentBuildInfo && !developmentBuildInfo.isConnected) {
         developmentBuildInfo.id = "trailbook-development-build-info";
         developmentBuildInfo.classList.add("trailbook-development-build-info");
-        document.body.append(developmentBuildInfo);
     }
+    libraryDiagnostics.appendBuildInfo(buildInfo, developmentBuildInfo);
+    libraryDiagnostics.attachPreviousLibrary(
+        app.libraryAccessPanel.previousLibraryStatus
+    );
+    libraryDiagnostics.attachFastRestore(
+        app.displaySnapshotCoordinator.diagnosticElement
+    );
+    libraryDiagnostics.attachLibraryRefresh(
+        app.libraryAccessPanel.libraryRefreshDiagnostic
+    );
+    app.trackDiscoveryCoordinator.sidebarShell?.append(
+        libraryDiagnostics.element
+    );
 
     const currentPosition = new CurrentPositionController({
         mapView: app.mapView,

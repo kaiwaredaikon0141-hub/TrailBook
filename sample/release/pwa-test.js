@@ -13,6 +13,7 @@ import {
     resolveBuildInfoElements,
     updateBuildInfoElement
 } from "../../src/js/ui/BuildInfoView.js";
+import LibraryDiagnosticsPanel from "../../src/js/ui/LibraryDiagnosticsPanel.js";
 
 const output = document.getElementById("result");
 let assertions = 0;
@@ -20,6 +21,43 @@ let assertions = 0;
 function assert(condition, message) {
     assertions += 1;
     if (!condition) throw new Error(message);
+}
+
+function testLibraryDiagnosticsPanel() {
+
+    const panel = new LibraryDiagnosticsPanel();
+    const build = createBuildInfoElement({
+        config: Config,
+        runtimeBuild: { commit: "431fb68cbe81145f" },
+        locationObject: { hostname: "example.github.io" }
+    });
+    const previous = document.createElement("small");
+    const fastRestore = document.createElement("details");
+    const refresh = document.createElement("details");
+
+    previous.className = "previous-library-status";
+    previous.textContent = "Previous Library: saved / prompt";
+    fastRestore.className = "fast-restore-diagnostic";
+    fastRestore.innerHTML =
+        "<summary>Fast Restore</summary><pre>snapshot: found</pre>";
+    refresh.className = "library-refresh-diagnostic";
+    refresh.innerHTML =
+        "<summary>Library Refresh</summary><pre>permission: prompt</pre>";
+    panel.appendBuildInfo(build);
+    panel.attachPreviousLibrary(previous);
+    panel.attachFastRestore(fastRestore);
+    panel.attachLibraryRefresh(refresh);
+
+    assert(!panel.disclosure.open,
+        "Library diagnostics are not initially collapsed");
+    assert(panel.element.textContent.includes("About / Diagnostics") &&
+        panel.element.textContent.includes("Build / Runtime") &&
+        panel.element.textContent.includes("Previous Library") &&
+        panel.element.textContent.includes("snapshot: found") &&
+        panel.element.textContent.includes("permission: prompt"),
+    "Library diagnostics did not collect the existing diagnostic content");
+    assert(fastRestore.open && refresh.open,
+        "Library diagnostic subsections are hidden after disclosure opens");
 }
 
 function waitForActivation(registration) {
@@ -259,8 +297,15 @@ async function testManifestAndAssets() {
     const mainSource = await fetch(new URL(
         "../../src/js/main.js", location.href
     )).then(response => response.text());
-    assert(mainSource.includes("trailbook-development-build-info"),
-        "localhost fixed build diagnostic is not attached");
+    assert(mainSource.includes("trailbook-development-build-info") &&
+        mainSource.includes("new LibraryDiagnosticsPanel") &&
+        mainSource.includes("libraryDiagnostics.appendBuildInfo") &&
+        mainSource.includes("libraryDiagnostics.attachPreviousLibrary") &&
+        mainSource.includes("libraryDiagnostics.attachFastRestore") &&
+        mainSource.includes("libraryDiagnostics.attachLibraryRefresh") &&
+        mainSource.includes("libraryDiagnostics.element") &&
+        !mainSource.includes("document.body.append(developmentBuildInfo)"),
+    "Library diagnostics are not collected at the bottom of the sidebar");
     assert(mainSource.includes("mapBuildInfo") &&
         mainSource.includes("mapIndicator: true") &&
         !/["'][0-9a-f]{8}["']/.test(mainSource),
@@ -279,9 +324,10 @@ async function testManifestAndAssets() {
     const themeSource = await fetch(new URL(
         "../../src/css/theme.css", location.href
     )).then(response => response.text());
-    assert(themeSource.includes(".trailbook-development-build-info") &&
-        themeSource.includes("position:fixed"),
-    "localhost fixed build diagnostic CSS missing");
+    assert(themeSource.includes(
+        ".library-diagnostics-panel .trailbook-development-build-info"
+    ) && themeSource.includes("position:static"),
+    "localhost build detail is not contained by Library diagnostics");
     assert(themeSource.includes(".map-build-indicator") &&
         themeSource.includes("pointer-events:none") &&
         themeSource.includes("bottom:max(130px") &&
@@ -628,7 +674,7 @@ async function testServiceWorkerCache() {
         new URL(request.url).pathname.includes("/js/") &&
         new URL(request.url).pathname.endsWith(".js")
     );
-    assert(cachedModules.length === 118,
+    assert(cachedModules.length === 119,
         `production module graph not precached: ${cachedModules.length}`);
     assert(!cachedRequests.some(request => request.url.endsWith(".gpx")),
         "GPX entered app shell cache");
@@ -655,6 +701,7 @@ async function testServiceWorkerCache() {
 }
 
 try {
+    testLibraryDiagnosticsPanel();
     await testManifestAndAssets();
     await testRegistrationContract();
     await testServiceWorkerCache();
