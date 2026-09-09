@@ -112,6 +112,18 @@ export default class LibraryDiscoveryIndexService {
         this.buildPromise = null;
     }
 
+    clear() {
+
+        this.cancel();
+        this.generation += 1;
+        this.fileEntries = [];
+        this.entries.clear();
+        this.failures.clear();
+        this.entryPromises.clear();
+        this.entryVersions.clear();
+        this.status = "idle";
+    }
+
     getStatus() {
 
         return this.status;

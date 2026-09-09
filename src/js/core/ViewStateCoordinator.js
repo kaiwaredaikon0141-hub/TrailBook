@@ -14,6 +14,7 @@ export default class ViewStateCoordinator {
         displayState,
         displayQueue,
         selectionState,
+        resetPresentation = () => {},
         debounceMs = 750,
         setTimer = globalThis.setTimeout.bind(globalThis),
         clearTimer = globalThis.clearTimeout.bind(globalThis)
@@ -26,6 +27,7 @@ export default class ViewStateCoordinator {
         this.displayState = displayState;
         this.displayQueue = displayQueue;
         this.selectionState = selectionState;
+        this.resetPresentation = resetPresentation;
         this.debounceMs = debounceMs;
         this.setTimer = setTimer;
         this.clearTimer = clearTimer;
@@ -176,6 +178,17 @@ export default class ViewStateCoordinator {
             restoring: this.restoring,
             resetBlocked: this.resetBlocked
         };
+    }
+
+    detachLibrary() {
+
+        this.#cancelTimer();
+        this.restoreRequestId += 1;
+        this.pendingSave = false;
+        this.restoring = false;
+        this.activeLibraryId = null;
+        this.activeLibraryGeneration = null;
+        this.isCurrentLibrary = () => false;
     }
 
     #bindEvents() {
@@ -355,6 +368,7 @@ export default class ViewStateCoordinator {
         }
 
         this.resetBlocked = true;
+        this.resetPresentation();
         this.controls.setStoredStateAvailable(false);
 
         return true;

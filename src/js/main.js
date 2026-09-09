@@ -7,6 +7,9 @@ import BatchSimplificationCoordinator, {
 } from "./core/BatchSimplificationCoordinator.js";
 import EditedGPXLibraryRefreshCoordinator from "./core/EditedGPXLibraryRefreshCoordinator.js";
 import LibraryRefreshCoordinator from "./core/LibraryRefreshCoordinator.js";
+import LibraryCacheResetCoordinator, {
+    clearLibraryRuntime
+} from "./core/LibraryCacheResetCoordinator.js";
 import TrackEditingCoordinator from "./core/TrackEditingCoordinator.js";
 import TrackSourceResolver from "./core/TrackSourceResolver.js";
 import SelectedTrackFileResolver from "./services/SelectedTrackFileResolver.js";
@@ -17,6 +20,7 @@ import {
     resolveBuildInfoElements
 } from "./ui/BuildInfoView.js";
 import LibraryDiagnosticsPanel from "./ui/LibraryDiagnosticsPanel.js";
+import LibraryMaintenancePanel from "./ui/LibraryMaintenancePanel.js";
 
 window.addEventListener("DOMContentLoaded", () => {
 
@@ -33,6 +37,9 @@ window.addEventListener("DOMContentLoaded", () => {
         ?.querySelector(".sidebar-fixed-controls")
         ?.append(app.mapView.sidebarDisplayControls);
     const libraryDiagnostics = new LibraryDiagnosticsPanel();
+    const libraryMaintenance = new LibraryMaintenancePanel(app.eventBus);
+
+    libraryMaintenance.attachViewStateControls(app.viewStateControls);
     const buildInfo = createBuildInfoElement();
     const mapBuildInfo = createBuildInfoElement({
         compact: true,
@@ -60,9 +67,14 @@ window.addEventListener("DOMContentLoaded", () => {
     libraryDiagnostics.attachLibraryRefresh(
         app.libraryAccessPanel.libraryRefreshDiagnostic
     );
-    app.trackDiscoveryCoordinator.sidebarShell?.append(
+    const sidebarFooter = document.createElement("div");
+
+    sidebarFooter.className = "library-sidebar-footer";
+    sidebarFooter.append(
+        libraryMaintenance.element,
         libraryDiagnostics.element
     );
+    app.trackDiscoveryCoordinator.sidebarShell?.append(sidebarFooter);
 
     const currentPosition = new CurrentPositionController({
         mapView: app.mapView,
@@ -257,6 +269,37 @@ window.addEventListener("DOMContentLoaded", () => {
         libraryRefresh.getDiagnostic()
     );
     libraryRefresh.bind();
+
+    const libraryCacheReset = new LibraryCacheResetCoordinator({
+        eventBus: app.eventBus,
+        panel: libraryMaintenance,
+        prepare: async () => {
+            await libraryRefresh.prepareCacheReset();
+            await app.librarySettingsCoordinator.prepareCacheReset();
+            await app.displaySnapshotCoordinator.prepareCacheReset();
+            app.previousLibraryCoordinator.prepareCacheReset();
+        },
+        clearers: [
+            { name: "display-snapshot", clear: () => app.displaySnapshotStore.clear() },
+            { name: "geometry-cache", clear: () => app.gpxGeometryLoader.repository.clear() },
+            { name: "previous-library", clear: () => app.previousLibraryStore.clear() },
+            { name: "folder-presentation", clear: () => app.folderPresentationCache.clear() },
+            { name: "view-state", clear: () => app.viewStateStore.clearLibraryStates() },
+            { name: "discovery-view", clear: () => app.discoveryViewStateStore.clearLibraryStates() }
+        ],
+        clearRuntime: () => {
+            app.librarySettingsCoordinator.detachForCacheReset();
+            app.viewStateCoordinator.detachLibrary();
+            app.displaySnapshotCoordinator.detachAfterCacheReset();
+            clearLibraryRuntime(app);
+            libraryRefresh.reset();
+        },
+        confirmReset: () => true,
+        setBusy: busy => app.toolbar.setFolderPickerBusy(busy),
+        onFailure: () => app.librarySettingsCoordinator.scheduleAutosave()
+    });
+
+    libraryCacheReset.bind();
 
     let batchSimplification = null;
     let driveLibrary = null;

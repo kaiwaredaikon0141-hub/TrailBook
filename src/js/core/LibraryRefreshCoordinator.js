@@ -888,6 +888,33 @@ export default class LibraryRefreshCoordinator {
         );
     }
 
+    reset() {
+
+        this.activeRefresh = null;
+        this.lastResult = null;
+        this.lastCompletedAt = -Infinity;
+        this.refreshPerformance = null;
+        this.refreshPerformanceActive = false;
+        this.#publishRefreshState({
+            permission: "unknown", hasHandle: false,
+            libraryState: "none", canManualRefresh: false,
+            cachedCount: null, scannedCount: null,
+            addedCount: null, recoveredCount: null,
+            removedCount: null, modifiedCount: null,
+            reason: "none", result: "idle", performance: null,
+            entryTrace: null, enumerationDiagnostic: null,
+            pathDifferences: Object.freeze([])
+        });
+    }
+
+    async prepareCacheReset() {
+
+        const refresh = this.activeRefresh;
+
+        if (refresh) await refresh;
+        return true;
+    }
+
     #capturePresentationDiagnostic(path) {
 
         const display = this.displayState.getDisplay(path);

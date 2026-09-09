@@ -207,6 +207,7 @@ export default class App {
             displayState: this.displayState,
             displayQueue: this.displayQueue,
             selectionState: this.selectionState,
+            resetPresentation: () => this.resetViewPresentation(),
             debounceMs: this.config.viewState.debounceMs
         });
         this.displaySnapshotCoordinator = new DisplaySnapshotCoordinator({
@@ -744,6 +745,22 @@ export default class App {
         this.scheduleRefocus();
         this.updateDisplayStatus();
         this.scheduleSearchRefresh();
+    }
+
+    resetViewPresentation() {
+
+        this.clearPresentation();
+        this.treeView.setDisplayBatch(this.displayState.getDisplays());
+        [...this.treeView.expandedPaths]
+            .filter(Boolean)
+            .sort((a, b) => b.length - a.length)
+            .forEach(path => {
+                this.treeView.collapseFolder(path);
+                this.eventBus.emit("tree:folder-expansion-changed", {
+                    path, expanded: false
+                });
+            });
+        this.searchView.setFilter({}, { emit: true });
     }
 
     setWaypointVisibility(visible) {

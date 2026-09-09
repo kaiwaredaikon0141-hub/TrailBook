@@ -455,6 +455,24 @@ export default class LibrarySettingsCoordinator {
         return this.canSwitchLibrary();
     }
 
+    async prepareCacheReset() {
+
+        clearTimeout(this.autosaveTimer);
+        this.#rememberPending();
+        if (this.autosavePromise) await this.autosavePromise;
+        this.#rememberPending();
+    }
+
+    detachForCacheReset() {
+
+        this.rootHandle = null;
+        this.libraryId = null;
+        this.folderPaths = [];
+        this.generation = null;
+        this.isCurrentLibrary = () => false;
+        this.state.reset();
+    }
+
     isSaving() {
 
         const status = this.state.getStatus();

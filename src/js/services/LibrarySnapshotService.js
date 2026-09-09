@@ -388,6 +388,21 @@ export default class LibrarySnapshotService {
         });
     }
 
+    reset() {
+
+        const wasProvisional = this.provisional;
+
+        this.provisional = false;
+        this.cacheNamespace = null;
+        this.provisionalPaths = new Set();
+        this.lastRestoreDiagnostic = Object.freeze({ status: "idle" });
+        this.accessPanel.setProvisionalLibrary(false);
+        if (wasProvisional) this.eventBus?.emit(
+            "library:provisional-state-changed",
+            { provisional: false }
+        );
+    }
+
     reconcileActual() {
         if (!this.provisional) return;
 

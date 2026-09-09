@@ -25,6 +25,11 @@ class IndexedDBGeometryAdapter {
         await this.#request("readwrite", store => store.delete(key));
     }
 
+    async clear() {
+
+        await this.#request("readwrite", store => store.clear());
+    }
+
     #open() {
 
         if (!this.indexedDB || typeof this.indexedDB.open !== "function") {
@@ -360,6 +365,16 @@ export default class GeometryCacheRepository {
 
         try {
             await this.adapter.delete(key);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    async clear() {
+
+        try {
+            await this.adapter.clear();
             return true;
         } catch {
             return false;

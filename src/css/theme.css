@@ -82,6 +82,55 @@ body{
     text-align:center;
 }
 
+.library-sidebar-footer{
+
+    min-width:0;
+
+    flex:0 0 auto;
+}
+
+.library-maintenance-panel{
+
+    min-width:0;
+
+    color:#52606d;
+
+    font-size:11px;
+}
+
+.library-maintenance-disclosure > summary{
+
+    box-sizing:border-box;
+
+    min-height:24px;
+
+    padding:5px 0;
+
+    cursor:pointer;
+}
+
+.library-maintenance-content{
+
+    padding:2px 0 6px;
+}
+
+.library-maintenance-actions{
+
+    display:grid;
+
+    gap:6px;
+}
+
+.library-maintenance-actions button{
+
+    width:100%;
+}
+
+.library-maintenance-panel .library-access-message{
+
+    margin:4px 0 0;
+}
+
 .library-diagnostics-panel{
 
     flex:0 0 auto;
@@ -2027,6 +2076,22 @@ body.is-track-info-resizing{
     }
 
     .sidebar-shell:has(.library-diagnostics-disclosure[open]) > .sidebar{
+
+        flex:0 0 auto;
+
+        min-height:auto;
+
+        overflow-x:clip;
+
+        overflow-y:visible;
+    }
+
+    .sidebar-shell:has(.library-maintenance-disclosure[open]){
+
+        overflow-y:auto;
+    }
+
+    .sidebar-shell:has(.library-maintenance-disclosure[open]) > .sidebar{
 
         flex:0 0 auto;
 

@@ -97,6 +97,13 @@ export default class DiscoveryViewStateStore {
         return true;
     }
 
+    clearLibraryStates() {
+
+        this.activeLibraryId = null;
+        this.filters.clear();
+        return this.#save();
+    }
+
     #save() {
 
         try {
@@ -105,8 +112,10 @@ export default class DiscoveryViewStateStore {
                 mode: this.mode,
                 filters: Object.fromEntries(this.filters)
             }));
+            return true;
         } catch {
             this.storage = null;
+            return false;
         }
     }
 

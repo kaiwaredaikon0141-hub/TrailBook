@@ -303,6 +303,25 @@ export default class DisplaySnapshotCoordinator {
         return this.#save(reason);
     }
 
+    async prepareCacheReset() {
+
+        this.#cancelTimer();
+        await this.writeQueue;
+        return true;
+    }
+
+    detachAfterCacheReset() {
+
+        this.libraryContextGeneration += 1;
+        this.libraryIdentity = null;
+        this.cacheNamespace = null;
+        this.#setRestoreState("idle");
+        this.lastKnownGood = null;
+        this.pendingExpandedPaths = null;
+        this.phaseARestored = false;
+        this.snapshotView = null;
+    }
+
     #bindEvents() {
 
         this.eventBus.on("map:view-changed", ({ programmatic = false } = {}) => {

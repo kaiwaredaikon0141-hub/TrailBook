@@ -49,6 +49,13 @@ export default class LibraryTrackCatalogCoordinator {
             this.catalog.remove(libraryIdentity, path));
     }
 
+    clear() {
+
+        this.catalog.clear();
+        this.lastDiagnostic = diagnostic("clear", null, "success");
+        return true;
+    }
+
     replaceActualPath(
         libraryIdentity,
         { sourcePath, targetPath = sourcePath, fileHandle }

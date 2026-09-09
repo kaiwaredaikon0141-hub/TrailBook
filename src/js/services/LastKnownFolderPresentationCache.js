@@ -86,6 +86,18 @@ export default class LastKnownFolderPresentationCache {
         return this.#update(libraryIdentity, presentations, true);
     }
 
+    clear() {
+
+        this.state = createState(this.schemaVersion);
+        if (!this.storage) return true;
+        try {
+            this.storage.removeItem(this.storageKey);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
     #update(libraryIdentity, presentations, replace) {
 
         if (!isValidLibraryId(libraryIdentity)) return 0;

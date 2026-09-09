@@ -194,6 +194,12 @@ export default class PreviousLibraryCoordinator {
         return this.loading;
     }
 
+    prepareCacheReset() {
+
+        this.generation += 1;
+        this.loading = false;
+    }
+
     setRefreshPerformanceObserver(observer) {
 
         this.refreshPerformanceObserver = typeof observer === "function"
@@ -224,6 +230,17 @@ export default class PreviousLibraryCoordinator {
             initializationStage: this.persistenceInitializationStage,
             status: this.persistenceStatus
         });
+    }
+
+    resetPersistenceState() {
+
+        this.generation += 1;
+        this.loading = false;
+        this.previousHandle = null;
+        this.previousPermission = "prompt";
+        this.persistenceInitializationStage = "complete";
+        this.#setPersistenceStatus("no persistent handle");
+        this.#configureAccess();
     }
 
     setPersistenceStatusListener(listener) {

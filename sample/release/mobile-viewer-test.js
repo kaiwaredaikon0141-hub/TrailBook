@@ -353,6 +353,11 @@ async function run() {
         !themeCss.includes("overscroll-behavior:contain") &&
         !themeCss.includes("touch-action:pan-y"),
     "mobile Library refresh diagnostic still owns a nested scroll area");
+    assert(themeCss.includes(
+        ".sidebar-shell:has(.library-maintenance-disclosure[open])"
+    ) && themeCss.includes(".library-maintenance-disclosure > summary") &&
+        !themeCss.includes(".library-maintenance-content{\n\n    max-height"),
+    "mobile Maintenance does not share the sidebar scroll container");
     assert(accessPanelSource.includes(
         '<details class="fast-restore-diagnostic library-refresh-diagnostic">'
     ), "Library refresh diagnostic wiring was removed");

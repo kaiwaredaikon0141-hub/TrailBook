@@ -190,7 +190,7 @@ export default class TrackDiscoveryCoordinator {
         this.generation += 1;
         this.isCurrent = () => false;
         this.fileHandles.clear();
-        this.index.cancel();
+        this.index.clear();
         this.folderFilter?.clear();
         this.filteredEntries = [];
         this.activeFilter = this.filterService.normalize();

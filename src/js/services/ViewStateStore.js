@@ -133,6 +133,14 @@ export default class ViewStateStore {
         return true;
     }
 
+    clearLibraryStates() {
+
+        if (Object.keys(this.document.libraries).length === 0) return true;
+        this.document.libraries = Object.create(null);
+        if (!this.storage) return true;
+        return this.#save();
+    }
+
     getStatus() {
 
         return {

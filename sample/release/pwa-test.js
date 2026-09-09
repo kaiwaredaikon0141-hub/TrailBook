@@ -303,9 +303,20 @@ async function testManifestAndAssets() {
         mainSource.includes("libraryDiagnostics.attachPreviousLibrary") &&
         mainSource.includes("libraryDiagnostics.attachFastRestore") &&
         mainSource.includes("libraryDiagnostics.attachLibraryRefresh") &&
+        mainSource.includes("new LibraryMaintenancePanel") &&
+        mainSource.includes("libraryMaintenance.attachViewStateControls") &&
+        mainSource.includes("libraryMaintenance.element") &&
         mainSource.includes("libraryDiagnostics.element") &&
         !mainSource.includes("document.body.append(developmentBuildInfo)"),
     "Library diagnostics are not collected at the bottom of the sidebar");
+    const maintenanceSource = await fetch(new URL(
+        "../../src/js/ui/LibraryMaintenancePanel.js", location.href
+    )).then(response => response.text());
+    assert(maintenanceSource.includes("<summary>Maintenance</summary>") &&
+        maintenanceSource.includes("表示状態だけをリセット") &&
+        maintenanceSource.includes("Libraryキャッシュをリセット") &&
+        maintenanceSource.includes("LibraryCacheResetDialog"),
+    "collapsed Maintenance actions are not separated from diagnostics");
     assert(mainSource.includes("mapBuildInfo") &&
         mainSource.includes("mapIndicator: true") &&
         !/["'][0-9a-f]{8}["']/.test(mainSource),
@@ -674,7 +685,7 @@ async function testServiceWorkerCache() {
         new URL(request.url).pathname.includes("/js/") &&
         new URL(request.url).pathname.endsWith(".js")
     );
-    assert(cachedModules.length === 119,
+    assert(cachedModules.length === 122,
         `production module graph not precached: ${cachedModules.length}`);
     assert(!cachedRequests.some(request => request.url.endsWith(".gpx")),
         "GPX entered app shell cache");

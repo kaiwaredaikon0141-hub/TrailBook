@@ -18,6 +18,11 @@ class IndexedDBSnapshotAdapter {
         await this.#request("readwrite", store => store.put(value, key));
     }
 
+    async delete(key) {
+
+        await this.#request("readwrite", store => store.delete(key));
+    }
+
     async #request(mode, operation) {
 
         if (!this.indexedDB?.open) {
@@ -164,6 +169,16 @@ export default class DisplaySnapshotStore {
 
         try {
             await this.adapter.set(this.config.recordKey, normalized);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    async clear() {
+
+        try {
+            await this.adapter.delete(this.config.recordKey);
             return true;
         } catch {
             return false;

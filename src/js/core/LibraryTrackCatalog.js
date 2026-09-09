@@ -136,6 +136,12 @@ export default class LibraryTrackCatalog {
         return true;
     }
 
+    clear() {
+
+        this.libraryIdentity = null;
+        this.records = new Map();
+    }
+
     replaceProvisional(libraryIdentity, entries = []) {
 
         const identity = requireLibraryIdentity(libraryIdentity);
