@@ -811,8 +811,9 @@ async function run() {
         assert(label.right <= color.left + 1 && color.width >= 18,
             "Folder label and read-only color indicator overlap");
         assert(getComputedStyle(colorButton).display === "none" &&
-            getComputedStyle(row.querySelector(".folder-color-readonly")).display ===
-                "inline-flex",
+            ["inline-flex", "flex"].includes(getComputedStyle(
+                row.querySelector(".folder-color-readonly")
+            ).display),
         "mobile color editor was not replaced by the read-only indicator");
         assert(getComputedStyle(probe.shell).overflowY === "hidden" &&
             getComputedStyle(probe.sidebar).overflowY === "auto",

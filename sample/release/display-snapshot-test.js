@@ -248,6 +248,10 @@ async function testCoordinator() {
         windowTarget,
         reportMetrics: value => metrics.push(value)
     });
+    const runLatestTimer = async () => {
+        timers.at(-1)();
+        await new Promise(resolve => setTimeout(resolve, 0));
+    };
 
     assert(await coordinator.initialize(), "instant restore reported failure");
     assert(order.indexOf("display:one.gpx") < order.indexOf("cache:missing.gpx"),
@@ -326,9 +330,7 @@ async function testCoordinator() {
     });
     assert(timers.length === timerCount + 1 && writes.length === writeCount,
         "Folder close bypassed the debounced snapshot schedule");
-    timers.at(-1)();
-    await Promise.resolve();
-    await Promise.resolve();
+    await runLatestTimer();
     assert(!writes.at(-1).library.expandedPaths.includes("Trips"),
         "closed Folder remained in the saved expanded paths");
 
@@ -339,9 +341,7 @@ async function testCoordinator() {
     });
     assert(timers.length === timerCount + 1,
         "Folder open did not schedule a snapshot save");
-    timers.at(-1)();
-    await Promise.resolve();
-    await Promise.resolve();
+    await runLatestTimer();
     assert(writes.at(-1).library.expandedPaths.includes("Trips"),
         "open Folder was absent from the saved expanded paths");
 
@@ -358,9 +358,7 @@ async function testCoordinator() {
     assert(timers.length === timerCount + 3 &&
         clearedTimers === clearsBefore + 2 && writes.length === writeCount,
     "three Folder closes were not coalesced behind one pending save");
-    timers.at(-1)();
-    await Promise.resolve();
-    await Promise.resolve();
+    await runLatestTimer();
     assert(writes.length === writeCount + 1,
         "debounced Folder expansion change saved more than once");
 
@@ -420,7 +418,7 @@ async function testLatestLibrarySwitchWinsDelayedSnapshotWrite() {
             getSidebarWidth: () => 320,
             getTrackInfoHeight: () => 180
         },
-        displayState: { getCheckedPaths: () => [] },
+        displayState: { getCheckedPaths: () => [], subscribe() {} },
         selectionState: { getSelectedPath: () => null },
         getTrackStyle: color => ({ color }),
         getSelectionStyles: color => ({ color }),
