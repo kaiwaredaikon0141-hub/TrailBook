@@ -443,6 +443,7 @@ function createTree(initialLibrary) {
         renderRequestId: 0,
         expandedPaths: new Set([""]),
         nodeMetadata: new Map(),
+        folderNodes: new Map(),
         selected: null,
         renderCount: 0,
         reconcileCount: 0,
@@ -1537,10 +1538,32 @@ function testInitialStateHydrationOrdering() {
 
     assertManualRefreshState(existing.coordinator.getDiagnostic(),
         "existing Previous/Fast Restore state was not hydrated at construction");
-    assert(existing.published.length === 1,
+    assert(existing.published.length === 2,
         "unchanged constructor/bind hydration published duplicate state");
+    const [initialPublication, hydratedPublication] = existing.published;
+
+    assert(initialPublication.runtimeBuildId === "local" &&
+        initialPublication.runtimeMarkerSource === "loaded" &&
+        initialPublication.permission === "unknown" &&
+        initialPublication.hasHandle === false &&
+        initialPublication.libraryState === "none" &&
+        initialPublication.canManualRefresh === false &&
+        initialPublication.cachedCount === null &&
+        initialPublication.reason === "none" &&
+        initialPublication.result === "idle",
+    "constructor did not publish the expected initial runtime/idle state");
+    assertManualRefreshState(hydratedPublication,
+        "constructor hydration did not publish prompt/provisional state");
+    assert(initialPublication !== hydratedPublication &&
+        initialPublication.permission !== hydratedPublication.permission &&
+        initialPublication.libraryState !== hydratedPublication.libraryState &&
+        initialPublication.result !== hydratedPublication.result,
+    "initial and hydrated publications were not semantically distinct");
     assert(existing.hydrationDiagnostics.length === 3 &&
-        existing.hydrationDiagnostics.at(-1).coordinator.reason === "bind",
+        existing.hydrationDiagnostics.map(diagnostic =>
+            diagnostic.coordinator.reason
+        ).join("|") ===
+            "constructor|previous-state-notification|bind",
     "constructor/listener/bind hydration reasons were not diagnosed");
     const initialRaw = existing.hydrationDiagnostics.at(-1);
 
@@ -1562,7 +1585,7 @@ function testInitialStateHydrationOrdering() {
     existing.eventBus.emit("library:provisional-state-changed", {
         provisional: true
     });
-    assert(existing.published.length === 1,
+    assert(existing.published.length === 2,
         "unchanged provisional notification published duplicate state");
     const beforeSidebarHydration = existing.hydrationDiagnostics.length;
 

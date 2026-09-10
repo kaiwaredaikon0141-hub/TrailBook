@@ -24,6 +24,20 @@ function assert(condition, message) {
     }
 }
 
+function createMemoryStorage() {
+
+    const values = new Map();
+
+    return {
+        getItem(key) {
+            return values.has(key) ? values.get(key) : null;
+        },
+        setItem(key, value) {
+            values.set(key, String(value));
+        }
+    };
+}
+
 function namedError(name) {
 
     const error = new Error(name);
@@ -128,6 +142,7 @@ function createCoordinatorHarness({
         config: Config.sharedLibrarySettings,
         displaySettingsStore: store,
         folderColorState,
+        storage: createMemoryStorage(),
         confirmDiscard: () => confirmResult,
         setSaveInteraction: busy => interaction.push(busy),
         applyFolderColorChange: path => appliedPaths.push(path),
