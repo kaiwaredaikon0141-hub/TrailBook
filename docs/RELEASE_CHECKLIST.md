@@ -4,6 +4,37 @@ Version: 1.0.0〜1.5.0 release records
 Status: Release 1.0〜1.5 Completed
 Baseline: v1.4.0 for Release 1.5
 
+## Release 1.9 — Release Candidate Complete
+
+Current production version: `1.9.0`
+
+Completed scope:
+
+- Fast Restore and incremental Library refresh stabilization without making Tree, DOM, or Snapshot the Library source of truth
+- Catalog-backed actual Track source resolution with provisional state kept separate
+- Deterministic Folder colors and Folder-derived Track colors across startup, refresh, and shared settings convergence
+- `trailbook.json` shared settings autosave with debounce, conflict/verification protection, no automatic permission prompt, and pending-state preservation
+- Consolidated collapsed Diagnostics and Maintenance UI, including display-state reset and internal Library-cache reset
+- Permanent Version / Build indicator and Android maskable PWA icons
+- Test stabilization for Display Snapshot, Library Refresh, Shared Settings Recovery, and Mobile read-only Folder color behavior
+
+Confirmed release-candidate validation:
+
+- Library Refresh: 137 assertions Pass
+- Shared Settings Autosave: 246 assertions Pass
+- Shared Settings Recovery: 102 assertions Pass, including same-profile isolation
+- Library Cache Reset / Maintenance: 41 assertions Pass
+- PWA / Service Worker / module graph: 128 assertions Pass
+- Production modules: 122 reachable; missing import / circular dependency: 0 / 0
+- App.js / TreeView.js: 999 / 996 lines
+- Android / PC manual acceptance: shared Folder colors, reset/rebuild, mobile read-only Folder color, collapsed Maintenance / Diagnostics, and map build indicator Pass
+
+Final Git release actions:
+
+- [ ] Commit the `1.9.0` release update
+- [ ] Push `main`
+- [ ] Create and verify tag `v1.9.0`
+
 ## Release 1.9 Unit 2 — Complete Fast Restore UX
 
 - [x] Apply snapshot center/zoom before cached geometry; no Phase A/B auto-fit or reset.

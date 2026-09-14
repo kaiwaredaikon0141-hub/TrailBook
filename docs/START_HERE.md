@@ -4,9 +4,9 @@ TrailBookの開発を始める人とAIのための入口です。
 
 ## Current Status
 
-- Current Version: `1.8.0`
-- Current Release: Release 1.8
-- Completed: Release 0.1からRelease 1.7
+- Current Version: `1.9.0`
+- Current Release: Release 1.9
+- Completed: Release 0.1からRelease 1.9
 - Next Release: Not defined
 - Branch: `main`
 
@@ -27,13 +27,13 @@ GPXを独自形式へ取り込むのではなく、ユーザーのGPX資産を�
 3. `ARCHITECTURE.md` — 現在の責務分割とデータフロー
 4. `CODING_RULES.md` — 実装規約
 5. `ROADMAP.md` — 完了Releaseと将来候補
-6. `UI_SPEC.md` — Release 1.7までの確定UI仕様
+6. `UI_SPEC.md` — 確定UI仕様
 7. `DECISIONS.md` — 採用済み設計判断と理由
 8. `AI_GUIDE.md` — AIとの開発手順
 9. `CONTRIBUTING.md` — 作業規約
 10. `GLOSSARY.md` — 用語
 11. リポジトリルートの`README.md`、`CHANGELOG.md` — 公開概要とリリース履歴
-12. `RELEASE_CHECKLIST.md` — Release 1.0〜1.7のbaseline / 完了記録
+12. `RELEASE_CHECKLIST.md` — Release 1.0〜1.9のbaseline / 完了記録
 
 ## Current Architecture
 
@@ -54,9 +54,9 @@ GPXを独自形式へ取り込むのではなく、ユーザーのGPX資産を�
 - `FolderColorState`がrootを含むFolder明示色とnearest ancestor継承を解決する。
 - `DisplaySettingsStore`はlegacy Folder色fallbackとglobal Map modeだけをschema version 1の`localStorage`へ保存する。
 - Monochrome Map Modeは背景OSM tileだけへCSS filterを適用する。
-- `LibrarySettingsRepository`がLibrary root直下の`trailbook.json`だけを読込・検証し、明示保存時だけ書き込む。
+- `LibrarySettingsRepository`がLibrary root直下の`trailbook.json`だけを読込・検証し、書き込み前後の検証とconflict protectionを担う。
 - `LibrarySettingsState`がshared snapshot、source、dirty、saving、conflictを保持する。
-- `LibrarySettingsCoordinator`がload、explicit save、migration、manual Reload、Conflict recoveryを調停する。
+- `LibrarySettingsCoordinator`がload、debounce autosave、migration、manual Reload、Conflict recoveryを調停する。
 - `LibrarySettingsPanel`と`SettingsConflictDialog`がstatusとReload / Overwrite / Cancel操作を担当する。
 
 Release 1.3 Unit 1〜7はCompletedであり、v1.3.0はfinal commit / tag可能な状態である。Unit 5は約807 visible Trackの既存再parse中央値25秒によりIndexedDB geometry cacheを採用し、導入後中央値3秒で約5秒Performance GateをPassした。Unit 6はselected Trackをsystem sourceで復元し、Tree / Search / highlight / ARIAを通常selection経路へ同期する。Unit 4はDirectoryHandleとopaque cache namespaceをorigin-local IndexedDBへ保存し、granted時の自動openとprompt / denied時の明示操作を既存Library lifecycleへ接続する。既存DisplaySettingsStore / shared settings schema、DisplayState、SelectionState、GPXDisplayQueueを正本として維持する。
@@ -69,7 +69,11 @@ Release 1.6のUnit 1〜7はCompletedである。Date Treeを年 / 月 / Trackへ
 
 Release 1.7のUnit 1〜6はCompletedである。responsive Mobile Viewer、GPS Current Position / Follow、Driving Mode / Screen Wake Lock、read-only Google Drive Library Reader、Drive cache pre-download lookup / cold-load 4並列、GitHub Pages HTTPS deployment、Library Open UI整理を追加した。Mobile editing、offline map、Drive large cold-loadの追加高速化は対象外である。
 
-## Implemented Through Release 1.7
+Release 1.8はPWA app shell、Previous Library Restore、Mobile Library / Map controls、runtime build diagnostics、Desktop Track Point Move / Add / Deleteを完了した。
+
+Release 1.9はFast Restore / incremental refreshの安定化、Folder / Track color ownership、shared settings autosave、Library diagnostics / maintenance、maskable PWA icon、permanent build indicatorを完了した。
+
+## Implemented Through Release 1.9
 
 Release 1.0 Stable Viewerは完了している。Release 0.9までのFolder Library、GPX Parser、複数GPX表示、Folder / root一括表示、Waypoint option、Searchを維持し、個人利用向けの起動・互換性UX、品質整理、文書、licenseと第三者表記を確定した。
 
@@ -84,12 +88,12 @@ Release 1.2 Shared Library SettingsはCompletedである。Library root直下の
 ## Non-Negotiable Rules
 
 - GPXは唯一の正本である。
-- ユーザーの明示的な保存操作なしにGPXやLibrary設定ファイルを変更、移動、削除しない。
+- ユーザーの明示的な編集保存操作なしにGPXを変更、移動、削除しない。Library共有設定はpermission promptを自動表示せず、書き込み可能な場合だけ安全に自動保存する。
 - Folder構造とGPXファイルをデータの正本とする。
 - SQLite、IndexedDBなどをFolder / GPXに代わるLibrary正本として持たない。一時的なセッションcacheは独自DBに含めない。
 - Release 1.3追加設計はDecision 0039 / 0040により、IndexedDBをprevious DirectoryHandleと、性能gate不達時の再生成可能geometry cacheにだけ使用可能とする。これはLibrary正本ではなく、削除・失敗時にViewerが継続できるorigin-local補助である。
-- 現行production 1.7はMap表示mode、base map、legacy Folder色fallbackに加え、専用keyへ再生成可能なdevice-local Map / sidebar / visible / selected Track / Discovery UI stateを`localStorage`へ保存する。Folder色はvalidなshared JSONがある場合に項目単位でlegacy値を混ぜない。DirectoryHandleはorigin-local IndexedDBだけへ保存し、localStorage / `trailbook.json`へ保存しない。GPS位置、access token、Driving Modeは永続化しない。
-- `trailbook.json`への書き込みはSave、migration、明示Overwriteだけに限定し、permissionの永続化を前提にしない。
+- 現行production 1.9はMap表示mode、base map、legacy Folder色fallbackに加え、専用keyへ再生成可能なdevice-local Map / sidebar / visible / selected Track / Discovery UI stateを保存する。Folder色はvalidなshared JSONがある場合にlegacy値を混ぜない。DirectoryHandleはorigin-local IndexedDBだけへ保存し、localStorage / `trailbook.json`へ保存しない。GPS位置、access token、Driving Modeは永続化しない。
+- `trailbook.json`のFolder色は500ms debounceで自動保存し、prompt / deniedでは自動permission requestを行わずpendingを保持する。
 - Framework、TypeScript、Node.jsを追加しない。
 - UI同士を直接接続せず、EventBusとAppの調停を使用する。
 - ModelへUI状態を保存しない。

@@ -4,11 +4,11 @@ TrailBookは、GPXを含むFolderをLibraryとして閲覧する、個人利用�
 
 ## Current Status
 
-- Current Release: `1.8.0`
-- Release 1.7: Completed
+- Current Release: `1.9.0`
+- Release 1.9: Completed
 - Next Release: Not defined
 
-Release 1.7はMobile Viewer、GPS現在地 / Follow、走行中モード / Screen Wake Lock、read-only Google Drive Library Reader、GitHub Pages HTTPS deploymentを追加したCompleted Releaseです。Release 1.6までのViewer / Editorとdata protection境界を維持します。
+Release 1.9はFast Restoreとincremental Library refreshを安定化し、Folder色の決定・共有・自動保存、Library diagnostics / maintenance、PWA build表示とmaskable iconを整備したCompleted Releaseです。Folder構造とGPXをデータの正本とする境界は維持します。
 
 ## Implemented Features
 
@@ -27,7 +27,7 @@ Release 1.7はMobile Viewer、GPS現在地 / Follow、走行中モード / Scree
 - Color / Monochrome背景地図表示（初期Color）
 - Folder色とMap表示modeに限定したUI設定の`localStorage`保存
 - Library root直下の`trailbook.json`によるFolder色共有
-- shared settingsの明示Save、legacy色migration、manual Reload
+- shared settingsの500ms debounce自動保存、legacy色migration、manual Reload
 - 外部変更を保護するReload / Overwrite / Cancel conflict recovery
 - LibraryごとのMap center / zoom、Sidebar、visible / selected Track復元
 - 前回Libraryの自動復元とpermission拒否時の手動picker fallback
@@ -51,15 +51,18 @@ Release 1.7はMobile Viewer、GPS現在地 / Follow、走行中モード / Scree
 - OAuth / Pickerによるread-only Google Drive Libraryの直接接続とlazy GPX load
 - Drive geometry cacheのpre-download lookupとcold cache missの最大4並列取得
 - GitHub Pages HTTPS deploymentとcredentialをcommitしないruntime config生成
+- Display Snapshot / Geometry CacheによるFast Restoreと高速incremental Library refresh
+- LibraryのMaintenance（表示状態reset / 内部cache reset）と折りたたみDiagnostics
+- Map右下のVersion / Build表示とAndroid用maskable PWA icon
 - ローカル同梱したLeaflet 1.9.4による地図表示
 
 従来のFolder名、GPXファイル名、relative path Searchはmetadataだけで動作します。Track名またはdate filterを明示した場合だけDiscovery Indexを遅延構築し、filter入力だけではGPX表示、SelectionState、DisplayState、Map center / zoomを変更しません。
 
 ## Data Principles
 
-- Current Release 1.8も、利用者の明示`保存`時にoriginal bytesのBackupを検証した後だけGPXを更新します。日付filename renameやTrack Point編集でもBackup originalは変更しません。
+- Current Release 1.9も、利用者の明示`保存`時にoriginal bytesのBackupを検証した後だけGPXを更新します。日付filename renameやTrack Point編集でもBackup originalは変更しません。
 - Backup成功前、自動、backgroundではGPXを変更・移動・削除しません。date-based filename renameは明示`保存`と検証成功後だけ旧source pathを削除します。
-- `trailbook.json`への書き込みはSave、Migration、明示Overwriteの利用者操作時だけ行います。
+- `trailbook.json`のFolder色は変更後にdebounce自動保存します。自動でpermission promptを表示せず、書き込めない間はpending変更を保持します。
 - SQLiteやIndexedDBをFolder / GPXに代わるLibrary正本として使用しません。
 - `localStorage`はdevice-local Map mode、legacy Folder色fallback、Library別のprevious view stateに使用し、GPX XMLやgeometryを保存しません。
 - validなshared JSONがある場合、Folder色へlegacy localStorage値を項目単位で混ぜません。
@@ -132,14 +135,14 @@ GitHub PagesのHTTPS deployment手順は[docs/GITHUB_PAGES.md](docs/GITHUB_PAGES
 2. GPXを含むFolderを選択します。
 3. browserのpermission確認を許可します。
 
-Folder pickerは`showDirectoryPicker({ mode: "read" })`で開きます。Cancelしても既存Libraryは維持されます。Folder色を共有fileへ保存する場合だけ、別の明示操作でreadwrite permissionを確認します。
+Folder pickerは`showDirectoryPicker({ mode: "read" })`で開きます。Cancelしても既存Libraryは維持されます。Folder色の自動保存はactual Library handleが書き込み可能な場合だけ行い、permission promptを自動表示しません。
 
 ### Shared Library Settings
 
 - `trailbook.json`は選択したLibrary root直下だけから読みます。
 - validなJSONのFolder色はdevice-localなlegacy色より優先されます。
-- Folder color Apply / Defaultだけではfileへ書き込みません。
-- `Libraryへ保存`、明示Migration、Conflict dialogの明示OverwriteだけがJSONを書き込みます。
+- Folder color Apply / Defaultはruntimeへ即時反映し、約500msのdebounce後に書き込み可能な`trailbook.json`へ自動保存します。
+- permissionがprompt / deniedの場合は変更をLibrary別のpending stateに保持し、次回の明示的なLibrary操作後に再試行します。
 - `設定を再読み込み`で外部変更を反映できます。未保存変更がある場合は破棄確認を表示します。
 - Google Drive等の同期Folderも通常fileとして扱います。TrailBookはGoogle Drive API、同期status、provider metadataを使用しません。
 - 外部同期完了をTrailBookは検出・保証しないため、同期後にmanual ReloadまたはLibrary再選択が必要な場合があります。
@@ -161,19 +164,19 @@ TrailBookはGPXファイルやGPX内容を外部serverへアップロードし�
 ## Data Protection
 
 - File System AccessはユーザーがFolder pickerを操作したときだけ開始します。
-- 通常のLibrary pickerはread-only modeを指定します。`createWritable`を使用するのは、明示操作による`trailbook.json`保存と、Editorの初回原本Backupおよび同一path保存だけです。
+- 通常のLibrary pickerはread-only modeを指定します。`createWritable`を使用するのは、書き込み可能なactual Libraryへの`trailbook.json`自動保存と、Editorの明示保存による初回原本Backupおよび同一path保存だけです。
 - Editorは明示`保存`時だけreadwrite permissionを要求し、Backup成功前、自動、backgroundではGPXを書き換えません。
 - session cacheはLibrary切り替え時に破棄します。前回Library Handleと再生成可能geometry cacheだけはorigin-local IndexedDBへ保存します。
 - SQLiteやIndexedDBをLibraryの正本として使用しません。
 - `localStorage`にはdevice-local UI設定とLibrary別previous view stateを保存します。
 - DirectoryHandleをlocalStorage / `trailbook.json`へ保存せず、GPX XML、Leaflet Layer、Queue状態を永続化しません。
-- 自動保存、polling、background sync、automatic merge、外部serverへのGPX送信を行いません。
+- GPXの自動保存、polling、background sync、automatic merge、外部serverへのGPX送信を行いません。
 
 ## Known Limitations
 
-- Mobile UIは未対応です。
-- iPhone ChromeはFolderとTree表示までは可能ですが、GPX操作とtouch UIには対応していません。
-- Android ChromeとiPad Chromeは未確認です。
+- Mobile editingは未対応です。
+- Android Chrome Mobile Viewerはbest effortで、DirectoryHandle permissionとDocumentsProviderの挙動は端末環境に依存します。
+- iPhone / iPad Chromeは正式対応していません。
 - 大量GPX表示中にWaypointをONにすると、多数のMarker描画により操作が重くなります。大量LibraryではWaypoint OFFを推奨します。
 - Waypointは初期OFFです。
 - OpenStreetMap背景tileはオンライン依存で、offline地図保存はありません。

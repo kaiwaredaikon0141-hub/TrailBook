@@ -1716,7 +1716,7 @@ function testPreviousLibraryPanel() {
 }
 
 try {
-    assert(Config.version === "1.8.0", "Config version changed");
+    assert(Config.version === "1.9.0", "Config version changed");
     assert(Config.uiSettings.schemaVersion === 1, "UI schema changed");
     assert(Config.sharedLibrarySettings.schemaVersion === 1, "shared schema changed");
     assert(Config.viewState.storageKey === "trailbook.viewState", "view key");

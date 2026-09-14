@@ -4,8 +4,8 @@
 
 ## Current Status
 
-- Current Release: `1.8.0`
-- Completed: Release 0.1からRelease 1.7
+- Current Release: `1.9.0`
+- Completed: Release 0.1からRelease 1.9
 - Next Release: Not defined
 
 Release 1.4 Library Browsing / Track DiscoveryはCompletedです。Release 1.3の前回Library / view restorationとgeometry cacheを維持し、1つのDiscovery IndexからDate Tree、Track Info、Track名 / Folder / date range Search・Filterを提供します。
@@ -15,6 +15,10 @@ Release 1.4 Unit 1〜6の設計、実装、Browser Acceptance、performance、da
 Release 1.6はCompletedです。Date Tree簡略化、Track日付修正・date-based filename rename・平行移動、Date mode selection同期、OSM / 国土地理院標準地図切替、一括簡略化を確定し、Release 1.5のOriginal Backup + In-place Edited GPXを維持します。
 
 Release 1.7はCompletedです。Mobile Viewer、GPS Current Position / Follow、Driving Mode / Screen Wake Lock、read-only Google Drive Library Reader、Drive Geometry Cache / cold-load 4並列、GitHub Pages HTTPS deployment、Mobile UI改善を確定します。
+
+Release 1.8はCompletedです。PWA app shell、Previous Library Restore、Mobile Library / Map controls、runtime build diagnostics、Desktop Track Point Move / Add / Deleteを確定します。
+
+Release 1.9はCompletedです。Fast Restore / incremental refresh、Folder / Track color ownership、shared settings autosave、Library diagnostics / maintenance、maskable PWA icon、permanent build indicatorを確定します。
 
 ## Read Order
 
@@ -30,7 +34,7 @@ Release 1.7はCompletedです。Mobile Viewer、GPS Current Position / Follow、
 10. [CONTRIBUTING.md](CONTRIBUTING.md) — Gitと変更手順
 11. [GLOSSARY.md](GLOSSARY.md) — 用語
 
-Release 1.0のUnit 1〜8、Release 1.1のUnit 1〜7、Release 1.2のUnit 1〜5、Release 1.3のUnit 1〜7、Release 1.4のUnit 1〜6、Release 1.5のUnit 1〜6、Release 1.6のUnit 1〜7、Release 1.7のUnit 1〜6は[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)に記録しています。
+Release 1.0〜1.9の完了条件と検証記録は[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)に記録しています。
 
 Release 1.1 Unit roles:
 
@@ -78,7 +82,7 @@ Release 1.5 Unit roles:
 5. Original Backup + In-place Save、verification、reserved Folder、targeted refresh
 6. Integration acceptance、documentation、Release finalization
 
-## Implemented Through Release 1.7
+## Implemented Through Release 1.9
 
 - Folder Libraryと再帰走査
 - GPX Parser
@@ -96,7 +100,7 @@ Release 1.5 Unit roles:
 - Folder色とglobal Map modeに限定したUI設定persistence
 - 背景OSM tileだけを対象とするColor / Monochrome表示
 - Library root直下のschema version 1 `trailbook.json` read / validation
-- Folder色のLibrary共有、明示Save、legacy migration
+- Folder色のLibrary共有、debounce autosave、legacy migration
 - manual ReloadとReload / Overwrite / Cancel Conflict recovery
 - invalid shared JSONのfail-closed処理と明示Overwrite recovery
 - Google Drive等の同期Folderを通常fileとして利用する運用
@@ -122,9 +126,9 @@ Release 1.5 Unit roles:
 
 ## Current Release and Future Features
 
-Release 1.7はCompletedです。Release 1.6までのViewer / Editorを維持し、Mobile Viewer、GPS / Follow、Driving Mode / Wake Lock、read-only Google Drive Reader、GitHub Pages deploymentを追加しました。Drive large cold-loadの追加高速化とoffline mapは将来候補です。
-
 Release 1.8はCompletedです。PWA app shell、Previous Library Restore、Mobile Library / Map controls、localhost build diagnostics、Desktop Track Point Move / Add / Deleteを追加し、既存Backup / SaveとBefore / After preview契約を維持します。
+
+Release 1.9はCompletedです。Fast Restoreとincremental Library refreshを安定化し、Folder / Track colorの一貫性、`trailbook.json`自動保存、Library diagnostics / maintenance、PWA icon / build visibilityを整備しました。
 
 Search / Tree navigation復元、Stable Library Identity / Alias、複数point選択、区間削除、Track分割・結合、Backup overwrite / deleteに加え、Statistics、Replay、HeatMap、vehicle metadata、Cloud Sync、Mobile editing、offline map、Drive large cold-load optimization、Waypoint性能最適化、Plugin、AI Searchなどは未実装の将来候補です。
 

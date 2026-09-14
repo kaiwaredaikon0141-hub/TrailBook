@@ -1,23 +1,25 @@
 # ROADMAP.md
 
-Version: 1.8 Completed
+Version: 1.9 Completed
 Status: Official
 
 ## Release 1.9 Unit 2 — Complete Fast Restore UX
 
-- Status: Implemented; Android PWA acceptance pending.
+- Status: Completed.
 - Restore the saved map view and cached Library tree during Phase A.
 - Keep the cached Library viewer-only until Phase B provider reconciliation completes.
 - Use platform-independent mobile control icons.
 
 ## Release 1.9 Unit 1 — Fast Mobile Cold Start
 
-- Status: Implemented; Browser performance acceptance pending.
+- Status: Completed.
 - Persistent Display SnapshotからGeometry Cache hitをLibrary scan前に表示するPhase Aを追加する。
 - Previous Library permission / scan / metadata revalidationはPhase Bとして既存経路を維持する。
 - GPX本文の複製、cache schema変更、Drive自動認証、offline mapは対象外とする。
-Current Release: 1.8.0
-Next Release: Release 1.9（Not Started）
+Current Release: 1.9.0
+Next Release: Not defined
+
+Release 1.9 completed Fast Restore and incremental Library refresh stabilization, deterministic Folder / Track color projection, shared `trailbook.json` autosave, consolidated diagnostics, Library maintenance reset, permanent build visibility, and Android maskable PWA icons. GPX and Folder structure remain the data source of truth.
 
 ## Version Policy
 

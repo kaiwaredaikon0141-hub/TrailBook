@@ -1,5 +1,45 @@
 # Changelog
 
+## v1.9.0
+
+Status: Release candidate; final release commit and tag pending
+
+### Added
+
+- Fast mobile restore using Display Snapshot, Library Snapshot metadata, and reusable Geometry Cache data before actual Library reconciliation
+- Permanent map build indicator, consolidated Library diagnostics, and collapsed Maintenance actions for display-state and internal Library-cache reset
+- Separate Android maskable PWA icons with safe artwork padding
+
+### Changed
+
+- Incremental Library refresh now preserves existing state, persists discovered Tracks, reconciles the live Tree, and avoids existing-Track file validation on the fast path
+- Track source loading is resolved through actual catalog file handles; provisional sources remain viewer-only until actual access is available
+- Folder Auto colors are deterministic by canonical folder path, and Track colors derive from the resolved Folder color
+- Shared Folder settings in `trailbook.json` autosave after a 500 ms debounce while retaining conflict checks, verification, permission safety, and pending changes
+- Startup color, Tree, Folder-toggle, Snapshot, Library-switch, and restore updates are batched or identity-guarded to avoid stale presentation and notification amplification
+
+### Data Protection
+
+- Library cache reset removes only TrailBook internal restore/cache state; it preserves GPX files, Folder structure, `trailbook.json`, shared Folder colors, and pending shared settings
+- Shared settings autosave never opens a permission prompt automatically; denied or prompt state keeps local pending changes
+- GPX files remain unchanged unless the user explicitly invokes an editor save operation
+
+## v1.8.0
+
+Date: 2026-08-23
+Status: Released
+
+### Added
+
+- Installable PWA app shell and deploy-specific runtime build visibility
+- Previous Library restoration and streamlined mobile Library / Map controls
+- Desktop Track Point move, add, and delete with the existing Backup-first explicit save boundary
+
+### Changed
+
+- GitHub Pages deployment uses build-specific app-shell caches while localhost runs without a registered TrailBook Service Worker
+- Mobile recovery actions remain available when a previous Library cannot be restored automatically
+
 ## v1.7.0
 
 Date: 2026-08-15
