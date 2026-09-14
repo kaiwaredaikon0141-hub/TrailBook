@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.9.1
+
+### Fixed
+
+- Fixed Driving Mode activation on mobile landscape layouts wider than 768px, where the UI used the established short-height/coarse-pointer mobile layout but `DrivingModeController` still used the old width-only media query
+- Added portrait, landscape boundary, and rotation regression coverage for Driving Mode activation and deactivation
+
 ## v1.9.0
 
 Status: Release candidate; final release commit and tag pending

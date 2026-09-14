@@ -6,7 +6,7 @@ Baseline: v1.4.0 for Release 1.5
 
 ## Release 1.9 — Release Candidate Complete
 
-Current production version: `1.9.0`
+Current production version: `1.9.1`
 
 Completed scope:
 
@@ -31,9 +31,9 @@ Confirmed release-candidate validation:
 
 Final Git release actions:
 
-- [ ] Commit the `1.9.0` release update
+- [ ] Commit the `1.9.1` release update
 - [ ] Push `main`
-- [ ] Create and verify tag `v1.9.0`
+- [ ] Create and verify tag `v1.9.1`
 
 ## Release 1.9 Unit 2 — Complete Fast Restore UX
 

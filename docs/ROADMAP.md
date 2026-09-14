@@ -16,7 +16,7 @@ Status: Official
 - Persistent Display SnapshotからGeometry Cache hitをLibrary scan前に表示するPhase Aを追加する。
 - Previous Library permission / scan / metadata revalidationはPhase Bとして既存経路を維持する。
 - GPX本文の複製、cache schema変更、Drive自動認証、offline mapは対象外とする。
-Current Release: 1.9.0
+Current Release: 1.9.1
 Next Release: Not defined
 
 Release 1.9 completed Fast Restore and incremental Library refresh stabilization, deterministic Folder / Track color projection, shared `trailbook.json` autosave, consolidated diagnostics, Library maintenance reset, permanent build visibility, and Android maskable PWA icons. GPX and Folder structure remain the data source of truth.

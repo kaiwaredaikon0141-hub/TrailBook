@@ -4,6 +4,8 @@ import ScreenWakeLockService from
     "../../src/js/services/ScreenWakeLockService.js";
 
 const output = document.getElementById("result");
+const MOBILE_LAYOUT_QUERY =
+    "(max-width: 768px), (max-height: 500px) and (pointer: coarse)";
 let assertions = 0;
 
 function assert(condition, message) {
@@ -171,13 +173,15 @@ async function testDrivingMode() {
     "Map drag disabled driving mode or did not show Follow OFF");
     gpsButton.click();
 
+    mobileMedia.set(false);
+    assert(controller.element.hidden && controller.isActive(),
+        "media change cleared active driving mode before explicit disable");
     assert(await controller.disable() && !controller.isActive(),
         "driving mode did not stop");
     assert(currentPosition.stops === 1 && wakeLock.releases === 1 &&
         !workspace.classList.contains("is-driving-mode"),
     "driving mode cleanup failed");
 
-    mobileMedia.set(false);
     assert(controller.element.hidden && !await controller.enable(),
         "Desktop exposed an active driving-mode entry");
 
@@ -212,9 +216,56 @@ async function testDrivingMode() {
     ), "driving mode state is persisted");
 }
 
+async function testDefaultMobileMediaQuery() {
+    const expectedMobile = matchMedia(MOBILE_LAYOUT_QUERY).matches;
+    const currentPosition = {
+        button: null,
+        following: false,
+        startFollowing() { this.following = true; return true; },
+        stopFollowing() { this.following = false; return true; },
+        isFollowing() { return this.following; }
+    };
+    const wakeLock = {
+        active: false,
+        async request() { this.active = true; return true; },
+        async release() { this.active = false; return true; },
+        isActive() { return this.active; }
+    };
+    const controller = new DrivingModeController({
+        currentPosition,
+        eventBus: new EventBus(),
+        viewStateControls: { setSidebarOpen() {} },
+        workspace: document.createElement("main"),
+        wakeLock
+    });
+
+    controller.attach(document.body);
+    assert(controller.element.hidden === !expectedMobile,
+        "Driving Mode default media query diverges from Mobile layout");
+
+    if (expectedMobile) {
+        controller.button.click();
+        await flush();
+        assert(controller.isActive() &&
+            controller.button.getAttribute("aria-pressed") === "true",
+        "real Mobile media query did not enable Driving Mode");
+        controller.button.click();
+        await flush();
+        assert(!controller.isActive() &&
+            controller.button.getAttribute("aria-pressed") === "false",
+        "real Mobile media query did not disable Driving Mode");
+    } else {
+        assert(!await controller.enable() && !controller.isActive(),
+            "non-Mobile viewport enabled Driving Mode");
+    }
+
+    controller.element.remove();
+}
+
 try {
     await testWakeLock();
     await testDrivingMode();
+    await testDefaultMobileMediaQuery();
     output.textContent = `PASS: ${assertions} assertions`;
     document.title = "PASS";
 } catch (error) {

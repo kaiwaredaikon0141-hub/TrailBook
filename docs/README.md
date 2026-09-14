@@ -4,7 +4,7 @@
 
 ## Current Status
 
-- Current Release: `1.9.0`
+- Current Release: `1.9.1`
 - Completed: Release 0.1からRelease 1.9
 - Next Release: Not defined
 

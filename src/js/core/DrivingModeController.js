@@ -1,6 +1,7 @@
 import ScreenWakeLockService from "../services/ScreenWakeLockService.js";
 
-const MOBILE_QUERY = "(max-width: 768px)";
+const MOBILE_QUERY =
+    "(max-width: 768px), (max-height: 500px) and (pointer: coarse)";
 
 /** Coordinates session-only Mobile driving presentation, GPS Follow and Wake Lock. */
 export default class DrivingModeController {

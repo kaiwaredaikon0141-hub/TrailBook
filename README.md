@@ -4,7 +4,7 @@ TrailBookは、GPXを含むFolderをLibraryとして閲覧する、個人利用�
 
 ## Current Status
 
-- Current Release: `1.9.0`
+- Current Release: `1.9.1`
 - Release 1.9: Completed
 - Next Release: Not defined
 
