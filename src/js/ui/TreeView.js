@@ -1,5 +1,6 @@
 import TreeMetadataBuilder from "./TreeMetadataBuilder.js";
 import { applyTreeDisplayBatch } from "./TreeDisplayBatch.js";
+import TreeRowPresenter from "./TreeRowPresenter.js";
 
 const ROOT_PATH = "";
 const NODE_SELECTOR = "[data-tree-path]";
@@ -25,6 +26,7 @@ export default class TreeView {
         this.currentRootHandle = null;
         this.currentLibrary = null;
         this.renderRequestId = 0;
+        this.rowPresenter = new TreeRowPresenter(this);
         this.element = this.create();
     }
 
@@ -632,10 +634,7 @@ export default class TreeView {
     }
 
     updateFolderRow(row, expanded) {
-
-        row.setAttribute("aria-expanded", String(expanded));
-        row.classList.toggle("is-expanded", expanded);
-        row.classList.toggle("is-collapsed", !expanded);
+        this.rowPresenter.updateFolderRow(row, expanded);
     }
 
     selectFile(fileHandle, source = "tree") {
@@ -916,62 +915,11 @@ export default class TreeView {
     }
 
     refreshFolderRow(path) {
-
-        const row = this.folderNodes.get(path);
-
-        if (!row) {
-            return;
-        }
-
-        const folder = this.nodeMetadata.get(path)?.model;
-        const files = folder
-            ? this.metadataBuilder.collectDescendantFiles(folder, path)
-            : [];
-        const checkedCount = files.reduce((count, entry) =>
-            count + Boolean(this.nodeMetadata.get(entry.path)?.checked), 0
-        );
-        const checkbox = row.querySelector(".folder-display-toggle");
-
-        if (!checkbox) {
-            return;
-        }
-
-        checkbox.disabled = files.length === 0;
-        checkbox.checked = files.length > 0 && checkedCount === files.length;
-        checkbox.indeterminate = checkedCount > 0 &&
-            checkedCount < files.length;
+        this.rowPresenter.refreshFolderRow(path);
     }
 
     refreshFileRow(path, refreshAncestors = true) {
-
-        const row = this.fileNodes.get(path);
-        const metadata = this.nodeMetadata.get(path);
-
-        if (!row || !metadata) {
-            return;
-        }
-
-        const isSelected = this.selectedFilePath === path;
-
-        row.classList.toggle("is-selected", isSelected);
-        row.classList.toggle("is-displayed", metadata.checked);
-        row.classList.toggle("is-loading", metadata.state === "loading");
-        row.classList.toggle("is-loaded", metadata.state === "loaded");
-        row.classList.toggle("is-error", metadata.state === "error");
-        row.setAttribute("aria-selected", String(isSelected));
-
-        const checkbox = row.querySelector(".gpx-display-toggle");
-        const colorIndicator = row.querySelector(".tree-color-indicator");
-
-        if (checkbox) {
-            checkbox.checked = Boolean(metadata.checked);
-        }
-
-        if (colorIndicator) {
-            colorIndicator.style.backgroundColor = metadata.color || "";
-        }
-
-        if (refreshAncestors) this.refreshFolderAncestors(metadata.parentPath);
+        this.rowPresenter.refreshFileRow(path, refreshAncestors);
     }
 
     findRenderedRow(path) {
