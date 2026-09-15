@@ -1,22 +1,15 @@
 import LayerManager from "../map/LayerManager.js";
 import drivePerformance from "../services/DrivePerformanceMonitor.js";
+import BasemapProviderRegistry, {
+    BASE_MAPS,
+    DEFAULT_BASE_MAP
+} from "../services/BasemapProviderRegistry.js";
 
 const DEFAULT_MAP_DISPLAY_MODE = "color";
 const MAP_DISPLAY_MODES = new Set([
     DEFAULT_MAP_DISPLAY_MODE,
     "monochrome"
 ]);
-const DEFAULT_BASE_MAP = "osm";
-const BASE_MAPS = Object.freeze({
-    gsiStandard: Object.freeze({
-        url: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
-        attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html" ' +
-            'target="_blank" rel="noopener noreferrer" ' +
-            'style="text-decoration: underline;">国土地理院</a>',
-        maxZoom: 18
-    })
-});
-
 function normalizeMapDisplayMode(mode) {
 
     return MAP_DISPLAY_MODES.has(mode)
@@ -36,6 +29,8 @@ export default class MapView {
     constructor(config, eventBus) {
 
         this.config = config;
+
+        this.basemapProviders = new BasemapProviderRegistry(config.map);
 
         this.eventBus = eventBus;
 
@@ -594,30 +589,20 @@ export default class MapView {
 
         const definition = this.#getBaseMapDefinition(this.baseMap);
 
-        this.baseTileLayer = L.tileLayer(definition.url, {
+        this.baseTileLayer = L.tileLayer(definition.tileUrl, {
             attribution: definition.attribution,
             maxZoom: definition.maxZoom
         }).addTo(this.map);
     }
 
     #getBaseMapDefinition(value) {
-
-        if (value === DEFAULT_BASE_MAP) {
-            return {
-                url: this.config.map.tileUrl,
-                attribution: this.config.map.tileAttribution,
-                maxZoom: this.config.map.tileMaxZoom
-            };
-        }
-
-        return BASE_MAPS[value] || this.#getBaseMapDefinition(DEFAULT_BASE_MAP);
+        return this.basemapProviders.get(
+            this.basemapProviders.normalizeId(value)
+        );
     }
 
     #normalizeBaseMap(value) {
-
-        return value === DEFAULT_BASE_MAP || Object.hasOwn(BASE_MAPS, value)
-            ? value
-            : DEFAULT_BASE_MAP;
+        return this.basemapProviders.normalizeId(value);
     }
 
     /**

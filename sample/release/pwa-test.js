@@ -685,7 +685,7 @@ async function testServiceWorkerCache() {
         new URL(request.url).pathname.includes("/js/") &&
         new URL(request.url).pathname.endsWith(".js")
     );
-    assert(cachedModules.length === 123,
+    assert(cachedModules.length === 124,
         `production module graph not precached: ${cachedModules.length}`);
     assert(!cachedRequests.some(request => request.url.endsWith(".gpx")),
         "GPX entered app shell cache");
