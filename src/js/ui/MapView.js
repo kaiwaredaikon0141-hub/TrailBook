@@ -4,6 +4,7 @@ import BasemapProviderRegistry, {
     BASE_MAPS,
     DEFAULT_BASE_MAP
 } from "../services/BasemapProviderRegistry.js";
+import OfflineTileLayer from "./OfflineTileLayer.js";
 
 const DEFAULT_MAP_DISPLAY_MODE = "color";
 const MAP_DISPLAY_MODES = new Set([
@@ -26,11 +27,20 @@ export default class MapView {
      * @param {object} config
      * @param {import("../core/EventBus.js").default} eventBus
      */
-    constructor(config, eventBus) {
+    constructor(config, eventBus, {
+        basemapProviders = new BasemapProviderRegistry(config.map),
+        offlineTileResolver = null,
+        offlineTileLayerFactory = options =>
+            new OfflineTileLayer(options).create(options.layerOptions)
+    } = {}) {
 
         this.config = config;
 
-        this.basemapProviders = new BasemapProviderRegistry(config.map);
+        this.basemapProviders = basemapProviders;
+
+        this.offlineTileResolver = offlineTileResolver;
+
+        this.offlineTileLayerFactory = offlineTileLayerFactory;
 
         this.eventBus = eventBus;
 
@@ -589,10 +599,23 @@ export default class MapView {
 
         const definition = this.#getBaseMapDefinition(this.baseMap);
 
-        this.baseTileLayer = L.tileLayer(definition.tileUrl, {
+        const layerOptions = {
             attribution: definition.attribution,
             maxZoom: definition.maxZoom
-        }).addTo(this.map);
+        };
+        const useOfflineReadPath =
+            definition.offlineDownloadAllowed === true &&
+            this.offlineTileResolver;
+
+        this.baseTileLayer = (useOfflineReadPath
+            ? this.offlineTileLayerFactory({
+                leaflet: L,
+                provider: definition,
+                resolver: this.offlineTileResolver,
+                layerOptions
+            })
+            : L.tileLayer(definition.tileUrl, layerOptions)
+        ).addTo(this.map);
     }
 
     #getBaseMapDefinition(value) {
