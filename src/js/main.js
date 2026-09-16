@@ -10,8 +10,12 @@ import LibraryRefreshCoordinator from "./core/LibraryRefreshCoordinator.js";
 import LibraryCacheResetCoordinator, {
     clearLibraryRuntime
 } from "./core/LibraryCacheResetCoordinator.js";
+import OfflineDownloadCoordinator from "./core/OfflineDownloadCoordinator.js";
+import OfflineMapsController from "./core/OfflineMapsController.js";
 import TrackEditingCoordinator from "./core/TrackEditingCoordinator.js";
 import TrackSourceResolver from "./core/TrackSourceResolver.js";
+import OfflineMapsRepository from "./services/OfflineMapsRepository.js";
+import OfflineTileResolver from "./services/OfflineTileResolver.js";
 import SelectedTrackFileResolver from "./services/SelectedTrackFileResolver.js";
 import { registerTrailBookServiceWorker } from "./services/PWAServiceWorker.js";
 import { folderPathFromFilePath } from "./utils/PathUtils.js";
@@ -21,6 +25,7 @@ import {
 } from "./ui/BuildInfoView.js";
 import LibraryDiagnosticsPanel from "./ui/LibraryDiagnosticsPanel.js";
 import LibraryMaintenancePanel from "./ui/LibraryMaintenancePanel.js";
+import OfflineMapsPanel from "./ui/OfflineMapsPanel.js";
 
 window.addEventListener("DOMContentLoaded", () => {
 
@@ -33,9 +38,32 @@ window.addEventListener("DOMContentLoaded", () => {
     });
     app.gpxGeometryLoader.setSourceResolver(trackSourceResolver);
     app.trackDiscoveryCoordinator.setSourceResolver(trackSourceResolver);
-    app.trackDiscoveryCoordinator.sidebarShell
-        ?.querySelector(".sidebar-fixed-controls")
-        ?.append(app.mapView.sidebarDisplayControls);
+    const offlineMapsRepository = new OfflineMapsRepository();
+    const offlineTileResolver = new OfflineTileResolver(
+        offlineMapsRepository
+    );
+    const offlineDownloadCoordinator = new OfflineDownloadCoordinator({
+        providerRegistry: app.mapView.basemapProviders,
+        repository: offlineMapsRepository
+    });
+    const offlineMapsPanel = new OfflineMapsPanel();
+    const offlineMapsController = new OfflineMapsController({
+        panel: offlineMapsPanel,
+        mapView: app.mapView,
+        providerRegistry: app.mapView.basemapProviders,
+        repository: offlineMapsRepository,
+        downloadCoordinator: offlineDownloadCoordinator,
+        eventBus: app.eventBus
+    });
+    const sidebarFixedControls = app.trackDiscoveryCoordinator.sidebarShell
+        ?.querySelector(".sidebar-fixed-controls");
+
+    app.mapView.setOfflineTileResolver(offlineTileResolver);
+    sidebarFixedControls?.append(
+        app.mapView.sidebarDisplayControls,
+        offlineMapsPanel.element
+    );
+    void offlineMapsController.attach();
     const libraryDiagnostics = new LibraryDiagnosticsPanel();
     const libraryMaintenance = new LibraryMaintenancePanel(app.eventBus);
 

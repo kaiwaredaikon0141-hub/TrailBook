@@ -69,6 +69,120 @@ body{
     min-width:0;
 }
 
+.offline-maps-panel{
+
+    min-width:0;
+
+    color:#52606d;
+
+    font-size:11px;
+}
+
+.offline-maps-disclosure > summary{
+
+    box-sizing:border-box;
+
+    min-height:24px;
+
+    padding:5px 0;
+
+    cursor:pointer;
+}
+
+.offline-maps-content{
+
+    display:grid;
+
+    min-width:0;
+
+    gap:6px;
+
+    padding:2px 0 8px;
+}
+
+.offline-maps-content p,
+.offline-maps-content h4{
+
+    margin:0;
+}
+
+.offline-maps-content > label,
+.offline-zoom-range label{
+
+    display:grid;
+
+    gap:2px;
+}
+
+.offline-zoom-range{
+
+    display:grid;
+
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+
+    gap:6px;
+}
+
+.offline-primary-actions,
+.offline-area-actions{
+
+    display:flex;
+
+    flex-wrap:wrap;
+
+    gap:6px;
+}
+
+.offline-primary-actions button,
+.offline-area-actions button{
+
+    flex:1 1 auto;
+}
+
+.offline-maps-content progress{
+
+    width:100%;
+}
+
+.offline-status[data-state="error"]{
+
+    color:#b42318;
+}
+
+.offline-status[data-state="warning"]{
+
+    color:#9a6700;
+}
+
+.offline-area-list{
+
+    display:grid;
+
+    gap:6px;
+
+    margin:0;
+
+    padding:0;
+
+    list-style:none;
+}
+
+.offline-area-item{
+
+    min-width:0;
+
+    padding-top:6px;
+
+    border-top:1px solid var(--border);
+}
+
+.offline-area-summary{
+
+    margin-bottom:4px;
+
+    overflow-wrap:anywhere;
+}
+
 .trailbook-build-info{
 
     padding-top:8px;
@@ -2092,6 +2206,22 @@ body.is-track-info-resizing{
     }
 
     .sidebar-shell:has(.library-maintenance-disclosure[open]) > .sidebar{
+
+        flex:0 0 auto;
+
+        min-height:auto;
+
+        overflow-x:clip;
+
+        overflow-y:visible;
+    }
+
+    .sidebar-shell:has(.offline-maps-disclosure[open]){
+
+        overflow-y:auto;
+    }
+
+    .sidebar-shell:has(.offline-maps-disclosure[open]) > .sidebar{
 
         flex:0 0 auto;
 

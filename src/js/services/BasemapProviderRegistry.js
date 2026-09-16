@@ -2,6 +2,7 @@ export const DEFAULT_BASE_MAP = "osm";
 
 const GSI_STANDARD = Object.freeze({
     id: "gsiStandard",
+    name: "GSI Standard",
     tileUrl: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
     // Retain the MapView BASE_MAPS export contract for existing consumers.
     url: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
@@ -29,6 +30,7 @@ export default class BasemapProviderRegistry {
 
         const osm = Object.freeze({
             id: DEFAULT_BASE_MAP,
+            name: "OpenStreetMap",
             tileUrl: mapConfig.tileUrl,
             url: mapConfig.tileUrl,
             attribution: mapConfig.tileAttribution,

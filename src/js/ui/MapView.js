@@ -288,6 +288,20 @@ export default class MapView {
         return this.config.map.initialZoom;
     }
 
+    getCurrentBounds() {
+
+        const bounds = this.map?.getBounds?.();
+        if (!bounds) return null;
+        const result = {
+            west: bounds.getWest?.(),
+            south: bounds.getSouth?.(),
+            east: bounds.getEast?.(),
+            north: bounds.getNorth?.()
+        };
+
+        return Object.values(result).every(Number.isFinite) ? result : null;
+    }
+
     getViewState() {
 
         if (
@@ -537,6 +551,23 @@ export default class MapView {
     getBaseMap() {
 
         return this.baseMap;
+    }
+
+    getBaseMapProvider() {
+
+        return this.#getBaseMapDefinition(this.baseMap);
+    }
+
+    setOfflineTileResolver(resolver) {
+
+        if (resolver !== null && typeof resolver?.resolveTile !== "function") {
+            throw new TypeError("Offline tile resolver is invalid.");
+        }
+        this.offlineTileResolver = resolver;
+        const provider = this.#getBaseMapDefinition(this.baseMap);
+        if (this.map && provider.offlineDownloadAllowed === true) {
+            this.#replaceBaseLayer();
+        }
     }
 
     /**
