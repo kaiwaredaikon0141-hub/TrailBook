@@ -12,6 +12,16 @@ This document records third-party components and services used by TrailBook. The
 
 The bundled Leaflet license file must be retained with the vendor files.
 
+## PMTiles JavaScript
+
+- Component: PMTiles JavaScript
+- Version: 4.5.0
+- License: BSD 3-Clause License
+- Distribution: Bundled locally under `src/vendor/pmtiles/`
+- License text: [src/vendor/pmtiles/LICENSE](src/vendor/pmtiles/LICENSE)
+
+The bundled PMTiles license file must be retained with the vendor files.
+
 ## OpenStreetMap
 
 - Purpose: Online background map tile source

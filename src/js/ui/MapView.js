@@ -5,6 +5,7 @@ import BasemapProviderRegistry, {
     DEFAULT_BASE_MAP
 } from "../services/BasemapProviderRegistry.js";
 import OfflineTileLayer from "./OfflineTileLayer.js";
+import PMTilesRasterLayer from "./PMTilesRasterLayer.js";
 
 const DEFAULT_MAP_DISPLAY_MODE = "color";
 const MAP_DISPLAY_MODES = new Set([
@@ -31,7 +32,12 @@ export default class MapView {
         basemapProviders = new BasemapProviderRegistry(config.map),
         offlineTileResolver = null,
         offlineTileLayerFactory = options =>
-            new OfflineTileLayer(options).create(options.layerOptions)
+            new OfflineTileLayer(options).create(options.layerOptions),
+        pmtilesArchiveStore = null,
+        pmtilesLayerFactory = options =>
+            new PMTilesRasterLayer(options).create(
+                options.provider, options.layerOptions
+            )
     } = {}) {
 
         this.config = config;
@@ -41,6 +47,10 @@ export default class MapView {
         this.offlineTileResolver = offlineTileResolver;
 
         this.offlineTileLayerFactory = offlineTileLayerFactory;
+
+        this.pmtilesArchiveStore = pmtilesArchiveStore;
+
+        this.pmtilesLayerFactory = pmtilesLayerFactory;
 
         this.eventBus = eventBus;
 
@@ -634,19 +644,34 @@ export default class MapView {
             attribution: definition.attribution,
             maxZoom: definition.maxZoom
         };
+        const sourceType = definition.sourceType ??
+            (definition.offlineDownloadAllowed === true
+                ? "offline-xyz" : "xyz");
         const useOfflineReadPath =
             definition.offlineDownloadAllowed === true &&
             this.offlineTileResolver;
 
-        this.baseTileLayer = (useOfflineReadPath
-            ? this.offlineTileLayerFactory({
+        if (sourceType === "pmtiles") {
+            if (!this.pmtilesArchiveStore) {
+                throw new Error("Offline PMTiles archive storage is unavailable.");
+            }
+            this.baseTileLayer = this.pmtilesLayerFactory({
+                leaflet: L,
+                provider: definition,
+                archiveStore: this.pmtilesArchiveStore,
+                layerOptions
+            });
+        } else if (useOfflineReadPath) {
+            this.baseTileLayer = this.offlineTileLayerFactory({
                 leaflet: L,
                 provider: definition,
                 resolver: this.offlineTileResolver,
                 layerOptions
-            })
-            : L.tileLayer(definition.tileUrl, layerOptions)
-        ).addTo(this.map);
+            });
+        } else {
+            this.baseTileLayer = L.tileLayer(definition.tileUrl, layerOptions);
+        }
+        this.baseTileLayer.addTo(this.map);
     }
 
     #getBaseMapDefinition(value) {
@@ -750,6 +775,15 @@ export default class MapView {
                 { baseMap: event.target.value }
             )
         );
+
+        const baseMapSelect = section.querySelector(".base-map-select");
+        for (const provider of this.basemapProviders.list?.() ?? []) {
+            if (["osm", "gsiStandard"].includes(provider.id)) continue;
+            const option = document.createElement("option");
+            option.value = provider.id;
+            option.textContent = provider.name;
+            baseMapSelect.append(option);
+        }
 
         section.querySelector(".mobile-base-map-toggle").addEventListener(
             "click",

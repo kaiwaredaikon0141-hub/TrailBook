@@ -3,6 +3,7 @@ export const DEFAULT_BASE_MAP = "osm";
 const GSI_STANDARD = Object.freeze({
     id: "gsiStandard",
     name: "GSI Standard",
+    sourceType: "xyz",
     tileUrl: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
     // Retain the MapView BASE_MAPS export contract for existing consumers.
     url: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
@@ -31,6 +32,7 @@ export default class BasemapProviderRegistry {
         const osm = Object.freeze({
             id: DEFAULT_BASE_MAP,
             name: "OpenStreetMap",
+            sourceType: "xyz",
             tileUrl: mapConfig.tileUrl,
             url: mapConfig.tileUrl,
             attribution: mapConfig.tileAttribution,
@@ -64,5 +66,9 @@ export default class BasemapProviderRegistry {
 
     canDownloadOffline(id) {
         return this.get(id)?.offlineDownloadAllowed === true;
+    }
+
+    list() {
+        return Array.from(this.#providers.values());
     }
 }
