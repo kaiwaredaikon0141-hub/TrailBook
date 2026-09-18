@@ -124,7 +124,8 @@ body{
 }
 
 .offline-primary-actions,
-.offline-area-actions{
+.offline-area-actions,
+.offline-package-actions{
 
     display:flex;
 
@@ -134,7 +135,8 @@ body{
 }
 
 .offline-primary-actions button,
-.offline-area-actions button{
+.offline-area-actions button,
+.offline-package-actions button{
 
     flex:1 1 auto;
 }
@@ -144,17 +146,20 @@ body{
     width:100%;
 }
 
-.offline-status[data-state="error"]{
+.offline-status[data-state="error"],
+.offline-package-status[data-state="error"]{
 
     color:#b42318;
 }
 
-.offline-status[data-state="warning"]{
+.offline-status[data-state="warning"],
+.offline-package-status[data-state="warning"]{
 
     color:#9a6700;
 }
 
-.offline-area-list{
+.offline-area-list,
+.offline-package-list{
 
     display:grid;
 
@@ -167,7 +172,8 @@ body{
     list-style:none;
 }
 
-.offline-area-item{
+.offline-area-item,
+.offline-package-item{
 
     min-width:0;
 
@@ -181,6 +187,25 @@ body{
     margin-bottom:4px;
 
     overflow-wrap:anywhere;
+}
+
+.offline-package-item > p{
+
+    margin:2px 0 0;
+
+    overflow-wrap:anywhere;
+}
+
+.offline-package-item progress{
+
+    width:100%;
+
+    margin-top:4px;
+}
+
+.offline-package-actions{
+
+    margin-top:4px;
 }
 
 .trailbook-build-info{

@@ -2,7 +2,9 @@ function formatBytes(value) {
     if (!Number.isFinite(value)) return "—";
     if (value < 1024) return `${value} B`;
     if (value < 1024 ** 2) return `${(value / 1024).toFixed(1)} KB`;
-    return `${(value / 1024 ** 2).toFixed(1)} MB`;
+    if (value < 1024 ** 3) return `${(value / 1024 ** 2).toFixed(1)} MB`;
+    if (value < 1024 ** 4) return `${(value / 1024 ** 3).toFixed(2)} GB`;
+    return `${(value / 1024 ** 4).toFixed(2)} TB`;
 }
 
 /** Mobile-first presentation for device-local Offline Maps state. */
@@ -32,15 +34,28 @@ export default class OfflineMapsPanel {
         );
         this.statusOutput = this.element.querySelector(".offline-status");
         this.areaList = this.element.querySelector(".offline-area-list");
+        this.packageStorageOutput = this.element.querySelector(
+            ".offline-package-storage"
+        );
+        this.packageStatusOutput = this.element.querySelector(
+            ".offline-package-status"
+        );
+        this.packageList = this.element.querySelector(".offline-package-list");
+        this.packageStorage = null;
         this.eligible = false;
         this.hasPlan = false;
         this.active = false;
         this.actions = {};
+        this.packageActions = {};
         this.#bindDom();
     }
 
     bindActions(actions) {
         this.actions = { ...actions };
+    }
+
+    bindPackageActions(actions) {
+        this.packageActions = { ...actions };
     }
 
     configureProvider(provider, eligible, currentZoom) {
@@ -167,6 +182,91 @@ export default class OfflineMapsPanel {
         }
     }
 
+    showPackageStorage(storage) {
+        this.packageStorage = storage;
+        const capacity = storage.availableBytes === null
+            ? "Storage estimate unavailable"
+            : `${formatBytes(storage.availableBytes)} available`;
+        const persistence = storage.persisted === true
+            ? "persistent storage" : storage.persisted === false
+                ? "best-effort storage" : "persistence unknown";
+        this.packageStorageOutput.textContent =
+            `${formatBytes(storage.installedBytes)} installed · ${capacity} · ` +
+            persistence;
+    }
+
+    showPackageStatus(message, state = "") {
+        this.packageStatusOutput.textContent = message;
+        this.packageStatusOutput.dataset.state = state;
+    }
+
+    showPackages(packages, storage = this.packageStorage) {
+        this.packageList.replaceChildren();
+        if (!packages.length) {
+            const empty = this.document.createElement("li");
+            empty.textContent = "No offline map packages are configured.";
+            this.packageList.append(empty);
+            return;
+        }
+        for (const value of packages) {
+            const item = this.document.createElement("li");
+            const title = this.document.createElement("strong");
+            const description = this.document.createElement("p");
+            const details = this.document.createElement("p");
+            const progress = this.document.createElement("progress");
+            const actions = this.document.createElement("div");
+
+            item.className = "offline-package-item";
+            item.dataset.packageId = value.packageId;
+            item.dataset.packageIdentity = value.identity;
+            item.dataset.state = value.state;
+            title.textContent = value.displayName;
+            description.textContent = value.description || value.region;
+            details.className = "offline-package-details";
+            details.textContent = `${value.region} · ${formatBytes(
+                value.byteLength)} · z${value.minZoom}–${value.maxZoom} · ${
+                value.state}`;
+            if (Number.isFinite(storage?.availableBytes) &&
+                value.byteLength > storage.availableBytes) {
+                details.textContent += " · may exceed available storage";
+            }
+            if (value.errorMessage) {
+                details.textContent += ` · ${value.errorMessage}`;
+            }
+            progress.max = Math.max(1, value.progressTotalBytes ||
+                value.byteLength);
+            progress.value = Math.min(progress.max,
+                value.downloadedBytes || 0);
+            progress.hidden = !value.active && value.state !== "partial";
+            progress.setAttribute("aria-label",
+                `${value.displayName} download progress`);
+            actions.className = "offline-package-actions";
+
+            const definitions = [
+                ["download", "Download"],
+                ["cancel", "Cancel"],
+                ["resume", "Resume"],
+                ["delete", "Delete"],
+                ["select", "Select"]
+            ];
+            for (const [action, label] of definitions) {
+                const button = this.document.createElement("button");
+                button.type = "button";
+                button.dataset.packageAction = action;
+                button.textContent = label;
+                button.disabled = value.actions?.[action] !== true;
+                button.setAttribute("aria-label", `${label} ${value.displayName}`);
+                button.addEventListener("click", () =>
+                    this.packageActions[action]?.(value.identity)
+                );
+                actions.append(button);
+            }
+
+            item.append(title, description, details, progress, actions);
+            this.packageList.append(item);
+        }
+    }
+
     #syncButtons() {
         this.planButton.disabled = !this.eligible || this.active;
         this.startButton.disabled = !this.eligible || !this.hasPlan ||
@@ -216,8 +316,13 @@ export default class OfflineMapsPanel {
                     <progress value="0" max="1"></progress>
                     <p class="offline-progress-text"></p>
                     <p class="offline-status" role="status" aria-live="polite"></p>
-                    <h4>Saved areas</h4>
+                    <h4>Cached Areas</h4>
                     <ul class="offline-area-list"></ul>
+                    <h4>Offline Map Packages</h4>
+                    <p class="offline-package-storage"></p>
+                    <p class="offline-package-status" role="status"
+                        aria-live="polite"></p>
+                    <ul class="offline-package-list"></ul>
                 </div>
             </details>
         `;

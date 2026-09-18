@@ -11,11 +11,25 @@ import LibraryCacheResetCoordinator, {
     clearLibraryRuntime
 } from "./core/LibraryCacheResetCoordinator.js";
 import OfflineDownloadCoordinator from "./core/OfflineDownloadCoordinator.js";
+import OfflineMapPackageDownloadCoordinator from
+    "./core/OfflineMapPackageDownloadCoordinator.js";
+import OfflineMapPackagesController from
+    "./core/OfflineMapPackagesController.js";
 import OfflineMapsController from "./core/OfflineMapsController.js";
 import TrackEditingCoordinator from "./core/TrackEditingCoordinator.js";
 import TrackSourceResolver from "./core/TrackSourceResolver.js";
 import OfflineMapsRepository from "./services/OfflineMapsRepository.js";
+import OfflineMapArchiveStore from "./services/OfflineMapArchiveStore.js";
+import OfflineMapPackageCatalog from
+    "./services/OfflineMapPackageCatalog.js";
+import { BUNDLED_OFFLINE_MAP_PACKAGE_MANIFEST } from
+    "./services/OfflineMapPackageManifest.js";
+import OfflineMapPackageRepository from
+    "./services/OfflineMapPackageRepository.js";
+import OfflineMapRegionCatalog from
+    "./services/OfflineMapRegionCatalog.js";
 import OfflineTileResolver from "./services/OfflineTileResolver.js";
+import PMTilesArchiveReader from "./services/PMTilesArchiveReader.js";
 import SelectedTrackFileResolver from "./services/SelectedTrackFileResolver.js";
 import { registerTrailBookServiceWorker } from "./services/PWAServiceWorker.js";
 import { folderPathFromFilePath } from "./utils/PathUtils.js";
@@ -38,32 +52,64 @@ window.addEventListener("DOMContentLoaded", () => {
     });
     app.gpxGeometryLoader.setSourceResolver(trackSourceResolver);
     app.trackDiscoveryCoordinator.setSourceResolver(trackSourceResolver);
+    const staticBasemapProviders = app.mapView.basemapProviders;
     const offlineMapsRepository = new OfflineMapsRepository();
     const offlineTileResolver = new OfflineTileResolver(
         offlineMapsRepository
     );
     const offlineDownloadCoordinator = new OfflineDownloadCoordinator({
-        providerRegistry: app.mapView.basemapProviders,
+        providerRegistry: staticBasemapProviders,
         repository: offlineMapsRepository
     });
     const offlineMapsPanel = new OfflineMapsPanel();
     const offlineMapsController = new OfflineMapsController({
         panel: offlineMapsPanel,
         mapView: app.mapView,
-        providerRegistry: app.mapView.basemapProviders,
+        providerRegistry: staticBasemapProviders,
         repository: offlineMapsRepository,
         downloadCoordinator: offlineDownloadCoordinator,
         eventBus: app.eventBus
+    });
+    const packageRepository = new OfflineMapPackageRepository();
+    const packageArchiveStore = new OfflineMapArchiveStore();
+    const packageArchiveReader = new PMTilesArchiveReader();
+    const packageDownloadCoordinator =
+        new OfflineMapPackageDownloadCoordinator({
+            repository: packageRepository,
+            archiveStore: packageArchiveStore,
+            archiveReader: packageArchiveReader
+        });
+    const packageBasemapCatalog = new OfflineMapPackageCatalog({
+        staticProviders: staticBasemapProviders,
+        repository: packageRepository,
+        archiveStore: packageArchiveStore,
+        archiveReader: packageArchiveReader
+    });
+    const packageRegionCatalog = new OfflineMapRegionCatalog({
+        manifest: BUNDLED_OFFLINE_MAP_PACKAGE_MANIFEST,
+        repository: packageRepository,
+        archiveStore: packageArchiveStore,
+        archiveReader: packageArchiveReader
+    });
+    const offlineMapPackagesController = new OfflineMapPackagesController({
+        panel: offlineMapsPanel,
+        mapView: app.mapView,
+        eventBus: app.eventBus,
+        regionCatalog: packageRegionCatalog,
+        basemapCatalog: packageBasemapCatalog,
+        downloadCoordinator: packageDownloadCoordinator
     });
     const sidebarFixedControls = app.trackDiscoveryCoordinator.sidebarShell
         ?.querySelector(".sidebar-fixed-controls");
 
     app.mapView.setOfflineTileResolver(offlineTileResolver);
+    app.mapView.setPMTilesArchiveStore(packageArchiveStore);
     sidebarFixedControls?.append(
         app.mapView.sidebarDisplayControls,
         offlineMapsPanel.element
     );
     void offlineMapsController.attach();
+    void offlineMapPackagesController.attach();
     const libraryDiagnostics = new LibraryDiagnosticsPanel();
     const libraryMaintenance = new LibraryMaintenancePanel(app.eventBus);
 

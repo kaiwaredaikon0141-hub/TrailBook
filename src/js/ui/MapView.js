@@ -580,6 +580,26 @@ export default class MapView {
         }
     }
 
+    setPMTilesArchiveStore(store) {
+
+        if (store !== null && typeof store?.readRange !== "function") {
+            throw new TypeError("PMTiles archive storage is invalid.");
+        }
+        this.pmtilesArchiveStore = store;
+    }
+
+    setBasemapProviders(providers) {
+
+        if (!providers?.get || !providers?.normalizeId || !providers?.list) {
+            throw new TypeError("Basemap provider catalog is invalid.");
+        }
+        this.basemapProviders = providers;
+        this.#syncBasemapProviderOptions();
+        const normalized = this.#normalizeBaseMap(this.baseMap);
+        if (normalized !== this.baseMap) this.setBaseMap(normalized);
+        return this.basemapProviders.list();
+    }
+
     /**
      * Removes displayed GPX layers.
      *
@@ -684,6 +704,23 @@ export default class MapView {
         return this.basemapProviders.normalizeId(value);
     }
 
+    #syncBasemapProviderOptions(root = this.element) {
+        const select = root?.querySelector?.(".base-map-select");
+        if (!select) return;
+        for (const option of select.querySelectorAll(
+            "option[data-offline-package='true']"
+        )) option.remove();
+        for (const provider of this.basemapProviders.list?.() ?? []) {
+            if (["osm", "gsiStandard"].includes(provider.id)) continue;
+            const option = document.createElement("option");
+            option.value = provider.id;
+            option.textContent = provider.name;
+            option.dataset.offlinePackage = "true";
+            select.append(option);
+        }
+        select.value = this.#normalizeBaseMap(this.baseMap);
+    }
+
     /**
      * Creates the map view elements.
      *
@@ -776,14 +813,7 @@ export default class MapView {
             )
         );
 
-        const baseMapSelect = section.querySelector(".base-map-select");
-        for (const provider of this.basemapProviders.list?.() ?? []) {
-            if (["osm", "gsiStandard"].includes(provider.id)) continue;
-            const option = document.createElement("option");
-            option.value = provider.id;
-            option.textContent = provider.name;
-            baseMapSelect.append(option);
-        }
+        this.#syncBasemapProviderOptions(section);
 
         section.querySelector(".mobile-base-map-toggle").addEventListener(
             "click",
