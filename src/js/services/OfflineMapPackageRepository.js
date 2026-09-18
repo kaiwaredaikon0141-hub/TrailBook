@@ -1,11 +1,16 @@
 const PACKAGE_STATUSES = new Set([
-    "downloading", "partial", "verifying", "ready", "failed"
+    "planned", "downloading", "partial", "verifying", "ready", "failed"
 ]);
 const TILE_TYPES = new Set(["mvt", "png", "jpeg", "webp", "avif"]);
+const INTEGRITY_STATUSES = new Set([
+    "none", "pending", "verifying", "verified", "unavailable", "failed"
+]);
 const MUTABLE_FIELDS = new Set([
     "sourceId", "version", "status", "opfsPath", "byteLength",
     "downloadedBytes", "checksum", "bounds", "minZoom", "maxZoom",
-    "tileType", "attribution", "stylePackageId"
+    "tileType", "attribution", "stylePackageId", "url",
+    "checksumAlgorithm", "etag", "lastModified", "integrityStatus",
+    "errorCode", "errorMessage"
 ]);
 
 function nonnegativeInteger(value) {
@@ -13,7 +18,7 @@ function nonnegativeInteger(value) {
 }
 
 function optionalString(value) {
-    return value === null || (typeof value === "string" && value.length > 0);
+    return value == null || (typeof value === "string" && value.length > 0);
 }
 
 function validBounds(bounds) {
@@ -42,7 +47,15 @@ function validatePackage(value) {
         !Number.isInteger(value.maxZoom) || value.maxZoom > 30 ||
         value.minZoom > value.maxZoom || !TILE_TYPES.has(value.tileType) ||
         typeof value.attribution !== "string" || !value.attribution ||
-        !optionalString(value.stylePackageId)) {
+        !optionalString(value.stylePackageId) ||
+        !optionalString(value.url) ||
+        !optionalString(value.checksumAlgorithm) ||
+        !optionalString(value.etag) ||
+        !optionalString(value.lastModified) ||
+        !optionalString(value.errorCode) ||
+        !optionalString(value.errorMessage) ||
+        !(value.integrityStatus == null ||
+            INTEGRITY_STATUSES.has(value.integrityStatus))) {
         throw new TypeError("Invalid offline map package metadata.");
     }
 }
