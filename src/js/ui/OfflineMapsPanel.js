@@ -385,12 +385,13 @@ export default class OfflineMapsPanel {
                     <ul class="offline-area-list"></ul>
                     <h4>Offline Map Packages</h4>
                     <div class="offline-package-import-actions">
-                        <label class="offline-package-import">
-                            <span>Import PMTiles</span>
-                            <input class="offline-package-file" type="file"
-                                accept=".pmtiles,application/vnd.pmtiles"
-                                aria-label="Import PMTiles">
-                        </label>
+                        <span class="offline-package-import-label">
+                            Import PMTiles
+                        </span>
+                        <input class="offline-package-import offline-package-file"
+                            type="file"
+                            accept=".pmtiles,application/vnd.pmtiles"
+                            aria-label="Import PMTiles">
                     </div>
                     <progress class="offline-package-import-progress"
                         value="0" max="1" hidden></progress>

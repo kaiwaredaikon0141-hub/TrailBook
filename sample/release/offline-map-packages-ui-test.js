@@ -476,17 +476,29 @@ async function testUiAndController() {
     assert(download.calls.some(call => call[0] === "delete"),
         "Delete action did not reach coordinator");
 
-    let pickerClicks = 0;
-    panel.packageFileInput.addEventListener("click", () => {
-        pickerClicks += 1;
-    });
-    panel.packageImportButton.click();
-    assert(pickerClicks === 1,
-        "Import control did not synchronously activate the native file input");
-    assert(panel.packageImportButton.tagName === "LABEL" &&
-        panel.packageImportButton.contains(panel.packageFileInput) &&
-        !panel.packageFileInput.hidden && !panel.packageFileInput.disabled,
-    "Import control is not a direct, enabled file-input activation boundary");
+    const fileInputStyle = getComputedStyle(panel.packageFileInput);
+    assert(panel.packageImportButton === panel.packageFileInput &&
+        panel.packageFileInput.tagName === "INPUT" &&
+        panel.packageFileInput.type === "file" &&
+        !panel.packageFileInput.closest("label"),
+    "Import control is not the native file input itself");
+    assert(!panel.packageFileInput.hidden && !panel.packageFileInput.disabled &&
+        panel.packageFileInput.isConnected && fileInputStyle.opacity !== "0" &&
+        fileInputStyle.pointerEvents !== "none" &&
+        fileInputStyle.display !== "none" &&
+        fileInputStyle.visibility !== "hidden",
+    "native file input is hidden, covered or disabled");
+    assert(panel.packageFileInput.accept ===
+        ".pmtiles,application/vnd.pmtiles",
+    "native file input accept contract changed");
+    assert(panel.packageFileInput.tabIndex >= 0,
+        "native file input is not in the keyboard focus order");
+    const panelSource = await fetch(
+        "../../src/js/ui/OfflineMapsPanel.js"
+    ).then(response => response.text());
+    assert(!panelSource.includes("packageFileInput.click(") &&
+        !panelSource.includes("showOpenFilePicker"),
+    "Import control still depends on programmatic picker activation");
     const importedFile = new File([new Uint8Array(16)],
         "local-kansai.pmtiles", {
             type: "application/vnd.pmtiles", lastModified: 123
