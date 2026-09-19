@@ -477,10 +477,16 @@ async function testUiAndController() {
         "Delete action did not reach coordinator");
 
     let pickerClicks = 0;
-    panel.packageFileInput.click = () => { pickerClicks += 1; };
+    panel.packageFileInput.addEventListener("click", () => {
+        pickerClicks += 1;
+    });
     panel.packageImportButton.click();
     assert(pickerClicks === 1,
-        "Import action did not remain at the user-gesture file-picker boundary");
+        "Import control did not synchronously activate the native file input");
+    assert(panel.packageImportButton.tagName === "LABEL" &&
+        panel.packageImportButton.contains(panel.packageFileInput) &&
+        !panel.packageFileInput.hidden && !panel.packageFileInput.disabled,
+    "Import control is not a direct, enabled file-input activation boundary");
     const importedFile = new File([new Uint8Array(16)],
         "local-kansai.pmtiles", {
             type: "application/vnd.pmtiles", lastModified: 123
@@ -514,9 +520,48 @@ async function testUiAndController() {
     assert(mapView.getBaseMap() === "osm",
         "deleting the active local import did not use safe basemap fallback");
 
+    panel.packageFileInput.dispatchEvent(new Event("change"));
+    await waitFor(() => importer.calls.length === 2 &&
+        regionCatalog.list().some(entry => entry.localImport),
+        "selecting the same PMTiles File again did not start a new import");
+    assert(panel.packageFileInput.value === "",
+        "file input value was not reset for same-file reselection");
+    const secondLocalEntry = regionCatalog.list().find(entry =>
+        entry.localImport
+    );
+    panel.packageList.querySelector(
+        `[data-package-id='${secondLocalEntry.packageId}'] ` +
+        "[data-package-action='delete']"
+    ).click();
+    await waitFor(() => regionCatalog.get(secondLocalEntry.packageId) === null,
+        "same-file reimport could not be cleaned up");
+
+    Object.defineProperty(panel.packageFileInput, "files", {
+        configurable: true, value: []
+    });
+    panel.packageFileInput.dispatchEvent(new Event("change"));
+    assert(importer.calls.length === 2 && !panel.packageFileInput.disabled,
+        "picker cancellation imported a file or disabled future selection");
+
     controller.detach();
     assert(download.listeners.size === 0,
         "panel teardown left a package download listener");
+    Object.defineProperty(panel.packageFileInput, "files", {
+        configurable: true, value: [importedFile]
+    });
+    panel.packageFileInput.dispatchEvent(new Event("change"));
+    assert(importer.calls.length === 2,
+        "controller detach left the file selection listener active");
+    await controller.attach();
+    Object.defineProperty(panel.packageFileInput, "files", {
+        configurable: true, value: [importedFile]
+    });
+    panel.packageFileInput.dispatchEvent(new Event("change"));
+    await waitFor(() => importer.calls.length === 3,
+        "reattach did not preserve the file-selection boundary");
+    assert(importer.calls.length === 3,
+        "attach/detach duplicated the file selection listener");
+    controller.detach();
 }
 
 function testMapViewCatalogApi() {

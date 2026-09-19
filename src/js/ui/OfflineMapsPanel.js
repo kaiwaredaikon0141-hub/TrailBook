@@ -60,6 +60,7 @@ export default class OfflineMapsPanel {
         this.active = false;
         this.actions = {};
         this.packageActions = {};
+        this.packageFileChangeHandler = null;
         this.#bindDom();
     }
 
@@ -69,6 +70,22 @@ export default class OfflineMapsPanel {
 
     bindPackageActions(actions) {
         this.packageActions = { ...actions };
+        const shouldBind = typeof this.packageActions.import === "function";
+        if (shouldBind && !this.packageFileChangeHandler) {
+            this.packageFileChangeHandler = () => {
+                const file = this.packageFileInput.files?.[0] ?? null;
+                this.packageFileInput.value = "";
+                if (file) this.packageActions.import?.(file);
+            };
+            this.packageFileInput.addEventListener(
+                "change", this.packageFileChangeHandler
+            );
+        } else if (!shouldBind && this.packageFileChangeHandler) {
+            this.packageFileInput.removeEventListener(
+                "change", this.packageFileChangeHandler
+            );
+            this.packageFileChangeHandler = null;
+        }
     }
 
     configureProvider(provider, eligible, currentZoom) {
@@ -215,7 +232,13 @@ export default class OfflineMapsPanel {
 
     setPackageImportActive(active) {
         this.packageBusy = Boolean(active);
-        this.packageImportButton.disabled = this.packageBusy;
+        this.packageFileInput.disabled = this.packageBusy;
+        this.packageImportButton.classList.toggle(
+            "is-disabled", this.packageBusy
+        );
+        this.packageImportButton.setAttribute(
+            "aria-disabled", String(this.packageBusy)
+        );
         for (const button of this.packageList.querySelectorAll("button")) {
             button.disabled = this.packageBusy ||
                 button.dataset.actionAvailable !== "true";
@@ -323,14 +346,6 @@ export default class OfflineMapsPanel {
         this.planButton.addEventListener("click", () => this.actions.plan?.());
         this.startButton.addEventListener("click", () => this.actions.start?.());
         this.cancelButton.addEventListener("click", () => this.actions.cancel?.());
-        this.packageImportButton.addEventListener("click", () =>
-            this.packageFileInput.click()
-        );
-        this.packageFileInput.addEventListener("change", () => {
-            const file = this.packageFileInput.files?.[0] ?? null;
-            this.packageFileInput.value = "";
-            if (file) this.packageActions.import?.(file);
-        });
     }
 
     #create() {
@@ -370,11 +385,12 @@ export default class OfflineMapsPanel {
                     <ul class="offline-area-list"></ul>
                     <h4>Offline Map Packages</h4>
                     <div class="offline-package-import-actions">
-                        <button class="offline-package-import" type="button">
-                            Import PMTiles
-                        </button>
-                        <input class="offline-package-file" type="file"
-                            accept=".pmtiles,application/vnd.pmtiles" hidden>
+                        <label class="offline-package-import">
+                            <span>Import PMTiles</span>
+                            <input class="offline-package-file" type="file"
+                                accept=".pmtiles,application/vnd.pmtiles"
+                                aria-label="Import PMTiles">
+                        </label>
                     </div>
                     <progress class="offline-package-import-progress"
                         value="0" max="1" hidden></progress>

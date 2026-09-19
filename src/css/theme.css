@@ -137,10 +137,91 @@ body{
 
 .offline-primary-actions button,
 .offline-area-actions button,
-.offline-package-import-actions button,
+.offline-package-import,
 .offline-package-actions button{
 
     flex:1 1 auto;
+}
+
+.offline-package-import{
+
+    position:relative;
+
+    box-sizing:border-box;
+
+    display:inline-flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    min-height:22px;
+
+    padding:2px 7px;
+
+    border:1px solid #767676;
+
+    border-radius:2px;
+
+    background:#efefef;
+
+    color:#000;
+
+    cursor:pointer;
+}
+
+.offline-package-import:hover{
+
+    background:#e5e5e5;
+}
+
+.offline-package-import:focus-within{
+
+    outline:2px solid var(--accent);
+
+    outline-offset:1px;
+}
+
+.offline-package-import.is-disabled{
+
+    color:#6d6d6d;
+
+    cursor:not-allowed;
+
+    opacity:0.65;
+}
+
+.offline-package-import .offline-package-file{
+
+    position:absolute;
+
+    inset:-1px;
+
+    box-sizing:border-box;
+
+    width:auto;
+
+    height:auto;
+
+    min-width:0;
+
+    min-height:0;
+
+    margin:0;
+
+    padding:0;
+
+    border:0;
+
+    font-size:0;
+
+    appearance:none;
+
+    -webkit-appearance:none;
+
+    opacity:0;
+
+    cursor:inherit;
 }
 
 .offline-maps-content progress{
@@ -2509,6 +2590,7 @@ body.is-track-info-resizing{
     .sidebar-fixed-controls button,
     .sidebar-fixed-controls select,
     .sidebar-fixed-controls input,
+    .offline-package-import,
     .tree-row,
     .date-tree-row,
     .search-result-row,
