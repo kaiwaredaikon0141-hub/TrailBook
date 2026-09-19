@@ -13,6 +13,8 @@ import LibraryCacheResetCoordinator, {
 import OfflineDownloadCoordinator from "./core/OfflineDownloadCoordinator.js";
 import OfflineMapPackageDownloadCoordinator from
     "./core/OfflineMapPackageDownloadCoordinator.js";
+import OfflineMapPackageImportCoordinator from
+    "./core/OfflineMapPackageImportCoordinator.js";
 import OfflineMapPackagesController from
     "./core/OfflineMapPackagesController.js";
 import OfflineMapsController from "./core/OfflineMapsController.js";
@@ -79,6 +81,11 @@ window.addEventListener("DOMContentLoaded", () => {
             archiveStore: packageArchiveStore,
             archiveReader: packageArchiveReader
         });
+    const packageImportCoordinator = new OfflineMapPackageImportCoordinator({
+        repository: packageRepository,
+        archiveStore: packageArchiveStore,
+        archiveReader: packageArchiveReader
+    });
     const packageBasemapCatalog = new OfflineMapPackageCatalog({
         staticProviders: staticBasemapProviders,
         repository: packageRepository,
@@ -97,7 +104,8 @@ window.addEventListener("DOMContentLoaded", () => {
         eventBus: app.eventBus,
         regionCatalog: packageRegionCatalog,
         basemapCatalog: packageBasemapCatalog,
-        downloadCoordinator: packageDownloadCoordinator
+        downloadCoordinator: packageDownloadCoordinator,
+        importCoordinator: packageImportCoordinator
     });
     const sidebarFixedControls = app.trackDiscoveryCoordinator.sidebarShell
         ?.querySelector(".sidebar-fixed-controls");

@@ -200,6 +200,47 @@ class DownloadStub {
     }
 }
 
+class ImportStub {
+    constructor(repository, archiveStore) {
+        this.repository = repository;
+        this.archiveStore = archiveStore;
+        this.calls = [];
+    }
+    async importFile(file, options) {
+        this.calls.push({ file, options });
+        options.onProgress?.({ status: "importing", downloadedBytes: 4,
+            totalBytes: file.size });
+        const value = {
+            packageId: options.packageId,
+            sourceId: options.sourceId,
+            version: options.version,
+            status: "ready",
+            opfsPath: this.archiveStore.paths(options.packageId).final,
+            byteLength: file.size,
+            downloadedBytes: file.size,
+            checksum: null,
+            checksumAlgorithm: null,
+            integrityStatus: "none",
+            bounds: { west: 130, south: 30, east: 140, north: 40 },
+            minZoom: 0,
+            maxZoom: 14,
+            tileType: "png",
+            attribution: "Imported package attribution",
+            stylePackageId: null,
+            url: null,
+            etag: null,
+            lastModified: null,
+            errorCode: null,
+            errorMessage: null
+        };
+        this.repository.values.set(value.packageId, value);
+        this.archiveStore.set(value.packageId, { final: file.size });
+        options.onProgress?.({ status: "ready", downloadedBytes: file.size,
+            totalBytes: file.size });
+        return value;
+    }
+}
+
 class FakeMapView {
     constructor() {
         this.baseMap = "osm";
@@ -361,15 +402,19 @@ async function testUiAndController() {
         mapView.setBaseMap(baseMap)
     );
     const download = new DownloadStub(repository, store);
+    const importer = new ImportStub(repository, store);
     const controller = new OfflineMapPackagesController({
         panel, mapView, eventBus, regionCatalog, basemapCatalog,
-        downloadCoordinator: download
+        downloadCoordinator: download, importCoordinator: importer
     });
     let packageFetches = 0;
 
     await controller.attach();
-    assert(packageFetches === 0 && download.calls.length === 0,
-        "startup initiated a package download");
+    assert(packageFetches === 0 && download.calls.length === 0 &&
+        importer.calls.length === 0,
+    "startup initiated a package download or local import");
+    assert(panel.packageFileInput.accept.includes(".pmtiles"),
+        "local package picker does not restrict selection to PMTiles");
     assert(panel.packageList.textContent.includes("Package regional") &&
         panel.areaList && panel.element.querySelector("h4")?.textContent ===
             "Cached Areas",
@@ -430,6 +475,44 @@ async function testUiAndController() {
         "static provider registry was mutated");
     assert(download.calls.some(call => call[0] === "delete"),
         "Delete action did not reach coordinator");
+
+    let pickerClicks = 0;
+    panel.packageFileInput.click = () => { pickerClicks += 1; };
+    panel.packageImportButton.click();
+    assert(pickerClicks === 1,
+        "Import action did not remain at the user-gesture file-picker boundary");
+    const importedFile = new File([new Uint8Array(16)],
+        "local-kansai.pmtiles", {
+            type: "application/vnd.pmtiles", lastModified: 123
+        });
+    Object.defineProperty(panel.packageFileInput, "files", {
+        configurable: true, value: [importedFile]
+    });
+    panel.packageFileInput.dispatchEvent(new Event("change"));
+    await waitFor(() => importer.calls.length === 1 &&
+        panel.packageList.textContent.includes("local-kansai"),
+    "selected local PMTiles File did not reach the import coordinator");
+    const localEntry = regionCatalog.list().find(entry => entry.localImport);
+    assert(importer.calls[0].file === importedFile && localEntry?.state ===
+        "ready" && localEntry.actions.select && localEntry.actions.delete,
+    "ready local import was not projected into the package catalog");
+    assert(!localEntry.actions.download && !localEntry.actions.resume &&
+        panel.packageImportOutput.textContent.includes("100%"),
+    "local import exposed remote actions or lost byte progress");
+    panel.packageList.querySelector(
+        `[data-package-id='${localEntry.packageId}'] ` +
+        "[data-package-action='select']"
+    ).click();
+    await waitFor(() => mapView.getBaseMapProvider()?.packageId ===
+        localEntry.packageId, "imported local package was not selectable");
+    panel.packageList.querySelector(
+        `[data-package-id='${localEntry.packageId}'] ` +
+        "[data-package-action='delete']"
+    ).click();
+    await waitFor(() => regionCatalog.get(localEntry.packageId) === null,
+        "deleted local import remained in the package catalog");
+    assert(mapView.getBaseMap() === "osm",
+        "deleting the active local import did not use safe basemap fallback");
 
     controller.detach();
     assert(download.listeners.size === 0,

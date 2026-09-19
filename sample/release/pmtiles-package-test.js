@@ -296,11 +296,13 @@ async function testImportRestartRenderAndDelete() {
         repository, archiveStore, archiveReader: reader, chunkSize: 1024
     });
     const file = new TrackingFile(fixtureBytes());
+    const progress = [];
     const ready = await importer.importFile(file, {
         packageId: "tiny-raster",
         sourceId: "Tiny Raster",
         version: "fixture-v1",
-        checksum: "fixture-checksum"
+        checksum: "fixture-checksum",
+        onProgress: value => progress.push(value)
     });
     assert(ready.status === "ready" && ready.downloadedBytes === file.size &&
         archiveStore.finalized.length === 1,
@@ -311,6 +313,16 @@ async function testImportRestartRenderAndDelete() {
     assert(!file.slices.some(([start, end]) =>
         start === 0 && end - start === file.size),
     "PMTiles import buffered the complete File");
+    assert(progress[0].status === "importing" &&
+        progress.at(-1).status === "ready" &&
+        progress.at(-1).downloadedBytes === file.size,
+    "PMTiles import did not publish bounded byte progress through ready");
+    await rejects(() => importer.importFile(file, {
+        packageId: "tiny-raster",
+        sourceId: "Tiny Raster",
+        version: "fixture-v1"
+    }), "duplicate local package identity was silently overwritten",
+    error => error.code === "duplicate-package");
     const files = await archiveStore.inspectPackageFiles("tiny-raster");
     assert(files.final.exists && files.final.size === file.size &&
         !files.partial.exists,
@@ -429,6 +441,62 @@ async function testImportRestartRenderAndDelete() {
     indexedDB.deleteDatabase(databaseName);
 }
 
+async function testVectorImportAndQuotaFailure() {
+    const databaseName = uniqueDatabase();
+    const repository = new OfflineMapPackageRepository({ databaseName });
+    const archiveStore = new MemoryArchiveStore();
+    const reader = new PMTilesArchiveReader();
+    const importer = new OfflineMapPackageImportCoordinator({
+        repository, archiveStore, archiveReader: reader, chunkSize: 1024
+    });
+    const vectorFile = new TrackingFile(fixtureBytes({ tileType: 1 }),
+        "local-vector.pmtiles");
+    const ready = await importer.importFile(vectorFile, {
+        packageId: "local-vector",
+        sourceId: "local-vector",
+        version: "local-v1"
+    });
+    const catalog = new OfflineMapPackageCatalog({
+        staticProviders: new BasemapProviderRegistry(Config.map),
+        repository, archiveStore, archiveReader: reader
+    });
+    const sources = await catalog.refresh();
+    assert(ready.tileType === "mvt" && sources.length === 1 &&
+        sources[0].tileType === "mvt",
+    "local vector PMTiles did not route to the vector package source");
+
+    const quotaStore = new MemoryArchiveStore();
+    const write = quotaStore.writePartial.bind(quotaStore);
+    quotaStore.writePartial = async (id, value, options) => {
+        if ((options.offset ?? 0) >= 1024) {
+            throw new DOMException("Quota exceeded", "QuotaExceededError");
+        }
+        return write(id, value, options);
+    };
+    const quotaRepository = new OfflineMapPackageRepository({
+        databaseName: uniqueDatabase()
+    });
+    const quotaImporter = new OfflineMapPackageImportCoordinator({
+        repository: quotaRepository,
+        archiveStore: quotaStore,
+        archiveReader: reader,
+        chunkSize: 1024
+    });
+    await rejects(() => quotaImporter.importFile(
+        new TrackingFile(fixtureBytes(), "quota.pmtiles"), {
+            packageId: "quota", sourceId: "quota", version: "local-v1"
+        }
+    ), "local import quota failure was hidden",
+    error => error.name === "QuotaExceededError");
+    const partial = await quotaRepository.getPackage("quota");
+    const files = await quotaStore.inspectPackageFiles("quota");
+    assert(partial.status === "partial" && partial.downloadedBytes === 1024 &&
+        files.partial.exists && !files.final.exists,
+    "quota failure did not preserve recoverable partial import state");
+    indexedDB.deleteDatabase(databaseName);
+    indexedDB.deleteDatabase(quotaRepository.databaseName);
+}
+
 async function testFailedValidationPreservesPartial() {
     const databaseName = uniqueDatabase();
     const repository = new OfflineMapPackageRepository({ databaseName });
@@ -467,6 +535,7 @@ async function testFailedValidationPreservesPartial() {
 try {
     await testReaderAndSource();
     await testImportRestartRenderAndDelete();
+    await testVectorImportAndQuotaFailure();
     await testFailedValidationPreservesPartial();
     output.textContent = `PASS: ${assertions} assertions`;
     document.title = "PASS";

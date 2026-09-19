@@ -30,15 +30,29 @@ export default class OfflineMapPackageImportCoordinator {
         version,
         checksum = null,
         attribution = null,
-        stylePackageId = null
+        stylePackageId = null,
+        onProgress = null
     } = {}) {
         packageId = requireText(packageId, "Package ID");
         sourceId = requireText(sourceId, "Package source ID");
         version = requireText(version, "Package version");
         const inspected = await this.archiveReader.inspectFile(file);
+        if (await this.repository.getPackage(packageId)) {
+            const error = new Error(
+                "An offline map package with this name is already installed."
+            );
+            error.code = "duplicate-package";
+            throw error;
+        }
         const paths = this.archiveStore.getPaths(packageId);
         const packageAttribution = attribution ??
             inspected.metadata?.attribution ?? "Offline map package";
+        const publish = (status, downloadedBytes) => onProgress?.(Object.freeze({
+            status,
+            packageId,
+            downloadedBytes,
+            totalBytes: file.size
+        }));
         let created = false;
         try {
             await this.repository.createPackage({
@@ -59,6 +73,7 @@ export default class OfflineMapPackageImportCoordinator {
             });
             created = true;
             await this.archiveStore.createPartial(packageId, { truncate: true });
+            publish("importing", 0);
             for (let offset = 0; offset < file.size; offset += this.chunkSize) {
                 const chunk = file.slice(
                     offset, Math.min(file.size, offset + this.chunkSize)
@@ -71,6 +86,8 @@ export default class OfflineMapPackageImportCoordinator {
                         ? "downloading" : "verifying",
                     downloadedBytes
                 });
+                publish(downloadedBytes < file.size
+                    ? "importing" : "verifying", downloadedBytes);
             }
             const partialSize = await this.archiveStore.getFileSize(packageId, {
                 kind: "partial"
@@ -92,11 +109,13 @@ export default class OfflineMapPackageImportCoordinator {
                 new PMTilesArchiveSource(this.archiveStore, packageId),
                 { expectedSize: file.size }
             );
-            return await this.repository.updatePackage(packageId, {
+            const ready = await this.repository.updatePackage(packageId, {
                 status: "ready",
                 opfsPath: finalized.path,
                 downloadedBytes: finalized.size
             });
+            publish("ready", finalized.size);
+            return ready;
         } catch (error) {
             if (created) {
                 try {

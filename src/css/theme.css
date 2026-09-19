@@ -125,6 +125,7 @@ body{
 
 .offline-primary-actions,
 .offline-area-actions,
+.offline-package-import-actions,
 .offline-package-actions{
 
     display:flex;
@@ -136,6 +137,7 @@ body{
 
 .offline-primary-actions button,
 .offline-area-actions button,
+.offline-package-import-actions button,
 .offline-package-actions button{
 
     flex:1 1 auto;

@@ -40,8 +40,21 @@ export default class OfflineMapsPanel {
         this.packageStatusOutput = this.element.querySelector(
             ".offline-package-status"
         );
+        this.packageImportButton = this.element.querySelector(
+            ".offline-package-import"
+        );
+        this.packageFileInput = this.element.querySelector(
+            ".offline-package-file"
+        );
+        this.packageImportProgress = this.element.querySelector(
+            ".offline-package-import-progress"
+        );
+        this.packageImportOutput = this.element.querySelector(
+            ".offline-package-import-text"
+        );
         this.packageList = this.element.querySelector(".offline-package-list");
         this.packageStorage = null;
+        this.packageBusy = false;
         this.eligible = false;
         this.hasPlan = false;
         this.active = false;
@@ -200,6 +213,31 @@ export default class OfflineMapsPanel {
         this.packageStatusOutput.dataset.state = state;
     }
 
+    setPackageImportActive(active) {
+        this.packageBusy = Boolean(active);
+        this.packageImportButton.disabled = this.packageBusy;
+        for (const button of this.packageList.querySelectorAll("button")) {
+            button.disabled = this.packageBusy ||
+                button.dataset.actionAvailable !== "true";
+        }
+    }
+
+    showPackageImportProgress(value = null) {
+        const visible = Boolean(value);
+        this.packageImportProgress.hidden = !visible;
+        this.packageImportOutput.textContent = "";
+        if (!visible) return;
+        const total = Math.max(1, value.totalBytes || 1);
+        const current = Math.min(total, value.downloadedBytes || 0);
+        const percent = Math.floor(current / total * 100);
+        this.packageImportProgress.max = total;
+        this.packageImportProgress.value = current;
+        this.packageImportOutput.textContent = `${value.status === "ready"
+            ? "Imported" : value.status === "verifying"
+                ? "Validating…" : "Importing…"} ${formatBytes(current)} / ${
+            formatBytes(value.totalBytes || 0)} · ${percent}%`;
+    }
+
     showPackages(packages, storage = this.packageStorage) {
         this.packageList.replaceChildren();
         if (!packages.length) {
@@ -253,8 +291,12 @@ export default class OfflineMapsPanel {
                 const button = this.document.createElement("button");
                 button.type = "button";
                 button.dataset.packageAction = action;
+                button.dataset.actionAvailable = String(
+                    value.actions?.[action] === true
+                );
                 button.textContent = label;
-                button.disabled = value.actions?.[action] !== true;
+                button.disabled = this.packageBusy ||
+                    value.actions?.[action] !== true;
                 button.setAttribute("aria-label", `${label} ${value.displayName}`);
                 button.addEventListener("click", () =>
                     this.packageActions[action]?.(value.identity)
@@ -281,6 +323,14 @@ export default class OfflineMapsPanel {
         this.planButton.addEventListener("click", () => this.actions.plan?.());
         this.startButton.addEventListener("click", () => this.actions.start?.());
         this.cancelButton.addEventListener("click", () => this.actions.cancel?.());
+        this.packageImportButton.addEventListener("click", () =>
+            this.packageFileInput.click()
+        );
+        this.packageFileInput.addEventListener("change", () => {
+            const file = this.packageFileInput.files?.[0] ?? null;
+            this.packageFileInput.value = "";
+            if (file) this.packageActions.import?.(file);
+        });
     }
 
     #create() {
@@ -319,6 +369,16 @@ export default class OfflineMapsPanel {
                     <h4>Cached Areas</h4>
                     <ul class="offline-area-list"></ul>
                     <h4>Offline Map Packages</h4>
+                    <div class="offline-package-import-actions">
+                        <button class="offline-package-import" type="button">
+                            Import PMTiles
+                        </button>
+                        <input class="offline-package-file" type="file"
+                            accept=".pmtiles,application/vnd.pmtiles" hidden>
+                    </div>
+                    <progress class="offline-package-import-progress"
+                        value="0" max="1" hidden></progress>
+                    <p class="offline-package-import-text"></p>
                     <p class="offline-package-storage"></p>
                     <p class="offline-package-status" role="status"
                         aria-live="polite"></p>

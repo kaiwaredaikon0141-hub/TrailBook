@@ -37,6 +37,30 @@ function stateFromLifecycle(metadata, lifecycle, descriptor) {
     return lifecycle.status;
 }
 
+function localDescriptor(metadata) {
+    return Object.freeze({
+        identity: `${metadata.packageId}@${metadata.version}`,
+        packageId: metadata.packageId,
+        sourceId: metadata.sourceId,
+        version: metadata.version,
+        displayName: metadata.sourceId,
+        region: "Local PMTiles",
+        description: "Imported from a local PMTiles file.",
+        url: null,
+        byteLength: metadata.byteLength,
+        checksum: metadata.checksum,
+        checksumAlgorithm: metadata.checksumAlgorithm ?? null,
+        bounds: Object.freeze({ ...metadata.bounds }),
+        minZoom: metadata.minZoom,
+        maxZoom: metadata.maxZoom,
+        tileType: metadata.tileType,
+        attribution: metadata.attribution,
+        etag: null,
+        lastModified: null,
+        localImport: true
+    });
+}
+
 /**
  * Derived regional package view model. Manifest, IndexedDB metadata and OPFS
  * remain the authorities; this catalog owns no persistent lifecycle state.
@@ -96,6 +120,31 @@ export default class OfflineMapRegionCatalog {
             entries.push(this.#entry(
                 descriptor, metadata, files, lifecycle, downloadState
             ));
+        }
+        const manifestIds = new Set(
+            this.manifest.packages.map(value => value.packageId)
+        );
+        for (const metadata of metadataList) {
+            if (manifestIds.has(metadata.packageId)) continue;
+            const files = await this.archiveStore.inspectPackageFiles(
+                metadata.packageId
+            );
+            this.files.set(metadata.packageId, files);
+            let lifecycle = evaluatePackageLifecycle(metadata, files);
+            if (lifecycle.ready) {
+                try {
+                    await this.archiveReader.inspectSource(
+                        new PMTilesArchiveSource(
+                            this.archiveStore, metadata.packageId
+                        ),
+                        { expectedSize: metadata.byteLength }
+                    );
+                } catch {
+                    lifecycle = { ...lifecycle, status: "failed", ready: false,
+                        recoverable: false, reason: "archive-invalid" };
+                }
+            }
+            entries.push(this.#localEntry(metadata, files, lifecycle));
         }
         this.entries = entries;
         return this.list();
@@ -173,6 +222,31 @@ export default class OfflineMapRegionCatalog {
             errorMessage: metadata?.errorMessage ?? null,
             active,
             actions: actionState(projectedState, { installedReady, active })
+        });
+    }
+
+    #localEntry(metadata, files, lifecycle) {
+        const descriptor = localDescriptor(metadata);
+        const state = lifecycle.status === "invalid"
+            ? "missing" : lifecycle.status;
+        return copyEntry({
+            ...descriptor,
+            descriptor,
+            state,
+            installedVersion: metadata.version,
+            installedReady: lifecycle.ready,
+            downloadedBytes: metadata.downloadedBytes ??
+                files.partial?.size ?? 0,
+            progressTotalBytes: metadata.byteLength,
+            errorMessage: metadata.errorMessage ?? null,
+            active: false,
+            actions: {
+                download: false,
+                cancel: false,
+                resume: false,
+                delete: true,
+                select: lifecycle.ready
+            }
         });
     }
 }

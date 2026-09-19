@@ -2,7 +2,8 @@
 export default class OfflineMapPackagesController {
 
     constructor({ panel, mapView, eventBus, regionCatalog,
-        basemapCatalog, downloadCoordinator, fallbackBaseMap = "osm" }) {
+        basemapCatalog, downloadCoordinator, importCoordinator = null,
+        fallbackBaseMap = "osm" }) {
         if (!panel || !mapView || !eventBus || !regionCatalog ||
             !basemapCatalog || !downloadCoordinator) {
             throw new TypeError("Offline map package UI dependencies are required.");
@@ -13,6 +14,7 @@ export default class OfflineMapPackagesController {
         this.regionCatalog = regionCatalog;
         this.basemapCatalog = basemapCatalog;
         this.downloadCoordinator = downloadCoordinator;
+        this.importCoordinator = importCoordinator;
         this.fallbackBaseMap = fallbackBaseMap;
         this.attached = false;
         this.activePackageId = null;
@@ -23,6 +25,7 @@ export default class OfflineMapPackagesController {
         if (this.attached) return this.refresh();
         this.attached = true;
         this.panel.bindPackageActions({
+            import: file => void this.importPackage(file),
             download: id => void this.download(id),
             cancel: id => this.cancel(id),
             resume: id => void this.resume(id),
@@ -76,6 +79,45 @@ export default class OfflineMapPackagesController {
         return this.#run(entry.packageId, () =>
             this.downloadCoordinator.startDownload(entry.descriptor)
         );
+    }
+
+    async importPackage(file) {
+        if (this.activePackageId || !this.importCoordinator) return null;
+        if (!file?.name?.toLowerCase().endsWith(".pmtiles")) {
+            this.panel.showPackageStatus(
+                "Select a .pmtiles file.", "error"
+            );
+            return null;
+        }
+        const displayName = file.name.replace(/\.pmtiles$/i, "").trim() ||
+            "Imported PMTiles";
+        const packageId = this.#localPackageId(file.name);
+        const version = `local-${file.size}-${file.lastModified || 0}`;
+        this.activePackageId = packageId;
+        this.panel.setPackageImportActive(true);
+        this.panel.showPackageImportProgress({
+            status: "importing", downloadedBytes: 0, totalBytes: file.size
+        });
+        try {
+            const result = await this.importCoordinator.importFile(file, {
+                packageId,
+                sourceId: displayName,
+                version,
+                onProgress: progress =>
+                    this.panel.showPackageImportProgress(progress)
+            });
+            this.panel.showPackageStatus(
+                `${displayName} imported and ready.`, "ready"
+            );
+            return result;
+        } catch (error) {
+            this.panel.showPackageStatus(error.message, "error");
+            return null;
+        } finally {
+            this.activePackageId = null;
+            this.panel.setPackageImportActive(false);
+            await this.refresh();
+        }
     }
 
     cancel(identity) {
@@ -162,5 +204,19 @@ export default class OfflineMapPackagesController {
             this.activePackageId = null;
             await this.refresh();
         }
+    }
+
+    #localPackageId(fileName) {
+        const base = fileName.replace(/\.pmtiles$/i, "").toLowerCase();
+        const slug = base.normalize("NFKD")
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "")
+            .slice(0, 72) || "pmtiles";
+        let hash = 0x811c9dc5;
+        for (const byte of new TextEncoder().encode(fileName)) {
+            hash ^= byte;
+            hash = Math.imul(hash, 0x01000193) >>> 0;
+        }
+        return `local-${slug}-${hash.toString(16).padStart(8, "0")}`;
     }
 }
