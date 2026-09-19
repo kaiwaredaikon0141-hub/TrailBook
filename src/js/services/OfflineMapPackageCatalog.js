@@ -31,12 +31,13 @@ export default class OfflineMapPackageCatalog {
             );
             if (!evaluatePackageLifecycle(metadata, files).ready) continue;
             try {
-                await this.archiveReader.inspectSource(
+                const inspected = await this.archiveReader.inspectSource(
                     new PMTilesArchiveSource(
                         this.archiveStore, metadata.packageId
                     ),
                     { expectedSize: metadata.byteLength }
                 );
+                if (inspected.tileType !== metadata.tileType) continue;
             } catch {
                 continue;
             }

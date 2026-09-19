@@ -238,7 +238,7 @@ function testManifestValidation() {
         manifest([{ ...source, minZoom: 15, maxZoom: 14 }]),
         manifest([{ ...source, byteLength: 0 }]),
         manifest([{ ...source, url: "file:///archive.pmtiles" }]),
-        manifest([{ ...source, tileType: "mvt" }])
+        manifest([{ ...source, tileType: "pbf" }])
     ];
     for (const value of invalid) {
         assert((() => {
@@ -246,6 +246,10 @@ function testManifestValidation() {
             catch { return true; }
         })(), "malformed manifest was accepted");
     }
+    assert(parseOfflineMapPackageManifest(manifest([{
+        ...source, packageId: "vector-package", tileType: "mvt"
+    }])).packages[0].tileType === "mvt",
+    "production vector PMTiles manifest entry was rejected");
 }
 
 async function testCatalogStates() {

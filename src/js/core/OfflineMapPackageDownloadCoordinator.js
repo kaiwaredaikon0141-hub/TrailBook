@@ -2,7 +2,9 @@ import PMTilesArchiveSource from "../services/PMTilesArchiveSource.js";
 
 const DEFAULT_VERIFY_CHUNK_SIZE = 4 * 1024 * 1024;
 const DEFAULT_QUOTA_HEADROOM = 32 * 1024 * 1024;
-const RASTER_TILE_TYPES = new Set(["png", "jpeg", "webp", "avif"]);
+const PACKAGE_TILE_TYPES = new Set([
+    "png", "jpeg", "webp", "avif", "mvt"
+]);
 
 export class OfflineMapPackageDownloadError extends Error {
     constructor(code, message, options) {
@@ -70,7 +72,7 @@ function normalizeDescriptor(value) {
         value.minZoom > value.maxZoom) {
         throw new TypeError("Package zoom range is invalid.");
     }
-    if (!RASTER_TILE_TYPES.has(value?.tileType)) {
+    if (!PACKAGE_TILE_TYPES.has(value?.tileType)) {
         throw new TypeError("Package tile type is unsupported.");
     }
     const checksum = optionalText(value?.checksum, "Package checksum");

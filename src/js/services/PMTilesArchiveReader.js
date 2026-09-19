@@ -10,6 +10,10 @@ const RASTER_TILE_TYPES = new Map([
     [TileType.Webp, "webp"],
     [TileType.Avif, "avif"]
 ]);
+const SUPPORTED_TILE_TYPES = new Map([
+    [TileType.Mvt, "mvt"],
+    ...RASTER_TILE_TYPES
+]);
 
 function assertHeader(header) {
     if (header.specVersion !== 3) {
@@ -17,9 +21,9 @@ function assertHeader(header) {
             `Unsupported PMTiles archive version: ${header.specVersion}`
         );
     }
-    if (!RASTER_TILE_TYPES.has(header.tileType)) {
+    if (!SUPPORTED_TILE_TYPES.has(header.tileType)) {
         throw new Error(
-            `Unsupported PMTiles raster tile type: ${header.tileType}`
+            `Unsupported PMTiles tile type: ${header.tileType}`
         );
     }
     const numbers = [
@@ -43,7 +47,7 @@ function archiveEnd(header) {
     );
 }
 
-/** Validates PMTiles v3 raster archives without reading the entire source. */
+/** Validates supported PMTiles v3 archives without reading the entire source. */
 export default class PMTilesArchiveReader {
 
     createArchive(source) {
@@ -80,7 +84,7 @@ export default class PMTilesArchiveReader {
             return {
                 archive,
                 archiveVersion: header.specVersion,
-                tileType: RASTER_TILE_TYPES.get(header.tileType),
+                tileType: SUPPORTED_TILE_TYPES.get(header.tileType),
                 minZoom: header.minZoom,
                 maxZoom: header.maxZoom,
                 bounds: {
@@ -109,4 +113,4 @@ export default class PMTilesArchiveReader {
     }
 }
 
-export { RASTER_TILE_TYPES };
+export { RASTER_TILE_TYPES, SUPPORTED_TILE_TYPES };

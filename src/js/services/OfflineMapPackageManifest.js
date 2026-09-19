@@ -1,5 +1,7 @@
 const MANIFEST_VERSION = 1;
-const RASTER_TILE_TYPES = new Set(["png", "jpeg", "webp", "avif"]);
+const PACKAGE_TILE_TYPES = new Set([
+    "png", "jpeg", "webp", "avif", "mvt"
+]);
 
 export const BUNDLED_OFFLINE_MAP_PACKAGE_MANIFEST = Object.freeze({
     manifestVersion: MANIFEST_VERSION,
@@ -62,7 +64,7 @@ function normalizePackage(value) {
         value.minZoom > value.maxZoom) {
         throw new TypeError("Package zoom range is invalid.");
     }
-    if (!RASTER_TILE_TYPES.has(value?.tileType)) {
+    if (!PACKAGE_TILE_TYPES.has(value?.tileType)) {
         throw new TypeError("Package tile type is unsupported.");
     }
     const checksum = optionalText(value.checksum, "Package checksum");

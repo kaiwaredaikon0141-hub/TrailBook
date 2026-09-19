@@ -4,8 +4,7 @@ import BasemapProviderRegistry, {
     BASE_MAPS,
     DEFAULT_BASE_MAP
 } from "../services/BasemapProviderRegistry.js";
-import OfflineTileLayer from "./OfflineTileLayer.js";
-import PMTilesRasterLayer from "./PMTilesRasterLayer.js";
+import BasemapLayerFactory from "./BasemapLayerFactory.js";
 
 const DEFAULT_MAP_DISPLAY_MODE = "color";
 const MAP_DISPLAY_MODES = new Set([
@@ -31,26 +30,37 @@ export default class MapView {
     constructor(config, eventBus, {
         basemapProviders = new BasemapProviderRegistry(config.map),
         offlineTileResolver = null,
-        offlineTileLayerFactory = options =>
-            new OfflineTileLayer(options).create(options.layerOptions),
+        offlineTileLayerFactory = null,
         pmtilesArchiveStore = null,
-        pmtilesLayerFactory = options =>
-            new PMTilesRasterLayer(options).create(
-                options.provider, options.layerOptions
-            )
+        pmtilesLayerFactory = null,
+        pmtilesVectorLayerFactory = null,
+        basemapLayerFactory = null
     } = {}) {
 
         this.config = config;
 
         this.basemapProviders = basemapProviders;
 
-        this.offlineTileResolver = offlineTileResolver;
-
-        this.offlineTileLayerFactory = offlineTileLayerFactory;
-
-        this.pmtilesArchiveStore = pmtilesArchiveStore;
-
-        this.pmtilesLayerFactory = pmtilesLayerFactory;
+        if (basemapLayerFactory) {
+            this.basemapLayerFactory = basemapLayerFactory;
+        } else {
+            const factoryOptions = {
+                leaflet: globalThis.L,
+                offlineTileResolver,
+                archiveStore: pmtilesArchiveStore
+            };
+            if (offlineTileLayerFactory) {
+                factoryOptions.offlineLayerFactory = offlineTileLayerFactory;
+            }
+            if (pmtilesLayerFactory) {
+                factoryOptions.rasterPMTilesLayerFactory = pmtilesLayerFactory;
+            }
+            if (pmtilesVectorLayerFactory) {
+                factoryOptions.vectorPMTilesLayerFactory =
+                    pmtilesVectorLayerFactory;
+            }
+            this.basemapLayerFactory = new BasemapLayerFactory(factoryOptions);
+        }
 
         this.eventBus = eventBus;
 
@@ -573,7 +583,7 @@ export default class MapView {
         if (resolver !== null && typeof resolver?.resolveTile !== "function") {
             throw new TypeError("Offline tile resolver is invalid.");
         }
-        this.offlineTileResolver = resolver;
+        this.basemapLayerFactory.setOfflineTileResolver(resolver);
         const provider = this.#getBaseMapDefinition(this.baseMap);
         if (this.map && provider.offlineDownloadAllowed === true) {
             this.#replaceBaseLayer();
@@ -585,7 +595,7 @@ export default class MapView {
         if (store !== null && typeof store?.readRange !== "function") {
             throw new TypeError("PMTiles archive storage is invalid.");
         }
-        this.pmtilesArchiveStore = store;
+        this.basemapLayerFactory.setArchiveStore(store);
     }
 
     setBasemapProviders(providers) {
@@ -664,33 +674,9 @@ export default class MapView {
             attribution: definition.attribution,
             maxZoom: definition.maxZoom
         };
-        const sourceType = definition.sourceType ??
-            (definition.offlineDownloadAllowed === true
-                ? "offline-xyz" : "xyz");
-        const useOfflineReadPath =
-            definition.offlineDownloadAllowed === true &&
-            this.offlineTileResolver;
-
-        if (sourceType === "pmtiles") {
-            if (!this.pmtilesArchiveStore) {
-                throw new Error("Offline PMTiles archive storage is unavailable.");
-            }
-            this.baseTileLayer = this.pmtilesLayerFactory({
-                leaflet: L,
-                provider: definition,
-                archiveStore: this.pmtilesArchiveStore,
-                layerOptions
-            });
-        } else if (useOfflineReadPath) {
-            this.baseTileLayer = this.offlineTileLayerFactory({
-                leaflet: L,
-                provider: definition,
-                resolver: this.offlineTileResolver,
-                layerOptions
-            });
-        } else {
-            this.baseTileLayer = L.tileLayer(definition.tileUrl, layerOptions);
-        }
+        this.baseTileLayer = this.basemapLayerFactory.create(
+            definition, layerOptions
+        );
         this.baseTileLayer.addTo(this.map);
     }
 

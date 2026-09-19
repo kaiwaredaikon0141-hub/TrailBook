@@ -32,7 +32,7 @@ function setUint64(view, offset, value) {
     view.setUint32(offset + 4, Math.floor(value / 2 ** 32), true);
 }
 
-function fixtureBytes({ corrupt = false, padding = 20000 } = {}) {
+function fixtureBytes({ corrupt = false, padding = 20000, tileType = 2 } = {}) {
     const png = Uint8Array.from(atob(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII="
     ), value => value.charCodeAt(0));
@@ -58,7 +58,7 @@ function fixtureBytes({ corrupt = false, padding = 20000 } = {}) {
     view.setUint8(96, 1);
     view.setUint8(97, 1);
     view.setUint8(98, 1);
-    view.setUint8(99, 2);
+    view.setUint8(99, tileType);
     view.setUint8(100, 0);
     view.setUint8(101, 0);
     view.setInt32(102, -1800000000, true);
@@ -554,6 +554,19 @@ async function testDuplicateAndDelete(repository, store, bytes) {
     "explicit ready package deletion was incomplete");
 }
 
+async function testVectorPackageBoundary(repository, store) {
+    const bytes = fixtureBytes({ tileType: 1 });
+    const value = descriptor("vector-download", bytes, { tileType: "mvt" });
+    const result = await coordinator(repository, store, () =>
+        Promise.resolve(streamResponse(bytes))).startDownload(value);
+    assert(result.status === "ready" && result.metadata.tileType === "mvt" &&
+        (await repository.getPackage(value.packageId)).tileType === "mvt",
+    "explicit MVT package download boundary remained raster-only");
+    await coordinator(repository, store, () => {
+        throw new Error("delete must not fetch");
+    }).deletePackage(value.packageId);
+}
+
 async function run() {
     const databaseName = uniqueDatabase();
     const repository = new OfflineMapPackageRepository({ databaseName });
@@ -566,6 +579,7 @@ async function run() {
         await testFailures(repository, store, bytes);
         await testIntegrity(repository, store, bytes);
         await testDuplicateAndDelete(repository, store, bytes);
+        await testVectorPackageBoundary(repository, store);
     } finally {
         indexedDB.deleteDatabase(databaseName);
     }

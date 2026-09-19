@@ -211,9 +211,11 @@ async function testReaderAndSource() {
     await rejects(() => reader.inspectFile(new TrackingFile(fixtureBytes({
         version: 4
     }))), "unsupported PMTiles version was accepted");
-    await rejects(() => reader.inspectFile(new TrackingFile(fixtureBytes({
+    const vector = await reader.inspectFile(new TrackingFile(fixtureBytes({
         tileType: 1
-    }))), "vector PMTiles was accepted by the raster reader");
+    })));
+    assert(vector.tileType === "mvt",
+        "valid vector PMTiles was rejected by the archive reader");
 
     const store = new MemoryArchiveStore();
     store.entry("ranges").final = bytes;
@@ -328,6 +330,15 @@ async function testImportRestartRenderAndDelete() {
     "ready package was not restored as a selectable basemap source");
     assert(catalog.list().length === 3,
         "installed package was not composed with static providers");
+    await reopenedRepository.updatePackage("tiny-raster", {
+        tileType: "mvt"
+    });
+    assert((await catalog.refresh()).length === 0,
+        "catalog routed a raster archive through mismatched MVT metadata");
+    await reopenedRepository.updatePackage("tiny-raster", {
+        tileType: "png"
+    });
+    await catalog.refresh();
 
     const originalFetch = globalThis.fetch;
     const originalCreateUrl = URL.createObjectURL;

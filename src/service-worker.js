@@ -18,6 +18,7 @@ const CORE_ASSETS = [
     "./css/theme.css",
     "./vendor/leaflet/leaflet.css",
     "./vendor/leaflet/leaflet.js",
+    "./vendor/protomaps-leaflet/protomaps-leaflet.js",
     "./vendor/leaflet/images/layers.png",
     "./vendor/leaflet/images/layers-2x.png",
     "./vendor/leaflet/images/marker-icon.png",

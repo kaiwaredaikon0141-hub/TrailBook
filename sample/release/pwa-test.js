@@ -153,6 +153,11 @@ async function testManifestAndAssets() {
         index.indexOf('src="js/main.js"'),
         "build runtime loads after application"
     );
+    assert(index.includes(
+        'src="vendor/protomaps-leaflet/protomaps-leaflet.js"'
+    ) && index.indexOf('src="vendor/protomaps-leaflet/protomaps-leaflet.js"') <
+        index.indexOf('src="js/main.js"'),
+    "local vector renderer is missing or loads after the application");
     assert(!index.includes('href="/'), "root-absolute index asset URL");
     assert(index.includes('id = "trailbook-development-build-info"') &&
         index.includes("getDevelopmentBuildIdentifier") &&
@@ -382,6 +387,9 @@ async function testManifestAndAssets() {
     assert(workerSource.includes('searchParams.set("trailbook-build"') &&
         workerSource.includes('fetch(buildFetchUrl(url), { cache: "reload" })'),
         "new app shell does not bypass old HTTP/module cache by build ID");
+    assert(workerSource.includes(
+        '"./vendor/protomaps-leaflet/protomaps-leaflet.js"'
+    ), "local vector renderer is not in the app shell");
     assert(workerSource.includes("assertBuildMarker") &&
         workerSource.includes("Runtime module") &&
         workerSource.includes("Build metadata"),
@@ -669,6 +677,7 @@ async function testServiceWorkerCache() {
         "css/theme.css",
         "vendor/leaflet/leaflet.css",
         "vendor/leaflet/leaflet.js",
+        "vendor/protomaps-leaflet/protomaps-leaflet.js",
         "icons/trailbook-192.png",
         "icons/trailbook-512.png",
         "icons/trailbook-maskable-192.png",
@@ -685,7 +694,7 @@ async function testServiceWorkerCache() {
         new URL(request.url).pathname.includes("/js/") &&
         new URL(request.url).pathname.endsWith(".js")
     );
-    assert(cachedModules.length === 141,
+    assert(cachedModules.length === 143,
         `production module graph not precached: ${cachedModules.length}`);
     assert(!cachedRequests.some(request => request.url.endsWith(".gpx")),
         "GPX entered app shell cache");
@@ -702,9 +711,14 @@ async function testServiceWorkerCache() {
     const cachedLeaflet = await cache.match(new URL(
         "vendor/leaflet/leaflet.js", scopeUrl
     ));
+    const cachedVectorRenderer = await cache.match(new URL(
+        "vendor/protomaps-leaflet/protomaps-leaflet.js", scopeUrl
+    ));
     assert(cachedIndex?.ok, "offline index unavailable");
     assert(cachedMain?.ok, "offline production JS unavailable");
     assert(cachedLeaflet?.ok, "offline vendor asset unavailable");
+    assert(cachedVectorRenderer?.ok,
+        "offline vector renderer vendor asset unavailable");
 
     await registration.unregister();
     await caches.delete("trailbook-app-shell-local");
