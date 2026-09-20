@@ -357,6 +357,8 @@ async function testManifestAndAssets() {
     )).then(response => response.text());
     assert(workflow.includes('Path("_site/trailbook.build.js")'),
         "Pages artifact build runtime generation missing");
+    assert(workflow.includes('Object.freeze({commit:'),
+        "Pages build marker is incompatible with deployed update clients");
     assert(workflow.includes('os.environ.get("GITHUB_SHA"'),
         "Pages build does not use commit SHA");
     assert(workflow.includes('"__TRAILBOOK_BUILD_ID__"'),

@@ -63,14 +63,11 @@ jobs:
               config_file.write(output)
 
           short_commit = os.environ.get("GITHUB_SHA", "")[:8].lower()
-          build = {
-              "commit": short_commit,
-          }
-          build_output = "window.TRAILBOOK_BUILD = Object.freeze(" + json.dumps(
-              build,
-              ensure_ascii=False,
-              separators=(",", ":"),
-          ) + ");\n"
+          build_output = (
+              "window.TRAILBOOK_BUILD = Object.freeze({commit:"
+              + json.dumps(short_commit)
+              + "});\n"
+          )
           with Path("_site/trailbook.build.js").open(
               "w", encoding="utf-8", newline="\n"
           ) as build_file:
