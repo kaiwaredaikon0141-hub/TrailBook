@@ -68,6 +68,8 @@ export default class MapView {
 
         this.baseMap = DEFAULT_BASE_MAP;
 
+        this.offlineCyclePreference = null;
+
         this.element = this.create();
 
         this.sidebarDisplayControls = this.#createSidebarDisplayControls();
@@ -556,6 +558,10 @@ export default class MapView {
         const normalized = this.#normalizeBaseMap(value);
         const changed = normalized !== this.baseMap;
 
+        if (this.#getBaseMapDefinition(normalized)?.sourceType === "pmtiles") {
+            this.offlineCyclePreference = normalized;
+        }
+
         this.baseMap = normalized;
         const select = this.element.querySelector(".base-map-select");
 
@@ -607,6 +613,7 @@ export default class MapView {
         this.#syncBasemapProviderOptions();
         const normalized = this.#normalizeBaseMap(this.baseMap);
         if (normalized !== this.baseMap) this.setBaseMap(normalized);
+        else this.#syncMobileMapControls();
         return this.basemapProviders.list();
     }
 
@@ -688,6 +695,41 @@ export default class MapView {
 
     #normalizeBaseMap(value) {
         return this.basemapProviders.normalizeId(value);
+    }
+
+    #getOfflineCycleBaseMap() {
+        const preferred = this.basemapProviders.get(
+            this.offlineCyclePreference
+        );
+        if (preferred?.sourceType === "pmtiles") return preferred.id;
+
+        const current = this.#getBaseMapDefinition(this.baseMap);
+        if (current?.sourceType === "pmtiles") {
+            this.offlineCyclePreference = current.id;
+            return current.id;
+        }
+
+        const available = (this.basemapProviders.list?.() ?? []).find(
+            provider => provider?.sourceType === "pmtiles"
+        );
+        this.offlineCyclePreference = available?.id ?? null;
+        return this.offlineCyclePreference;
+    }
+
+    #getNextBaseMap() {
+        const offline = this.#getOfflineCycleBaseMap();
+        const cycle = offline
+            ? ["osm", "gsiStandard", offline]
+            : ["osm", "gsiStandard"];
+        const currentIndex = cycle.indexOf(this.baseMap);
+
+        return cycle[(currentIndex + 1) % cycle.length];
+    }
+
+    #getBaseMapCycleLabel(value) {
+        if (value === "osm") return "OSM";
+        if (value === "gsiStandard") return "地理院標準";
+        return this.#getBaseMapDefinition(value)?.name ?? value;
     }
 
     #syncBasemapProviderOptions(root = this.element) {
@@ -805,7 +847,7 @@ export default class MapView {
             "click",
             () => this.eventBus.emit(
                 "map:base-map-changed",
-                { baseMap: this.baseMap === "osm" ? "gsiStandard" : "osm" }
+                { baseMap: this.#getNextBaseMap() }
             )
         );
 
@@ -864,15 +906,18 @@ export default class MapView {
 
         const baseButton = root.querySelector?.(".mobile-base-map-toggle");
         const modeButton = root.querySelector?.(".mobile-map-mode-toggle");
-        const isGsi = this.baseMap === "gsiStandard";
         const isMonochrome = this.mapDisplayMode === "monochrome";
 
         if (baseButton) {
-            const next = isGsi ? "OSM" : "地理院標準";
-            const current = isGsi ? "地理院標準" : "OSM";
+            const nextBaseMap = this.#getNextBaseMap();
+            const next = this.#getBaseMapCycleLabel(nextBaseMap);
+            const current = this.#getBaseMapCycleLabel(this.baseMap);
 
             baseButton.dataset.state = this.baseMap;
-            baseButton.setAttribute("aria-pressed", String(isGsi));
+            baseButton.setAttribute(
+                "aria-pressed",
+                String(this.baseMap !== DEFAULT_BASE_MAP)
+            );
             baseButton.setAttribute(
                 "aria-label",
                 `背景地図: ${current}。${next}へ切り替え`

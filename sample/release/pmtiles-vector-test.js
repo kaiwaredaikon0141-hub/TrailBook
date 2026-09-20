@@ -249,9 +249,11 @@ function fakeLayer(kind, id, options, layers) {
 
 function testMapViewSwitching() {
     const map = installLeafletFake();
-    const sources = [
+    let sources = [
         { id: "osm", name: "OSM", sourceType: "xyz", tileUrl: "osm",
             attribution: "osm", maxZoom: 19 },
+        { id: "gsiStandard", name: "GSI", sourceType: "xyz", tileUrl: "gsi",
+            attribution: "gsi", maxZoom: 18 },
         { id: "raster", name: "Raster", sourceType: "pmtiles",
             packageId: "raster", tileType: "png", attribution: "raster",
             minZoom: 0, maxZoom: 10 },
@@ -270,9 +272,13 @@ function testMapViewSwitching() {
         },
         setOfflineTileResolver() {}, setArchiveStore() {}
     };
-    const view = new MapView(Config, new EventBus(), {
+    const eventBus = new EventBus();
+    const view = new MapView(Config, eventBus, {
         basemapProviders: catalog,
         basemapLayerFactory: factory
+    });
+    eventBus.on("map:base-map-changed", ({ baseMap }) => {
+        view.setBaseMap(baseMap);
     });
     view.initialize();
     const mapIdentity = view.map.identity;
@@ -295,6 +301,56 @@ function testMapViewSwitching() {
     }
     assert(view.baseTileLayer.options.attribution === "osm",
         "switching back to XYZ did not restore attribution options");
+
+    const cycleButton = view.element.querySelector(".mobile-base-map-toggle");
+    const assertCurrent = (id, message, mode = "monochrome") => {
+        assert(view.getBaseMap() === id && view.baseTileLayer.id === id &&
+            view.baseTileLayer.options.attribution === catalog.get(id).attribution,
+        `${message}: active=${view.getBaseMap()}, layer=${view.baseTileLayer.id}, ` +
+            `attribution=${view.baseTileLayer.options.attribution}`);
+        assert(view.map.identity === mapIdentity &&
+            view.layerManager.layers.get("track.gpx") === overlay &&
+            view.getMapDisplayMode() === mode &&
+            view.element.querySelector(".map-canvas")?.classList.contains(
+                "map--monochrome"
+            ) === (mode === "monochrome"),
+        `${message}: map, GPX overlay, or display mode changed`);
+    };
+
+    cycleButton.click();
+    assertCurrent("gsiStandard", "OSM did not cycle to GSI");
+    assert(cycleButton.title.includes("Raster"),
+        `GSI next-step label omitted offline package: ${cycleButton.title}`);
+    cycleButton.click();
+    assertCurrent("raster", "GSI did not cycle to the first ready package");
+    cycleButton.click();
+    assertCurrent("osm", "PMTiles did not cycle back to OSM");
+
+    view.setMapDisplayMode("color");
+    view.setBaseMap("vector-b");
+    cycleButton.click();
+    assertCurrent("osm", "selected package did not cycle back to OSM", "color");
+    cycleButton.click();
+    assertCurrent("gsiStandard", "OSM did not retain GSI as the next step", "color");
+    cycleButton.click();
+    assertCurrent("vector-b", "last selected package was not the offline slot", "color");
+
+    sources = sources.filter(source => source.id !== "vector-b");
+    view.setBasemapProviders(catalog);
+    assertCurrent("osm", "removed active package did not fall back to OSM", "color");
+    cycleButton.click();
+    assertCurrent("gsiStandard", "cycle did not reach GSI after removal", "color");
+    cycleButton.click();
+    assertCurrent("raster", "removed cycle slot was not replaced by a ready package",
+        "color");
+
+    sources = sources.filter(source => source.sourceType !== "pmtiles");
+    view.setBasemapProviders(catalog);
+    assertCurrent("osm", "removing the final active package did not fall back", "color");
+    cycleButton.click();
+    assertCurrent("gsiStandard", "two-way cycle did not reach GSI", "color");
+    cycleButton.click();
+    assertCurrent("osm", "removed package remained in the basemap cycle", "color");
 }
 
 async function testActiveVectorDeletionFallback() {

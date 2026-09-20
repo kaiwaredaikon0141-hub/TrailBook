@@ -625,7 +625,11 @@ function testMapViewCatalogApi() {
             ? id : staticProviders.normalizeId(id); },
         list() { return [...staticProviders.list(), this.get("package:test")]; }
     };
-    const mapView = new MapView(Config, new EventBus());
+    const eventBus = new EventBus();
+    const mapView = new MapView(Config, eventBus);
+    eventBus.on("map:base-map-changed", ({ baseMap }) => {
+        mapView.setBaseMap(baseMap);
+    });
     mapView.setPMTilesArchiveStore({ readRange() {} });
     mapView.setBasemapProviders(dynamic);
     assert(mapView.element.querySelector(
@@ -638,6 +642,17 @@ function testMapViewCatalogApi() {
     mapView.setBaseMap("osm");
     assert(mapView.getBaseMap() === "osm",
         "MapView did not switch PMTiles back to XYZ");
+    const cycleButton = mapView.element.querySelector(
+        ".mobile-base-map-toggle"
+    );
+    cycleButton.click();
+    cycleButton.click();
+    assert(mapView.getBaseMap() === "package:test" &&
+        cycleButton.dataset.state === "package:test",
+    "package selected through MapView did not become the offline cycle slot");
+    cycleButton.click();
+    assert(mapView.getBaseMap() === "osm",
+        "single-package cycle did not return PMTiles to OSM");
 }
 
 function testMobileLayoutContract() {
