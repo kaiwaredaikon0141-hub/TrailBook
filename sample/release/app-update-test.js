@@ -50,7 +50,9 @@ function fixture({
     fetchError = null,
     networkBody = null,
     cacheNames = [],
-    scope = "https://example.test/TrailBook/"
+    scope = "https://example.test/TrailBook/",
+    timeoutMs = 1000,
+    installTimeoutMs = 1000
 } = {}) {
     const panel = new LibraryMaintenancePanel({ emit() {} });
     const serviceWorker = new Target();
@@ -89,7 +91,8 @@ function fixture({
         runtimeBuildIdentifier: runtimeBuild,
         reload: () => reloads.push(true),
         consoleObject: { warn(...values) { warnings.push(values); } },
-        timeoutMs: 1000
+        timeoutMs,
+        installTimeoutMs
     });
 
     return {
@@ -174,6 +177,32 @@ async function testInstallingActivation() {
     assert(worker.messages[0]?.type === "SKIP_WAITING" &&
         test.reloads.length === 1,
     "installing update activation sequence failed");
+}
+
+async function testSlowInstallationUsesInstallDeadline() {
+    let serviceWorker;
+    const worker = new Worker("installing", () => {
+        serviceWorker.dispatch("controllerchange");
+    });
+    const test = fixture({
+        worker,
+        timeoutMs: 10,
+        installTimeoutMs: 100,
+        update: async ({ registration }) => {
+            setTimeout(() => {
+                registration.installing = null;
+                registration.waiting = worker;
+                worker.setState("installed");
+            }, 25);
+        }
+    });
+
+    serviceWorker = test.serviceWorker;
+    test.coordinator.attach();
+    assert(await test.coordinator.update(),
+        "slow app-shell install used the controller-change deadline");
+    assert(test.reloads.length === 1,
+        "slow app-shell install did not reload exactly once");
 }
 
 async function testFailureAndOfflineSafety() {
@@ -265,6 +294,7 @@ async function run() {
     await testLocalDevelopmentAvailability();
     await testWaitingActivation();
     await testInstallingActivation();
+    await testSlowInstallationUsesInstallDeadline();
     await testFailureAndOfflineSafety();
     await testScopedFallback();
     await testConcurrencyAndPanelLifecycle();

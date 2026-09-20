@@ -24,7 +24,8 @@ export default class AppUpdateCoordinator {
         runtimeBuildIdentifier = RUNTIME_BUILD_ID,
         reload = () => locationObject.reload(),
         consoleObject = globalThis.console,
-        timeoutMs = 20000
+        timeoutMs = 20000,
+        installTimeoutMs = 120000
     }) {
 
         this.panel = panel;
@@ -37,6 +38,7 @@ export default class AppUpdateCoordinator {
         this.reload = reload;
         this.consoleObject = consoleObject;
         this.timeoutMs = timeoutMs;
+        this.installTimeoutMs = installTimeoutMs;
         this.running = false;
         this.reloaded = false;
     }
@@ -177,7 +179,7 @@ export default class AppUpdateCoordinator {
             timeout = setTimeout(() => {
                 cleanup();
                 reject(new Error("Application update installation timed out."));
-            }, this.timeoutMs);
+            }, this.installTimeoutMs);
             onStateChange();
         });
     }
