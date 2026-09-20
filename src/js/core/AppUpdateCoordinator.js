@@ -74,7 +74,7 @@ export default class AppUpdateCoordinator {
                 throw new Error("Application updates are unavailable.");
             }
 
-            let discoveredWorker = registration.waiting || null;
+            let discoveredWorker = null;
             const onUpdateFound = () => {
                 discoveredWorker = registration.installing || discoveredWorker;
             };
@@ -87,8 +87,8 @@ export default class AppUpdateCoordinator {
                 registration.removeEventListener?.("updatefound", onUpdateFound);
             }
 
-            const worker = registration.waiting || registration.installing ||
-                discoveredWorker;
+            const worker = registration.installing || discoveredWorker ||
+                registration.waiting;
 
             if (worker) {
                 stage = "worker-activation";

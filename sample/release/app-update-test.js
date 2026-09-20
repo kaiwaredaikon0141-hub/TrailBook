@@ -205,6 +205,37 @@ async function testSlowInstallationUsesInstallDeadline() {
         "slow app-shell install did not reload exactly once");
 }
 
+async function testNewInstallingWorkerSupersedesOldWaitingWorker() {
+    let serviceWorker;
+    const oldWaiting = new Worker("installed");
+    const newInstalling = new Worker("installing", () => {
+        serviceWorker.dispatch("controllerchange");
+    });
+    const test = fixture({
+        worker: oldWaiting,
+        update: async ({ registration }) => {
+            registration.installing = newInstalling;
+            registration.dispatch("updatefound");
+            setTimeout(() => {
+                oldWaiting.setState("redundant");
+                registration.installing = null;
+                registration.waiting = newInstalling;
+                newInstalling.setState("installed");
+            }, 0);
+        }
+    });
+
+    serviceWorker = test.serviceWorker;
+    test.coordinator.attach();
+    assert(await test.coordinator.update(),
+        "new worker was not activated over a stale waiting worker");
+    assert(oldWaiting.messages.length === 0,
+        "stale waiting worker received the activation message");
+    assert(newInstalling.messages[0]?.type === "SKIP_WAITING" &&
+        test.reloads.length === 1,
+    "newly discovered worker did not activate with one reload");
+}
+
 async function testFailureAndOfflineSafety() {
     const updateFailure = fixture({
         update: async () => { throw new Error("update failed"); },
@@ -295,6 +326,7 @@ async function run() {
     await testWaitingActivation();
     await testInstallingActivation();
     await testSlowInstallationUsesInstallDeadline();
+    await testNewInstallingWorkerSupersedesOldWaitingWorker();
     await testFailureAndOfflineSafety();
     await testScopedFallback();
     await testConcurrencyAndPanelLifecycle();
