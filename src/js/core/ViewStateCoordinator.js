@@ -17,7 +17,9 @@ export default class ViewStateCoordinator {
         resetPresentation = () => {},
         debounceMs = 750,
         setTimer = globalThis.setTimeout.bind(globalThis),
-        clearTimer = globalThis.clearTimeout.bind(globalThis)
+        clearTimer = globalThis.clearTimeout.bind(globalThis),
+        documentTarget = globalThis.document,
+        windowTarget = globalThis.window
     }) {
 
         this.eventBus = eventBus;
@@ -31,6 +33,8 @@ export default class ViewStateCoordinator {
         this.debounceMs = debounceMs;
         this.setTimer = setTimer;
         this.clearTimer = clearTimer;
+        this.documentTarget = documentTarget;
+        this.windowTarget = windowTarget;
         this.activeLibraryId = null;
         this.activeLibraryGeneration = null;
         this.isCurrentLibrary = () => false;
@@ -43,6 +47,7 @@ export default class ViewStateCoordinator {
         this.selectionChangedDuringRestore = false;
         this.saveAfterRestore = false;
         this.#bindEvents();
+        this.#bindLifecycle();
         this.mapView.setBaseMap?.(this.store.getBaseMap?.() ?? "osm");
     }
 
@@ -249,6 +254,16 @@ export default class ViewStateCoordinator {
         this.eventBus.on("view-state:reset-requested", () => {
             this.#resetCurrentLibrary();
         });
+    }
+
+    #bindLifecycle() {
+
+        this.documentTarget?.addEventListener?.("visibilitychange", () => {
+            if (this.documentTarget.visibilityState === "hidden") {
+                this.flush();
+            }
+        });
+        this.windowTarget?.addEventListener?.("pagehide", () => this.flush());
     }
 
     #handleRuntimeChange() {

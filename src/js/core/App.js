@@ -100,8 +100,7 @@ export default class App {
             applyFolderColorChange: path => this.applyFolderColorChange(path)
         });
         this.displayState = new DisplayState();
-        this.libraryTrackCatalogCoordinator =
-            new LibraryTrackCatalogCoordinator();
+        this.libraryTrackCatalogCoordinator = new LibraryTrackCatalogCoordinator();
         this.selectionState = new SelectionState();
         this.displayQueue = new GPXDisplayQueue(2);
         this.trackDiscoveryCoordinator = new TrackDiscoveryCoordinator({
@@ -187,6 +186,7 @@ export default class App {
         );
         const sidebar = this.trackDiscoveryCoordinator.attach({
             folderTree: this.treeView.element.querySelector(".tree-root"),
+            treeView: this.treeView,
             searchView: this.searchView
         });
         this.librarySnapshotService = new LibrarySnapshotService({

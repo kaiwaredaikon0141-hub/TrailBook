@@ -2830,3 +2830,61 @@ body.is-track-info-resizing{
         pointer-events:none;
     }
 }
+
+@media (max-height:500px) and (pointer:coarse){
+
+    .leaflet-control-zoom a,
+    .leaflet-touch .leaflet-control-zoom a{
+
+        position:relative;
+
+        height:44px;
+
+        background:transparent;
+
+        font-size:0;
+
+        line-height:44px;
+    }
+
+    .leaflet-control-zoom a::before{
+
+        position:absolute;
+
+        top:7px;
+
+        left:50%;
+
+        box-sizing:border-box;
+
+        width:30px;
+
+        height:30px;
+
+        margin-left:-15px;
+
+        border:1px solid #ccc;
+
+        border-radius:4px;
+
+        background:#fff;
+
+        color:#000;
+
+        font-size:20px;
+
+        line-height:28px;
+
+        text-align:center;
+    }
+
+    .leaflet-control-zoom .leaflet-control-zoom-out::before{
+
+        content:"−";
+    }
+
+    .leaflet-control-zoom .leaflet-control-zoom-in::before{
+
+        content:"+";
+    }
+}

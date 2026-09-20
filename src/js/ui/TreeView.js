@@ -1,6 +1,7 @@
 import TreeMetadataBuilder from "./TreeMetadataBuilder.js";
 import { applyTreeDisplayBatch } from "./TreeDisplayBatch.js";
 import TreeRowPresenter from "./TreeRowPresenter.js";
+import TrackTreeOrder from "../services/TrackTreeOrder.js";
 
 const ROOT_PATH = "";
 const NODE_SELECTOR = "[data-tree-path]";
@@ -27,6 +28,7 @@ export default class TreeView {
         this.currentLibrary = null;
         this.renderRequestId = 0;
         this.rowPresenter = new TreeRowPresenter(this);
+        this.trackOrder = new TrackTreeOrder();
         this.element = this.create();
     }
 
@@ -76,6 +78,8 @@ export default class TreeView {
                     prepared.nodeMetadata
                 )
                 : new Set([ROOT_PATH]);
+
+            if (!sameLibrary) this.trackOrder.clear();
 
             expandedPaths.add(ROOT_PATH);
 
@@ -238,7 +242,7 @@ export default class TreeView {
             );
         });
 
-        this.sortNodes(folder.gpxFiles).forEach(fileHandle => {
+        this.sortTrackNodes(folder.gpxFiles, path).forEach(fileHandle => {
             group.append(
                 this.createFileNode(
                     fileHandle,
@@ -574,6 +578,35 @@ export default class TreeView {
             this.expandFolder(path);
         }
         this.eventBus.emit("tree:folder-expansion-changed", { path, expanded: this.expandedPaths.has(path) });
+    }
+
+    sortTrackNodes(nodes, folderPath) {
+
+        return [...nodes].sort((first, second) => this.trackOrder.compare(
+            this.joinPath(folderPath, first.name),
+            this.joinPath(folderPath, second.name)
+        ));
+    }
+
+    setTrackOrderEntries(entries = []) {
+
+        if (!this.trackOrder.setEntries(entries)) return false;
+
+        this.folderNodes.forEach((row, folderPath) => {
+            const group = row.parentElement?.querySelector(":scope > .tree-group");
+
+            if (!group) return;
+
+            [...group.children]
+                .filter(item => item.firstElementChild?.dataset.nodeKind === "file")
+                .sort((first, second) => this.trackOrder.compare(
+                    first.firstElementChild.dataset.treePath,
+                    second.firstElementChild.dataset.treePath
+                ))
+                .forEach(item => group.append(item));
+        });
+
+        return true;
     }
 
     expandFolder(path) {

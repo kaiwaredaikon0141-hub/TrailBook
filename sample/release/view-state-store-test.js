@@ -364,13 +364,33 @@ function testMapView() {
     assert(!mapView.setViewState({ lat: Infinity, lng: 0, zoom: 1 }), "invalid restore applied");
 }
 
+class LifecycleTarget {
+
+    constructor() {
+        this.listeners = new Map();
+        this.visibilityState = "visible";
+    }
+
+    addEventListener(type, listener) {
+        const listeners = this.listeners.get(type) || [];
+        listeners.push(listener);
+        this.listeners.set(type, listeners);
+    }
+
+    dispatch(type) {
+        (this.listeners.get(type) || []).forEach(listener => listener());
+    }
+}
+
 function createCoordinatorFixture({
-    displayQueue = { whenIdle: () => Promise.resolve() }
+    displayQueue = { whenIdle: () => Promise.resolve() },
+    storage = new MemoryStorage()
 } = {}) {
 
     const eventBus = new EventBus();
-    const storage = new MemoryStorage();
     const store = createStore(storage);
+    const documentTarget = new LifecycleTarget();
+    const windowTarget = new LifecycleTarget();
     const timers = new Map();
     const cleared = [];
     let timerId = 0;
@@ -423,6 +443,8 @@ function createCoordinatorFixture({
         displayState,
         displayQueue,
         selectionState,
+        documentTarget,
+        windowTarget,
         debounceMs: 750,
         setTimer(callback, delay) {
             const id = ++timerId;
@@ -443,6 +465,8 @@ function createCoordinatorFixture({
         mapView,
         displayState,
         selectionState,
+        documentTarget,
+        windowTarget,
         coordinator,
         timers,
         cleared,
@@ -455,6 +479,73 @@ function createCoordinatorFixture({
             timer.callback();
         }
     };
+}
+
+async function testLifecycleFlushAndRestart() {
+
+    const storage = new MemoryStorage();
+    const first = createCoordinatorFixture({ storage });
+    const libraryId = first.store.createLibraryId("Lifecycle");
+
+    first.displayState.setLibrary({ name: "Lifecycle" });
+    ["new.gpx", "folder/kept.gpx", "deleted.gpx"].forEach(path =>
+        first.displayState.registerFile(path, { name: path }, "#123456")
+    );
+    assert(await first.coordinator.restoreLibrary({
+        libraryId,
+        libraryName: "Lifecycle",
+        generation: 1,
+        isCurrent: first.isCurrent(1)
+    }), "lifecycle fixture restore failed");
+
+    first.displayState.setChecked("folder/kept.gpx", true);
+    first.displayState.setChecked("deleted.gpx", true);
+    first.mapView.current = { lat: 34.7019, lng: 135.4949, zoom: 14 };
+    first.eventBus.emit("gpx:display-toggled", {
+        path: "folder/kept.gpx",
+        checked: true
+    });
+    first.eventBus.emit("map:view-changed", { programmatic: false });
+    assert(first.timers.size === 1, "lifecycle changes were not debounced");
+
+    first.windowTarget.dispatch("pagehide");
+    assert(first.timers.size === 0, "pagehide left the debounce timer active");
+    const persisted = first.store.getLibraryState(libraryId);
+    assert(persisted.map.lat === 34.7019 && persisted.map.lng === 135.4949 &&
+        persisted.map.zoom === 14,
+    "pagehide did not save the last map coordinate and zoom");
+    assert(persisted.visibleTracks.join(",") ===
+        "folder/kept.gpx,deleted.gpx",
+    "pagehide did not save checked relativePaths");
+
+    const restarted = createCoordinatorFixture({ storage });
+    restarted.displayState.setLibrary({ name: "Lifecycle" });
+    ["folder/kept.gpx", "new.gpx"].forEach(path =>
+        restarted.displayState.registerFile(path, { name: path }, "#123456")
+    );
+    restarted.eventBus.on("gpx:display-toggled", ({ path, checked }) => {
+        restarted.displayState.setChecked(path, checked);
+    });
+    assert(await restarted.coordinator.restoreLibrary({
+        libraryId,
+        libraryName: "Lifecycle",
+        generation: 1,
+        isCurrent: restarted.isCurrent(1)
+    }), "restart fixture restore failed");
+    assert(restarted.displayState.getCheckedPaths().join(",") ===
+        "folder/kept.gpx",
+    "restart did not restore canonical checked paths or ignored deletion");
+    assert(restarted.mapView.restored.value.lat === 34.7019 &&
+        restarted.mapView.restored.value.lng === 135.4949 &&
+        restarted.mapView.restored.value.zoom === 14,
+    "restart did not restore the last map coordinate and zoom");
+
+    restarted.mapView.current = { lat: 35.1, lng: 136.2, zoom: 11 };
+    restarted.eventBus.emit("map:view-changed", { programmatic: false });
+    restarted.documentTarget.visibilityState = "hidden";
+    restarted.documentTarget.dispatch("visibilitychange");
+    assert(restarted.store.getLibraryState(libraryId).map.lat === 35.1,
+        "hidden visibility did not flush the current map view");
 }
 
 async function testCoordinator() {
@@ -1742,6 +1833,7 @@ try {
     testStore();
     testMapView();
     await testCoordinator();
+    await testLifecycleFlushAndRestart();
     await testVisibleTrackState();
     await testStaleVisibleRestore();
     await testSelectedTrackRestore();

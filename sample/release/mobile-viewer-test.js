@@ -14,6 +14,48 @@ function assert(condition, message) {
     if (!condition) throw new Error(message);
 }
 
+function testLeafletZoomPresentation() {
+
+    const corner = document.createElement("div");
+    const control = document.createElement("div");
+    const out = document.createElement("a");
+    const inside = document.createElement("a");
+
+    corner.className = "leaflet-top leaflet-left";
+    control.className = "leaflet-control-zoom leaflet-bar";
+    out.className = "leaflet-control-zoom-out";
+    inside.className = "leaflet-control-zoom-in";
+    out.textContent = "−";
+    inside.textContent = "+";
+    control.append(out, inside);
+    corner.append(control);
+    document.body.classList.add("leaflet-touch");
+    document.body.append(corner);
+
+    const landscape = matchMedia(
+        "(max-height:500px) and (pointer:coarse)"
+    ).matches;
+    const outStyle = getComputedStyle(out);
+    const symbolStyle = getComputedStyle(out, "::before");
+
+    if (landscape) {
+        assert(out.getBoundingClientRect().height >= 44,
+            "landscape zoom touch target is below 44px");
+        assert(outStyle.fontSize === "0px" &&
+            Math.round(parseFloat(symbolStyle.width)) === 30 &&
+            Math.round(parseFloat(symbolStyle.height)) === 30,
+        "landscape zoom symbol is not a compact 30px presentation");
+        assert(outStyle.pointerEvents !== "none",
+            "landscape zoom touch target is not interactive");
+    } else if (matchMedia("(max-width:768px)").matches) {
+        assert(Math.round(out.getBoundingClientRect().height) === 60,
+            "portrait zoom presentation changed from 60px");
+    }
+
+    corner.remove();
+    document.body.classList.remove("leaflet-touch");
+}
+
 class FakeEventBus {
     constructor() { this.events = []; }
     emit(name, detail) { this.events.push({ name, detail }); }
@@ -223,6 +265,7 @@ async function testLargeColorProjection() {
 }
 
 async function run() {
+    testLeafletZoomPresentation();
     const media = new FakeMedia(false);
     const fixture = createFixture(media);
 
@@ -338,6 +381,11 @@ async function run() {
         themeCss.includes("order:1"),
         "mobile Leaflet zoom is not a 60px horizontal minus/plus row"
     );
+    assert(themeCss.includes("@media (max-height:500px) and (pointer:coarse)") &&
+        themeCss.includes("width:30px") &&
+        themeCss.includes("height:30px") &&
+        themeCss.includes("height:44px"),
+    "mobile landscape Leaflet zoom presentation contract missing");
     assert(themeCss.includes(".map-toolbar") &&
         themeCss.includes("display:none") &&
         themeCss.includes(".mobile-sidebar-display-controls"),

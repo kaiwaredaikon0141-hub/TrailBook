@@ -28,6 +28,7 @@ export default class TrackDiscoveryCoordinator {
         this.pendingDisplayPaths = new Set();
         this.displaySyncScheduled = false;
         this.folderTree = null;
+        this.treeView = null;
         this.folderFilter = null;
         this.searchView = null;
         this.activeFilter = this.filterService.normalize();
@@ -39,9 +40,10 @@ export default class TrackDiscoveryCoordinator {
             this.#scheduleDisplaySync(path, paths));
     }
 
-    attach({ folderTree, searchView = null }) {
+    attach({ folderTree, treeView = null, searchView = null }) {
 
         this.folderTree = folderTree;
+        this.treeView = treeView;
         this.searchView = searchView;
         this.folderFilter = new FolderTreeFilterProjection(folderTree);
         const sidebar = folderTree.closest(".sidebar") || folderTree.parentElement;
@@ -191,6 +193,7 @@ export default class TrackDiscoveryCoordinator {
         this.isCurrent = () => false;
         this.fileHandles.clear();
         this.index.clear();
+        this.treeView?.setTrackOrderEntries([]);
         this.folderFilter?.clear();
         this.filteredEntries = [];
         this.activeFilter = this.filterService.normalize();
@@ -396,6 +399,8 @@ export default class TrackDiscoveryCoordinator {
     }
 
     #applyFilter(entries = this.index.getEntries()) {
+
+        this.treeView?.setTrackOrderEntries(entries);
 
         const active = this.filterService.isActive(this.activeFilter);
         const result = active
