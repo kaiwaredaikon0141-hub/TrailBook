@@ -48,6 +48,7 @@ function fixture({
     networkBuild = "11111111",
     runtimeBuild = "11111111",
     fetchError = null,
+    networkBody = null,
     cacheNames = [],
     scope = "https://example.test/TrailBook/"
 } = {}) {
@@ -55,6 +56,7 @@ function fixture({
     const serviceWorker = new Target();
     const deleted = [];
     const reloads = [];
+    const warnings = [];
     let unregisters = 0;
     const registration = new Target();
 
@@ -80,18 +82,19 @@ function fixture({
             if (fetchError) throw fetchError;
             return {
                 ok: true,
-                text: async () => `window.TRAILBOOK_BUILD={commit:"${networkBuild}"}`
+                text: async () => networkBody ??
+                    `window.TRAILBOOK_BUILD = Object.freeze({"commit":"${networkBuild}"});`
             };
         },
         runtimeBuildIdentifier: runtimeBuild,
         reload: () => reloads.push(true),
-        consoleObject: { warn() {} },
+        consoleObject: { warn(...values) { warnings.push(values); } },
         timeoutMs: 1000
     });
 
     return {
         panel, serviceWorker, registration, coordinator, deleted, reloads,
-        getUnregisters: () => unregisters
+        warnings, getUnregisters: () => unregisters
     };
 }
 
@@ -109,6 +112,25 @@ async function testLatestAndNoAutostart() {
         "latest status missing");
     assert(test.deleted.length === 0 && test.reloads.length === 0,
         "latest check changed the app shell");
+}
+
+async function testLocalDevelopmentAvailability() {
+    const test = fixture();
+
+    test.coordinator.locationObject = {
+        href: "http://localhost:8000/src/",
+        hostname: "localhost",
+        reload() {}
+    };
+    assert(test.coordinator.attach() === false,
+        "localhost update action was attached");
+    assert(test.panel.appUpdateButton.disabled,
+        "localhost update action remained enabled");
+    assert(test.panel.appUpdateStatus.textContent.includes("ローカル版"),
+        "localhost update guidance missing");
+    test.panel.appUpdateButton.click();
+    assert(test.registration.updateCalls === 0,
+        "localhost update action called Service Worker update");
 }
 
 async function testWaitingActivation() {
@@ -179,6 +201,15 @@ async function testFailureAndOfflineSafety() {
     "offline check removed the working app shell");
     assert(offline.panel.appUpdateStatus.textContent === "更新できませんでした。",
         "offline error feedback missing");
+
+    const invalidMetadata = fixture({ networkBody: "invalid build metadata" });
+
+    invalidMetadata.coordinator.attach();
+    assert(!await invalidMetadata.coordinator.update(),
+        "invalid build metadata was accepted");
+    assert(invalidMetadata.warnings[0]?.[0]?.includes("network-build-check") &&
+        invalidMetadata.warnings[0]?.[1] === "Latest build metadata is invalid.",
+    "update failure diagnostic did not identify the failing stage");
 }
 
 async function testScopedFallback() {
@@ -231,6 +262,7 @@ async function testConcurrencyAndPanelLifecycle() {
 
 async function run() {
     await testLatestAndNoAutostart();
+    await testLocalDevelopmentAvailability();
     await testWaitingActivation();
     await testInstallingActivation();
     await testFailureAndOfflineSafety();

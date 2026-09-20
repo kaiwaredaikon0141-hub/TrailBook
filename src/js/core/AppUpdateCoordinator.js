@@ -1,7 +1,8 @@
 import { RUNTIME_BUILD_ID } from "../runtime/RuntimeBuild.js";
+import { isLocalDevelopmentLocation } from "../services/PWAServiceWorker.js";
 
 const APP_SHELL_CACHE_PREFIX = "trailbook-app-shell-";
-const BUILD_PATTERN = /commit\s*:\s*["']([0-9a-f]{7,40}|local)["']/i;
+const BUILD_PATTERN = /["']?commit["']?\s*:\s*["']([0-9a-f]{7,40}|local)["']/i;
 
 function buildId(value) {
 
@@ -42,6 +43,12 @@ export default class AppUpdateCoordinator {
 
     attach() {
 
+        if (isLocalDevelopmentLocation(this.locationObject)) {
+            this.panel?.setAppUpdateHandler?.(null);
+            this.panel?.setAppUpdateState?.("local");
+            return false;
+        }
+
         return this.panel?.setAppUpdateHandler?.(() => this.update()) || false;
     }
 
@@ -56,6 +63,7 @@ export default class AppUpdateCoordinator {
 
         this.running = true;
         this.panel?.setAppUpdateState?.("checking");
+        let stage = "registration";
 
         try {
             const registration = await this.#getRegistration();
@@ -69,6 +77,7 @@ export default class AppUpdateCoordinator {
                 discoveredWorker = registration.installing || discoveredWorker;
             };
 
+            stage = "registration-update";
             registration.addEventListener?.("updatefound", onUpdateFound);
             try {
                 await registration.update();
@@ -80,16 +89,19 @@ export default class AppUpdateCoordinator {
                 discoveredWorker;
 
             if (worker) {
+                stage = "worker-activation";
                 await this.#activateWorker(registration, worker);
                 return true;
             }
 
+            stage = "network-build-check";
             const networkBuild = await this.#fetchNetworkBuild();
 
             if (
                 this.runtimeBuildIdentifier !== "local" &&
                 networkBuild !== this.runtimeBuildIdentifier
             ) {
+                stage = "app-shell-refresh";
                 await this.#refreshAppShell(registration);
                 return true;
             }
@@ -99,7 +111,7 @@ export default class AppUpdateCoordinator {
         } catch (error) {
             this.panel?.setAppUpdateState?.("failed");
             this.consoleObject?.warn?.(
-                "TrailBook update failed without changing user data.",
+                `TrailBook update failed at ${stage} without changing user data.`,
                 error?.message || error
             );
             return false;

@@ -89,6 +89,7 @@ export default class LibraryMaintenancePanel {
             latest: "最新版です。",
             updating: "更新しています…",
             reloading: "再読み込みします…",
+            local: "ローカル版は再読み込みで更新されます。",
             failed: "更新できませんでした。"
         };
 
