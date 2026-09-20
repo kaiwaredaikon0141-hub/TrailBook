@@ -548,6 +548,58 @@ async function testLifecycleFlushAndRestart() {
         "hidden visibility did not flush the current map view");
 }
 
+async function testSequentialMapPersistence() {
+    const storage = new MemoryStorage();
+    const positions = {
+        b: { lat: 34.1, lng: 135.1, zoom: 11 },
+        c: { lat: 35.2, lng: 136.2, zoom: 12 },
+        d: { lat: 36.3, lng: 137.3, zoom: 13 },
+        e: { lat: 37.4, lng: 138.4, zoom: 14 }
+    };
+    let libraryId = null;
+
+    const restart = async expected => {
+        const fixture = createCoordinatorFixture({ storage });
+
+        libraryId ||= fixture.store.createLibraryId("Sequential Map");
+        assert(await fixture.coordinator.restoreLibrary({
+            libraryId,
+            libraryName: "Sequential Map",
+            generation: 1,
+            isCurrent: fixture.isCurrent(1)
+        }), "sequential Map restore failed");
+        if (expected) {
+            assert(JSON.stringify(fixture.mapView.restored?.value) ===
+                JSON.stringify(expected),
+            "restart did not restore the newest sequential Map state");
+        }
+        return fixture;
+    };
+
+    let fixture = await restart(null);
+
+    fixture.mapView.current = positions.b;
+    fixture.eventBus.emit("map:view-changed", { programmatic: false });
+    assert(fixture.coordinator.flush(), "B Map flush failed");
+    fixture = await restart(positions.b);
+
+    fixture.mapView.current = positions.c;
+    fixture.eventBus.emit("map:view-changed", { programmatic: false });
+    fixture.runTimer();
+    fixture = await restart(positions.c);
+
+    fixture.mapView.current = positions.d;
+    fixture.eventBus.emit("map:view-changed", { programmatic: false });
+    fixture.windowTarget.dispatch("pagehide");
+    fixture = await restart(positions.d);
+
+    fixture.mapView.current = positions.e;
+    fixture.eventBus.emit("map:view-changed", { programmatic: false });
+    fixture.documentTarget.visibilityState = "hidden";
+    fixture.documentTarget.dispatch("visibilitychange");
+    await restart(positions.e);
+}
+
 async function testCoordinator() {
 
     const fixture = createCoordinatorFixture();
@@ -1834,6 +1886,7 @@ try {
     testMapView();
     await testCoordinator();
     await testLifecycleFlushAndRestart();
+    await testSequentialMapPersistence();
     await testVisibleTrackState();
     await testStaleVisibleRestore();
     await testSelectedTrackRestore();

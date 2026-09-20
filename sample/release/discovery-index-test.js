@@ -459,6 +459,45 @@ async function testLargeWarmIndexContract() {
         "806 entry index contains duplicate paths");
 }
 
+function testLazyOrderingMetadata() {
+    let loads = 0;
+    const index = new LibraryDiscoveryIndexService({
+        loader: {
+            setLibraryNamespace() {},
+            async loadSummary() { loads += 1; return null; }
+        }
+    });
+    const fileEntries = [
+        "trips/2022_12_04.gpx",
+        "trips/2022_12_06.gpx",
+        "trips/2022_12_05.gpx",
+        "trips/undated.gpx"
+    ].map(path => ({
+        path,
+        fileHandle: { name: path.split("/").pop() }
+    }));
+
+    index.setLibrary({
+        namespace: "ordering-fallback",
+        generation: 1,
+        fileEntries
+    });
+    const entries = index.getOrderingEntries();
+
+    assert(loads === 0 && index.getStatus() === "idle",
+        "ordering metadata eagerly loaded GPX content");
+    assert(entries.length === 4,
+        "ordering metadata omitted a canonical relativePath");
+    assert(entries.find(entry =>
+        entry.relativePath.endsWith("2022_12_06.gpx")
+    )?.dateSource === DATE_SOURCES.FILE_NAME,
+    "ordering metadata did not reuse the filename date resolver");
+    assert(entries.find(entry =>
+        entry.relativePath.endsWith("undated.gpx")
+    )?.resolvedDate === null,
+    "undated ordering fallback invented a date");
+}
+
 async function testTargetedEntryReplacement() {
     const releases = [];
     const loader = {
@@ -514,6 +553,7 @@ try {
     await testGenerationGuard();
     await testTargetedEntryReplacement();
     await testLargeWarmIndexContract();
+    testLazyOrderingMetadata();
     output.textContent = `PASS: ${assertions} assertions`;
 } catch (error) {
     output.textContent = `FAIL after ${assertions} assertions\n${error.stack}`;

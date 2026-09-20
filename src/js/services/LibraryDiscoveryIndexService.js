@@ -136,6 +136,14 @@ export default class LibraryDiscoveryIndexService {
         });
     }
 
+    getOrderingEntries() {
+
+        return this.fileEntries.map(source => (
+            this.entries.get(source.relativePath) ||
+            this.#createUnavailableSummary(source)
+        ));
+    }
+
     getEntry(relativePath) {
 
         return this.entries.get(relativePath) || null;

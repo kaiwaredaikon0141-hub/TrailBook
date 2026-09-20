@@ -72,7 +72,9 @@ export default class TrackDiscoveryCoordinator {
             this.dateTree.setSelectedPath(path, {
                 reveal: this.mode === "date"
             });
-            void this.trackInfo.setSelectedPath(path);
+            void this.trackInfo.setSelectedPath(path).then(() => {
+                this.#syncTrackOrder();
+            });
         });
         this.eventBus.on("discovery:index-cancel-requested", () => {
             this.index.cancel();
@@ -104,6 +106,7 @@ export default class TrackDiscoveryCoordinator {
             fileEntries,
             generation
         });
+        this.#syncTrackOrder();
         this.trackInfo.setLibrary({ generation, isCurrent });
         this.activeFilter = this.filterService.normalize(
             this.modeStore.setActiveLibrary(libraryId)
@@ -216,6 +219,7 @@ export default class TrackDiscoveryCoordinator {
         }
 
         this.fileHandles.set(path, fileHandle);
+        this.#syncTrackOrder();
 
         if (this.index.getStatus() === "ready") {
             await this.index.loadEntry(path, {
@@ -243,6 +247,7 @@ export default class TrackDiscoveryCoordinator {
         }
 
         this.fileHandles.set(path, fileHandle);
+        this.#syncTrackOrder();
         const status = this.index.getStatus();
 
         if (hadLoadedEntry || status === "ready" || status === "building") {
@@ -252,6 +257,7 @@ export default class TrackDiscoveryCoordinator {
             });
 
             if (!entry || !this.isCurrent()) return false;
+            this.#syncTrackOrder();
             if (this.index.getStatus() === "ready") this.#applyFilter();
             await this.trackInfo.setSelectedPath(this.trackInfo.selectedPath);
         }
@@ -274,6 +280,7 @@ export default class TrackDiscoveryCoordinator {
 
         this.fileHandles.delete(sourcePath);
         this.fileHandles.set(targetPath, fileHandle);
+        this.#syncTrackOrder();
 
         if (shouldReload || this.index.getStatus() === "ready") {
             const entry = await this.index.loadEntry(targetPath, {
@@ -282,6 +289,7 @@ export default class TrackDiscoveryCoordinator {
             });
 
             if (!entry || !this.isCurrent()) return false;
+            this.#syncTrackOrder();
             if (this.index.getStatus() === "ready") this.#applyFilter();
         }
 
@@ -400,7 +408,7 @@ export default class TrackDiscoveryCoordinator {
 
     #applyFilter(entries = this.index.getEntries()) {
 
-        this.treeView?.setTrackOrderEntries(entries);
+        this.#syncTrackOrder();
 
         const active = this.filterService.isActive(this.activeFilter);
         const result = active
@@ -413,6 +421,13 @@ export default class TrackDiscoveryCoordinator {
         );
         this.#showEntries(result.entries);
         this.#showFilterResults(result);
+    }
+
+    #syncTrackOrder() {
+
+        return this.treeView?.setTrackOrderEntries(
+            this.index.getOrderingEntries()
+        ) ?? false;
     }
 
     #showFilterResults(result = null) {

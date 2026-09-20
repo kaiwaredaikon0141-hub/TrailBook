@@ -290,6 +290,7 @@ async function testCoordinator() {
         libraryIdentity: "root-name:GPX",
         cacheNamespace: "local-cache"
     });
+    mapView.view = { lat: 34.5, lng: 135.5, zoom: 10 };
     documentTarget.emit("visibilitychange");
     windowTarget.emit("pagehide");
     await Promise.resolve();
@@ -308,8 +309,9 @@ async function testCoordinator() {
     ), "missing cache reference was not retained for revalidation");
     assert(writes[0].selectedTrack.relativePath === "one.gpx",
         "selection was not preserved by phase-B commit");
-    assert(writes[0].map.zoom === 12,
-        "phase-B replaced the snapshot map view");
+    assert(writes[0].map.zoom === 10 &&
+        order.filter(value => value === "map-state").length === 1,
+    "stale phase-A Map replaced the current View State during phase B");
     assert(writes[0].library.entries.length === 1,
         "phase-B omitted lightweight Library metadata");
     assert(coordinator.getLibraryPathDiagnostic("one.gpx").exists &&

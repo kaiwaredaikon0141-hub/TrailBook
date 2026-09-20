@@ -94,8 +94,6 @@ export default class DisplaySnapshotCoordinator {
         this.libraryContextGeneration = 0;
         this.writeQueue = Promise.resolve();
         this.metricsReported = false;
-        this.snapshotView = null;
-        this.mapChangedDuringRestore = false;
         this.startedAt = now();
         this.metrics = {
             appShellReady: 0,
@@ -129,7 +127,6 @@ export default class DisplaySnapshotCoordinator {
         );
         this.libraryIdentity = snapshot.libraryIdentity;
         this.cacheNamespace = snapshot.cacheNamespace;
-        this.snapshotView = snapshot.map;
         this.#updateDiagnostic({ snapshotStatus: "found" });
         if (this.mapView.isValidViewState(snapshot.map)) {
             this.mapView.setViewState(snapshot.map, {
@@ -238,16 +235,6 @@ export default class DisplaySnapshotCoordinator {
             return false;
         }
 
-        if (
-            this.phaseARestored &&
-            !this.mapChangedDuringRestore &&
-            this.mapView.isValidViewState(this.snapshotView)
-        ) {
-            this.mapView.setViewState(this.snapshotView, {
-                animate: false,
-                silent: true
-            });
-        }
         const saved = await this.#save("phaseB-complete");
 
         if (!saved) return false;
@@ -255,7 +242,6 @@ export default class DisplaySnapshotCoordinator {
         this.#setRestoreState("ready");
         this.markLibraryReady();
         this.phaseARestored = false;
-        this.snapshotView = null;
         this.metrics.libraryReady ??= Math.max(0, now() - this.startedAt);
         this.#updateDiagnostic({
             phaseBStatus: "success",
@@ -319,17 +305,11 @@ export default class DisplaySnapshotCoordinator {
         this.lastKnownGood = null;
         this.pendingExpandedPaths = null;
         this.phaseARestored = false;
-        this.snapshotView = null;
     }
 
     #bindEvents() {
 
-        this.eventBus.on("map:view-changed", ({ programmatic = false } = {}) => {
-            if (!programmatic && ["phaseA", "phaseB"].includes(
-                this.restoreState
-            )) {
-                this.mapChangedDuringRestore = true;
-            }
+        this.eventBus.on("map:view-changed", () => {
             this.#scheduleSave("map-change");
         });
         this.eventBus.on("gpx:display-toggled", () => {

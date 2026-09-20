@@ -10,6 +10,7 @@ import DateTreeBuilder from "../../src/js/services/DateTreeBuilder.js";
 import DiscoveryViewStateStore from "../../src/js/services/DiscoveryViewStateStore.js";
 import DisplayState from "../../src/js/state/DisplayState.js";
 import DateTreeView from "../../src/js/ui/DateTreeView.js";
+import TrackTreeOrder from "../../src/js/services/TrackTreeOrder.js";
 import { applyTreeDisplayBatch } from "../../src/js/ui/TreeDisplayBatch.js";
 
 const output = document.getElementById("result");
@@ -598,6 +599,100 @@ async function testCoordinator() {
     assert(loads === 2 && !folderTree.hidden, "Library clear rebuilt or hid Folder Tree");
 }
 
+async function testFolderOrderingMetadataFlow() {
+    const eventBus = new EventBus();
+    const displayState = new DisplayState();
+    const modeStore = new DiscoveryViewStateStore({ storage: memoryStorage() });
+    const order = new TrackTreeOrder();
+    const paths = [
+        "trips/2022_12_04.gpx",
+        "trips/2022_12_06.gpx",
+        "trips/2022_12_05.gpx",
+        "trips/recent.gpx"
+    ];
+    let orderedPaths = [];
+    let loads = 0;
+    const handles = paths.map(path => ({
+        path,
+        fileHandle: { name: path.split("/").pop() }
+    }));
+    const coordinator = new TrackDiscoveryCoordinator({
+        eventBus,
+        displayState,
+        modeStore,
+        loader: {
+            setLibraryNamespace() {},
+            async loadSummary(path) {
+                loads += 1;
+                return new TrackDiscoveryEntry({
+                    relativePath: path,
+                    folderPath: "trips",
+                    originalFileName: "recent.gpx",
+                    displayName: "Recent",
+                    resolvedDate: new Date("2026-09-05T01:00:00Z"),
+                    dateSource: DATE_SOURCES.TRACK_POINT,
+                    startTime: new Date("2026-09-05T01:00:00Z")
+                });
+            }
+        }
+    });
+    const sidebar = document.createElement("div");
+    const folderTree = document.createElement("ul");
+    const treeView = {
+        setTrackOrderEntries(entries) {
+            order.setEntries(entries);
+            orderedPaths = [...paths].sort((first, second) =>
+                order.compare(first, second));
+            return true;
+        }
+    };
+
+    sidebar.className = "sidebar";
+    folderTree.className = "tree-root";
+    sidebar.append(folderTree);
+    document.body.append(sidebar);
+    coordinator.attach({ folderTree, treeView });
+    coordinator.bindEvents();
+    coordinator.setSourceResolver({
+        resolve: path => ({
+            status: "ready",
+            relativePath: path,
+            actualFileHandle: handles.find(entry => entry.path === path)
+                ?.fileHandle
+        })
+    });
+    coordinator.setLibrary({
+        namespace: "folder-ordering",
+        libraryId: "root-name:Ordering",
+        fileEntries: handles,
+        generation: 1,
+        isCurrent: () => true
+    });
+
+    assert(loads === 0,
+        "Folder ordering eagerly parsed GPX content");
+    assert(orderedPaths.join(",") === [
+        "trips/2022_12_06.gpx",
+        "trips/2022_12_05.gpx",
+        "trips/2022_12_04.gpx",
+        "trips/recent.gpx"
+    ].join(","),
+    "resolved-date-only Tracks were not newest-first before GPX metadata load");
+
+    eventBus.emit("selection:changed", { path: "trips/recent.gpx" });
+    await flush();
+    await flush();
+    assert(loads === 1 && orderedPaths[0] === "trips/recent.gpx",
+        "actual GPX startTime did not re-order the Folder tree");
+    assert(orderedPaths.slice(1).join(",") === [
+        "trips/2022_12_06.gpx",
+        "trips/2022_12_05.gpx",
+        "trips/2022_12_04.gpx"
+    ].join(","),
+    "resolved-date-only Tracks lost their descending order after enrichment");
+    sidebar.closest(".sidebar-shell")?.remove();
+}
+
 try {
     testBuilder();
     testModeStore();
@@ -609,6 +704,7 @@ try {
     testTreeDisplayBatchScale();
     await testProvisionalFolderBatchRollback();
     await testCoordinator();
+    await testFolderOrderingMetadataFlow();
     output.textContent = `PASS: ${assertions} assertions`;
 } catch (error) {
     output.textContent = `FAIL after ${assertions} assertions: ${error.stack || error}`;
