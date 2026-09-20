@@ -119,6 +119,9 @@ function testPanel() {
     document.body.append(panel.element);
 
     assert(!panel.disclosure.open, "Maintenance was not initially collapsed");
+    assert(panel.appUpdateButton.textContent.trim() === "最新版に更新" &&
+        panel.appUpdateButton.disabled,
+    "safe app update action is missing from Maintenance");
     assert(panel.attachViewStateControls({
         element: controlsElement, resetButton: viewButton, status: viewStatus
     }), "View-state reset was not attached to Maintenance");

@@ -41,6 +41,7 @@ import {
 } from "./ui/BuildInfoView.js";
 import LibraryDiagnosticsPanel from "./ui/LibraryDiagnosticsPanel.js";
 import LibraryMaintenancePanel from "./ui/LibraryMaintenancePanel.js";
+import AppUpdateCoordinator from "./core/AppUpdateCoordinator.js";
 import OfflineMapsPanel from "./ui/OfflineMapsPanel.js";
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -468,6 +469,12 @@ window.addEventListener("DOMContentLoaded", () => {
     );
 
     const serviceWorkerRegistration = registerTrailBookServiceWorker();
+    const appUpdateCoordinator = new AppUpdateCoordinator({
+        panel: libraryMaintenance,
+        serviceWorkerRegistration
+    });
+
+    appUpdateCoordinator.attach();
     resolveBuildInfoElements([buildInfo, developmentBuildInfo, mapBuildInfo], {
         serviceWorkerRegistration
     });

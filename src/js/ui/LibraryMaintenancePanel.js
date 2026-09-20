@@ -22,6 +22,12 @@ export default class LibraryMaintenancePanel {
         this.cacheResetStatus = this.element.querySelector(
             ".library-cache-reset-status"
         );
+        this.appUpdateButton = this.element.querySelector(".app-update-action");
+        this.appUpdateStatus = this.element.querySelector(".app-update-status");
+        this.appUpdateHandler = null;
+        this.appUpdateButton.addEventListener("click", () => {
+            this.appUpdateHandler?.();
+        });
         this.cacheResetDialog = new LibraryCacheResetDialog(eventBus);
         this.element.append(this.cacheResetDialog.element);
     }
@@ -67,6 +73,29 @@ export default class LibraryMaintenancePanel {
                     : "";
     }
 
+    setAppUpdateHandler(handler) {
+
+        this.appUpdateHandler = typeof handler === "function" ? handler : null;
+        this.appUpdateButton.disabled = !this.appUpdateHandler;
+        return true;
+    }
+
+    setAppUpdateState(state) {
+
+        const running = state === "checking" || state === "updating" ||
+            state === "reloading";
+        const messages = {
+            checking: "更新を確認中…",
+            latest: "最新版です。",
+            updating: "更新しています…",
+            reloading: "再読み込みします…",
+            failed: "更新できませんでした。"
+        };
+
+        this.appUpdateButton.disabled = running || !this.appUpdateHandler;
+        this.appUpdateStatus.textContent = messages[state] || "";
+    }
+
     #create(documentTarget) {
 
         const section = documentTarget.createElement("section");
@@ -77,6 +106,9 @@ export default class LibraryMaintenancePanel {
                 <summary>Maintenance</summary>
                 <div class="library-maintenance-content">
                     <div class="library-maintenance-actions">
+                        <button class="app-update-action" type="button" disabled>
+                            最新版に更新
+                        </button>
                         <button class="library-cache-reset" type="button">
                             Libraryキャッシュをリセット
                         </button>
@@ -85,6 +117,8 @@ export default class LibraryMaintenancePanel {
                         class="library-access-message library-maintenance-view-status"
                         role="status" aria-live="polite"></p>
                     <p class="library-access-message library-cache-reset-status"
+                        role="status" aria-live="polite"></p>
+                    <p class="library-access-message app-update-status"
                         role="status" aria-live="polite"></p>
                 </div>
             </details>

@@ -310,6 +310,8 @@ async function testManifestAndAssets() {
         mainSource.includes("libraryDiagnostics.attachLibraryRefresh") &&
         mainSource.includes("new LibraryMaintenancePanel") &&
         mainSource.includes("libraryMaintenance.attachViewStateControls") &&
+        mainSource.includes("new AppUpdateCoordinator") &&
+        mainSource.includes("appUpdateCoordinator.attach()") &&
         mainSource.includes("libraryMaintenance.element") &&
         mainSource.includes("libraryDiagnostics.element") &&
         !mainSource.includes("document.body.append(developmentBuildInfo)"),
@@ -394,8 +396,9 @@ async function testManifestAndAssets() {
         workerSource.includes("Runtime module") &&
         workerSource.includes("Build metadata"),
         "mixed build metadata/runtime module is not rejected during install");
-    assert(!workerSource.includes("self.skipWaiting()"),
-        "Service Worker can still replace the controller mid-page");
+    assert(workerSource.includes('event.data?.type === "SKIP_WAITING"') &&
+        workerSource.includes("event.waitUntil(self.skipWaiting())"),
+    "explicit Service Worker activation message is missing");
     assert(workerSource.includes("self.clients.claim()"),
         "activated Service Worker no longer claims its scope");
     assert(!workerSource.includes("self.location.hostname"),
@@ -694,7 +697,7 @@ async function testServiceWorkerCache() {
         new URL(request.url).pathname.includes("/js/") &&
         new URL(request.url).pathname.endsWith(".js")
     );
-    assert(cachedModules.length === 145,
+    assert(cachedModules.length === 146,
         `production module graph not precached: ${cachedModules.length}`);
     assert(!cachedRequests.some(request => request.url.endsWith(".gpx")),
         "GPX entered app shell cache");
