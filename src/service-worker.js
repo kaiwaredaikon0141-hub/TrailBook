@@ -29,6 +29,7 @@ const MODULE_ENTRY = "./js/main.js";
 const MODULE_SPECIFIER_PATTERN = /\b(?:import|export)\s+(?:(?:[\w*{}\s,]+)\s+from\s+)?["']([^"']+)["']/g;
 const DYNAMIC_IMPORT_PATTERN = /\bimport\(\s*["']([^"']+)["']\s*\)/g;
 const RUNTIME_BUILD_MODULE = "./js/runtime/RuntimeBuild.js";
+const MODULE_FETCH_CONCURRENCY = 12;
 
 function buildFetchUrl(url) {
 
@@ -70,35 +71,49 @@ async function precacheModuleGraph(cache) {
     const visited = new Set();
 
     while (pending.length > 0) {
-        const moduleUrl = pending.shift();
+        const batch = [];
 
-        if (visited.has(moduleUrl)) continue;
-        visited.add(moduleUrl);
+        while (
+            pending.length > 0 &&
+            batch.length < MODULE_FETCH_CONCURRENCY
+        ) {
+            const moduleUrl = pending.shift();
 
-        const response = await fetchBuildAsset(moduleUrl);
-
-        if (!response.ok) {
-            throw new Error(`App shell module fetch failed: ${response.status}`);
+            if (visited.has(moduleUrl)) continue;
+            visited.add(moduleUrl);
+            batch.push(moduleUrl);
         }
 
-        await cache.put(moduleUrl, response.clone());
-        const source = await response.text();
+        const dependencies = await Promise.all(batch.map(async moduleUrl => {
+            const response = await fetchBuildAsset(moduleUrl);
 
-        if (moduleUrl === new URL(RUNTIME_BUILD_MODULE, scope).href) {
-            assertBuildMarker(source, "Runtime module");
-        }
+            if (!response.ok) {
+                throw new Error(
+                    `App shell module fetch failed: ${response.status}`
+                );
+            }
 
-        collectModuleSpecifiers(source).forEach(specifier => {
-            if (!specifier.startsWith(".")) return;
+            await cache.put(moduleUrl, response.clone());
+            const source = await response.text();
 
-            const dependencyUrl = new URL(specifier, moduleUrl);
+            if (moduleUrl === new URL(RUNTIME_BUILD_MODULE, scope).href) {
+                assertBuildMarker(source, "Runtime module");
+            }
+
+            return collectModuleSpecifiers(source)
+                .filter(specifier => specifier.startsWith("."))
+                .map(specifier => new URL(specifier, moduleUrl).href);
+        }));
+
+        dependencies.flat().forEach(dependencyUrl => {
+            const url = new URL(dependencyUrl);
 
             if (
-                dependencyUrl.origin === self.location.origin &&
-                dependencyUrl.pathname.endsWith(".js") &&
-                !visited.has(dependencyUrl.href)
+                url.origin === self.location.origin &&
+                url.pathname.endsWith(".js") &&
+                !visited.has(url.href)
             ) {
-                pending.push(dependencyUrl.href);
+                pending.push(url.href);
             }
         });
     }

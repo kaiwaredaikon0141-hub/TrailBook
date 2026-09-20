@@ -391,6 +391,10 @@ async function testManifestAndAssets() {
     assert(workerSource.includes('searchParams.set("trailbook-build"') &&
         workerSource.includes('fetch(buildFetchUrl(url), { cache: "reload" })'),
         "new app shell does not bypass old HTTP/module cache by build ID");
+    assert(workerSource.includes("MODULE_FETCH_CONCURRENCY = 12") &&
+        workerSource.includes("Promise.all(batch.map(async moduleUrl") &&
+        workerSource.includes("batch.length < MODULE_FETCH_CONCURRENCY"),
+    "app shell module graph is not fetched with bounded concurrency");
     assert(workerSource.includes(
         '"./vendor/protomaps-leaflet/protomaps-leaflet.js"'
     ), "local vector renderer is not in the app shell");
