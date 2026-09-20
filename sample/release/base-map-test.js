@@ -123,6 +123,13 @@ function run() {
     eventBus.emit("map:base-map-changed", { baseMap: "osm" });
     assert(mapView.baseTileLayer.options.attribution === Config.map.tileAttribution,
         "OSM attribution changed after switching back");
+    eventBus.emit("map:display-mode-changed", { mode: "monochrome" });
+    eventBus.emit("map:base-map-changed", { baseMap: "gsiStandard" });
+    assert(mapView.getMapDisplayMode() === "monochrome" &&
+        mapView.element.querySelector(".map-canvas").classList.contains(
+            "map--monochrome"
+        ), "XYZ basemap switching lost monochrome presentation state");
+    eventBus.emit("map:display-mode-changed", { mode: "color" });
     eventBus.emit("map:base-map-changed", { baseMap: "gsiStandard" });
     assert(JSON.parse(storage.value).global.baseMap === "gsiStandard",
         "base map was not saved to view state");

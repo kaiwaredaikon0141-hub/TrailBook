@@ -462,19 +462,37 @@ async function testUiAndController() {
         "ready package did not compose with static providers");
     panel.packageList.querySelector("[data-package-action='select']").click();
     await waitFor(() => mapView.getBaseMapProvider()?.packageId ===
-        value.packageId, "ready package was not selected");
+        value.packageId, "ready package did not become the active basemap");
+    await waitFor(() => panel.packageList.querySelector(
+            `[data-package-id='${value.packageId}'] ` +
+            "[data-package-action='select']"
+        )?.textContent === "Selected",
+    "active basemap was not projected as Selected");
     assert(mapView.getBaseMapProvider().attribution === value.attribution,
         "selected package attribution was lost");
-
-    panel.packageList.querySelector("[data-package-action='delete']").click();
-    await waitFor(() => regionCatalog.get(value.packageId)?.state === "available",
-        "deleted package did not remain catalog-visible");
-    assert(mapView.getBaseMap() === "osm",
-        "deleting active package did not fall back to online basemap");
-    assert(staticProviders.list().length === staticCount,
-        "static provider registry was mutated");
-    assert(download.calls.some(call => call[0] === "delete"),
-        "Delete action did not reach coordinator");
+    const selectedA = panel.packageList.querySelector(
+        `[data-package-id='${value.packageId}'] ` +
+        "[data-package-action='select']"
+    );
+    assert(selectedA.disabled && selectedA.textContent === "Selected",
+        "active package was not presented as Selected");
+    eventBus.emit("map:base-map-changed", { baseMap: "osm" });
+    await waitFor(() => mapView.getBaseMap() === "osm" &&
+        panel.packageList.querySelector(
+            `[data-package-id='${value.packageId}'] ` +
+            "[data-package-action='select']"
+        )?.disabled === false,
+    "switching to OSM did not restore the package Select action");
+    panel.packageList.querySelector(
+        `[data-package-id='${value.packageId}'] ` +
+        "[data-package-action='select']"
+    ).click();
+    await waitFor(() => mapView.getBaseMapProvider()?.packageId ===
+        value.packageId && panel.packageList.querySelector(
+            `[data-package-id='${value.packageId}'] ` +
+            "[data-package-action='select']"
+        )?.textContent === "Selected",
+    "OSM to PMTiles reselection did not synchronize package state");
 
     const fileInputStyle = getComputedStyle(panel.packageFileInput);
     assert(panel.packageImportButton === panel.packageFileInput &&
@@ -522,7 +540,16 @@ async function testUiAndController() {
         "[data-package-action='select']"
     ).click();
     await waitFor(() => mapView.getBaseMapProvider()?.packageId ===
-        localEntry.packageId, "imported local package was not selectable");
+        localEntry.packageId && panel.packageList.querySelector(
+            `[data-package-id='${localEntry.packageId}'] ` +
+            "[data-package-action='select']"
+        )?.textContent === "Selected",
+    "imported local package was not selectable");
+    assert(panel.packageList.querySelector(
+        `[data-package-id='${value.packageId}'] ` +
+        "[data-package-action='select']"
+    )?.disabled === false,
+    "PMTiles A to PMTiles B left the former package selected");
     panel.packageList.querySelector(
         `[data-package-id='${localEntry.packageId}'] ` +
         "[data-package-action='delete']"
@@ -531,6 +558,17 @@ async function testUiAndController() {
         "deleted local import remained in the package catalog");
     assert(mapView.getBaseMap() === "osm",
         "deleting the active local import did not use safe basemap fallback");
+
+    panel.packageList.querySelector(
+        `[data-package-id='${value.packageId}'] ` +
+        "[data-package-action='delete']"
+    ).click();
+    await waitFor(() => regionCatalog.get(value.packageId)?.state === "available",
+        "deleted package did not remain catalog-visible");
+    assert(staticProviders.list().length === staticCount,
+        "static provider registry was mutated");
+    assert(download.calls.some(call => call[0] === "delete"),
+        "Delete action did not reach coordinator");
 
     panel.packageFileInput.dispatchEvent(new Event("change"));
     await waitFor(() => importer.calls.length === 2 &&

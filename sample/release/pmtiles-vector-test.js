@@ -190,6 +190,12 @@ async function testOfflineRender(store, source) {
             source.attribution
         ), "vector attribution was not shown");
         assert(map.hasLayer(overlay), "GPX-equivalent overlay was hidden by basemap");
+        mapElement.classList.add("map--monochrome");
+        assert(getComputedStyle(map.getPane("tilePane")).filter !== "none",
+            "monochrome presentation did not include vector PMTiles canvas tiles");
+        mapElement.classList.remove("map--monochrome");
+        assert(getComputedStyle(map.getPane("tilePane")).filter === "none",
+            "color presentation retained the monochrome PMTiles filter");
         const identity = map;
         map.panBy([8, 0], { animate: false });
         layer.rerenderTiles();
@@ -272,6 +278,7 @@ function testMapViewSwitching() {
     const mapIdentity = view.map.identity;
     const overlay = { marker: "gpx" };
     view.layerManager.layers.set("track.gpx", overlay);
+    view.setMapDisplayMode("monochrome");
     for (const id of ["raster", "vector-a", "vector-b", "raster", "osm"]) {
         view.setBaseMap(id);
         assert(view.baseTileLayer.id === id && map.layers.size === 1 &&
@@ -281,6 +288,10 @@ function testMapViewSwitching() {
         assert(view.map.identity === mapIdentity &&
             view.layerManager.layers.get("track.gpx") === overlay,
         `${id} switch replaced the map or GPX overlay`);
+        assert(view.getMapDisplayMode() === "monochrome" &&
+            view.element.querySelector(".map-canvas")?.classList.contains(
+                "map--monochrome"
+            ), `${id} switch lost the current map display mode`);
     }
     assert(view.baseTileLayer.options.attribution === "osm",
         "switching back to XYZ did not restore attribution options");

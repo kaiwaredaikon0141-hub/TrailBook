@@ -19,6 +19,7 @@ export default class OfflineMapPackagesController {
         this.attached = false;
         this.activePackageId = null;
         this.unsubscribe = null;
+        this.baseMapListenerBound = false;
     }
 
     async attach() {
@@ -37,12 +38,20 @@ export default class OfflineMapPackagesController {
             this.activePackageId = ["planned", "downloading", "verifying"]
                 .includes(state.status) ? state.packageId : null;
             this.panel.showPackages(
-                this.regionCatalog.projectDownloadState(state)
+                this.#projectActiveBasemap(
+                    this.regionCatalog.projectDownloadState(state)
+                )
             );
             if (["ready", "partial", "failed"].includes(state.status)) {
                 void this.refresh();
             }
         });
+        if (!this.baseMapListenerBound) {
+            this.eventBus.on("map:base-map-changed", () => {
+                if (this.attached) this.#syncActiveBasemapPresentation();
+            });
+            this.baseMapListenerBound = true;
+        }
         return this.refresh();
     }
 
@@ -64,7 +73,10 @@ export default class OfflineMapPackagesController {
             const storage = await this.regionCatalog.getStorageSummary();
             this.mapView.setBasemapProviders(this.basemapCatalog);
             this.panel.showPackageStorage(storage);
-            this.panel.showPackages(entries, storage);
+            this.panel.showPackages(
+                this.#projectActiveBasemap(entries),
+                storage
+            );
             return { entries, sources };
         } catch (error) {
             this.panel.showPackageStatus(error.message, "error");
@@ -204,6 +216,29 @@ export default class OfflineMapPackagesController {
             this.activePackageId = null;
             await this.refresh();
         }
+    }
+
+    #syncActiveBasemapPresentation() {
+        this.panel.showPackages(
+            this.#projectActiveBasemap(this.regionCatalog.list())
+        );
+    }
+
+    #projectActiveBasemap(entries) {
+        const selectedPackageId = this.mapView.getBaseMapProvider?.()
+            ?.packageId ?? null;
+        return entries.map(entry => {
+            const selected = entry.installedReady === true &&
+                entry.packageId === selectedPackageId;
+            return Object.freeze({
+                ...entry,
+                selected,
+                actions: Object.freeze({
+                    ...entry.actions,
+                    select: selected ? false : entry.actions?.select === true
+                })
+            });
+        });
     }
 
     #localPackageId(fileName) {

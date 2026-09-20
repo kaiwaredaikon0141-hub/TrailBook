@@ -1793,7 +1793,7 @@ body.is-track-info-resizing{
     display:none;
 }
 
-.map--monochrome .leaflet-tile-pane img{
+.map--monochrome .leaflet-tile-pane{
 
     filter:var(--map-monochrome-filter);
 }

@@ -308,7 +308,7 @@ export default class OfflineMapsPanel {
                 ["cancel", "Cancel"],
                 ["resume", "Resume"],
                 ["delete", "Delete"],
-                ["select", "Select"]
+                ["select", value.selected ? "Selected" : "Select"]
             ];
             for (const [action, label] of definitions) {
                 const button = this.document.createElement("button");

@@ -71,10 +71,12 @@ function responseFor(url) {
 class FakeMapView {
     constructor() {
         this.baseMap = "osm";
+        this.activeProvider = null;
         this.zoom = 2;
         this.bounds = { west: -1, south: -1, east: 1, north: 1 };
     }
     getBaseMap() { return this.baseMap; }
+    getBaseMapProvider() { return this.activeProvider; }
     getZoom() { return this.zoom; }
     getCurrentBounds() { return { ...this.bounds }; }
 }
@@ -210,7 +212,25 @@ async function testWorkflow() {
         await controller.planCurrentView() === null && requests.length === 0,
     "GSI offline download actions were enabled");
 
+    mapView.baseMap = "pmtiles:kansai";
+    mapView.activeProvider = {
+        id: mapView.baseMap,
+        name: "Kansai local PMTiles",
+        sourceType: "pmtiles",
+        packageId: "kansai-local",
+        minZoom: 0,
+        maxZoom: 15,
+        offlineDownloadAllowed: false
+    };
+    controller.syncProvider();
+    assert(panel.providerOutput.textContent.includes("Kansai local PMTiles") &&
+        !panel.providerOutput.textContent.includes("Unavailable"),
+    "active PMTiles basemap was labelled unavailable");
+    assert(panel.planButton.disabled,
+        "active PMTiles package bypassed Cached Areas provider eligibility");
+
     mapView.baseMap = provider.id;
+    mapView.activeProvider = null;
     controller.syncProvider();
     assert(!panel.planButton.disabled && panel.startButton.disabled,
         "explicit offline-capable provider was not enabled for planning");

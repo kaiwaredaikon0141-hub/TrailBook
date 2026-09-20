@@ -59,10 +59,13 @@ export default class OfflineMapsController {
     }
 
     syncProvider() {
-        const provider = this.providerRegistry.get(this.mapView.getBaseMap());
-        const eligible = Boolean(provider) &&
-            this.providerRegistry.canDownloadOffline(provider.id) &&
-            provider.offlineDownloadAllowed === true;
+        const baseMap = this.mapView.getBaseMap();
+        const provider = this.mapView.getBaseMapProvider?.() ??
+            this.providerRegistry.get(baseMap);
+        const downloadProvider = this.providerRegistry.get(baseMap);
+        const eligible = Boolean(downloadProvider) &&
+            this.providerRegistry.canDownloadOffline(downloadProvider.id) &&
+            downloadProvider.offlineDownloadAllowed === true;
         this.plan = null;
         this.panel.clearPlan();
         this.panel.configureProvider(provider, eligible, this.mapView.getZoom());
