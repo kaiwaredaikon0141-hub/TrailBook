@@ -139,6 +139,8 @@ function testSummaryBuilder() {
         "elevation range");
     assert(summary.fileSize === 4321, "fileSize");
     assert(summary.lastModified === sourceFile.lastModified, "lastModified");
+    assert(summary.metadataComplete,
+        "parsed GPX summary was not marked metadata-complete");
 
     const pointDate = builder.build(
         "point.gpx",
@@ -167,6 +169,16 @@ function testSummaryBuilder() {
         "missing time did not remain null");
     assert(modified.elevationMin === null && modified.elevationMax === null,
         "missing elevation did not remain null");
+    assert(modified.metadataComplete,
+        "parsed empty GPX was not marked metadata-complete");
+
+    const unavailable = builder.build(
+        "unavailable.gpx",
+        { name: "unavailable.gpx" },
+        null
+    );
+    assert(!unavailable.metadataComplete,
+        "unparsed fallback was incorrectly marked metadata-complete");
 
     const brokenNames = parsed({ metadataName: "���" });
     brokenNames.tracks.forEach(track => { track.name = "Broken � name"; });

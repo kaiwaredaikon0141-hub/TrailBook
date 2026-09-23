@@ -115,12 +115,16 @@ export default class ViewStateCoordinator {
         const displayChanges = state
             ? this.#resolveDisplayChanges(state.visibleTracks)
             : [];
+        const displayGeneration = this.displayState.getLibraryGeneration();
         const expectedEnqueueCount = displayChanges.filter(
             change => change.checked
         ).length;
-        drivePerformance.setRestoreGeneration(generation, expectedEnqueueCount);
+        drivePerformance.setRestoreGeneration(
+            displayGeneration,
+            expectedEnqueueCount
+        );
         const restoreEnqueuesComplete = this.displayQueue.whenEnqueued?.({
-            generation,
+            generation: displayGeneration,
             count: expectedEnqueueCount
         }) ?? Promise.resolve();
         displayChanges.forEach(({ display, checked }) => {
@@ -136,7 +140,7 @@ export default class ViewStateCoordinator {
 
         await restoreEnqueuesComplete;
         drivePerformance.markRestoreProducerCompleted(isCurrent);
-        await this.displayQueue.whenIdle({ generation });
+        await this.displayQueue.whenIdle({ generation: displayGeneration });
         drivePerformance.markDisplayQueueIdle(isCurrent);
 
         if (
@@ -187,6 +191,11 @@ export default class ViewStateCoordinator {
             restoring: this.restoring,
             resetBlocked: this.resetBlocked
         };
+    }
+
+    getLibraryMapState(libraryId) {
+
+        return this.store.getLibraryState(libraryId)?.map ?? null;
     }
 
     detachLibrary() {

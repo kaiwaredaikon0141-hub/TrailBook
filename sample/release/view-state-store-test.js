@@ -600,6 +600,44 @@ async function testSequentialMapPersistence() {
     await restart(positions.e);
 }
 
+async function testDisplayQueueUsesDisplayGeneration() {
+    let enqueuedGeneration = null;
+    let idleGeneration = null;
+    const fixture = createCoordinatorFixture({
+        displayQueue: {
+            whenEnqueued({ generation, count }) {
+                enqueuedGeneration = generation;
+                assert(count === 1, "visible restore enqueue count changed");
+                return Promise.resolve();
+            },
+            whenIdle({ generation }) {
+                idleGeneration = generation;
+                return Promise.resolve();
+            }
+        }
+    });
+    const libraryId = fixture.store.createLibraryId("Generation");
+
+    fixture.displayState.setLibrary({ name: "Provisional" });
+    fixture.displayState.setLibrary({ name: "Actual" });
+    fixture.displayState.registerFile("a.gpx", { name: "a.gpx" }, "#123456");
+    fixture.store.setLibraryState(libraryId, state({
+        visibleTracks: ["a.gpx"]
+    }));
+    fixture.eventBus.on("gpx:display-toggled", ({ path, checked }) => {
+        fixture.displayState.setChecked(path, checked);
+    });
+
+    assert(await fixture.coordinator.restoreLibrary({
+        libraryId,
+        libraryName: "Generation",
+        generation: 1,
+        isCurrent: fixture.isCurrent(1)
+    }), "generation-mismatch restore did not complete");
+    assert(enqueuedGeneration === 2 && idleGeneration === 2,
+        "View State waited on Library generation instead of Display generation");
+}
+
 async function testCoordinator() {
 
     const fixture = createCoordinatorFixture();
@@ -1887,6 +1925,7 @@ try {
     await testCoordinator();
     await testLifecycleFlushAndRestart();
     await testSequentialMapPersistence();
+    await testDisplayQueueUsesDisplayGeneration();
     await testVisibleTrackState();
     await testStaleVisibleRestore();
     await testSelectedTrackRestore();

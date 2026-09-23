@@ -1,14 +1,16 @@
 import App from "../../src/js/core/App.js";
+import Config from "../../src/js/core/Config.js";
 import TrackSourceResolver from "../../src/js/core/TrackSourceResolver.js";
 import Folder from "../../src/js/models/Folder.js";
 import Library from "../../src/js/models/Library.js";
+import DisplaySnapshotStore from "../../src/js/services/DisplaySnapshotStore.js";
 import TrackSummaryBuilder from "../../src/js/services/TrackSummaryBuilder.js";
 
 const output = document.getElementById("result");
 const SESSION_QUERY = new URLSearchParams(location.search).has("session");
 const LIBRARY_NAME = "Desktop State Production";
 const NAMESPACE = "local:desktop-state-production";
-const TRACKS = ["one.gpx", "two.gpx"];
+const TRACKS = ["a.gpx", "b.gpx", "c.gpx"];
 let assertions = 0;
 
 function assert(condition, message) {
@@ -72,15 +74,38 @@ async function createSession({ actual = false } = {}) {
     document.body.innerHTML = '<main id="app"></main><pre id="session-result"></pre>';
     const sessionResult = document.getElementById("session-result");
     const app = new App();
+    const appliedMapViews = [];
 
     app.getColor = () => "#8f8300";
     app.librarySettingsCoordinator.load = async () => ({ source: "none" });
     app.librarySettingsCoordinator.applyLoad = () => true;
     app.initialize();
+    const setViewState = app.mapView.setViewState.bind(app.mapView);
+
+    app.mapView.setViewState = (state, options) => {
+        appliedMapViews.push({ ...state });
+        return setViewState(state, options);
+    };
     await waitFor(
         () => app.displaySnapshotCoordinator.getStatus().restoreState === "phaseB",
         "startup did not reach Fast Restore phase B"
     );
+    const checkbox = path => app.treeView.fileNodes.get(path)
+        ?.querySelector(".gpx-display-toggle");
+    const snapshot = () => ({
+        libraryId: app.viewStateCoordinator.getStatus().activeLibraryId,
+        checked: TRACKS.filter(path => checkbox(path)?.checked),
+        runtimeChecked: app.displayState.getCheckedPaths(),
+        map: app.mapView.getViewState(),
+        persisted: JSON.parse(localStorage.getItem("trailbook.viewState") ||
+            '{"libraries":{}}')
+    });
+    const phases = {
+        provisional: app.librarySnapshotService.isProvisional()
+            ? snapshot()
+            : null,
+        actual: null
+    };
 
     if (actual) {
         const fixture = createLibraryFixture();
@@ -96,10 +121,30 @@ async function createSession({ actual = false } = {}) {
             isCurrent: () => true,
             cacheNamespace: NAMESPACE
         });
-        await waitFor(
-            () => app.displaySnapshotCoordinator.getStatus().restoreState === "ready",
-            "actual Library did not become ready"
-        );
+        try {
+            await waitFor(
+                () => app.displaySnapshotCoordinator.getStatus().restoreState === "ready",
+                "actual Library did not become ready"
+            );
+        } catch (error) {
+            throw new Error(`${error.message}: ${JSON.stringify({
+                snapshot: app.displaySnapshotCoordinator.getStatus(),
+                viewState: app.viewStateCoordinator.getStatus(),
+                displayGeneration: app.displayState.getLibraryGeneration(),
+                displays: [...app.displayState.getDisplays()].map(
+                    ([path, value]) => ({
+                        path,
+                        checked: value.checked,
+                        state: value.state
+                    })
+                ),
+                queue: {
+                    active: app.displayQueue.getActiveCount(),
+                    queued: app.displayQueue.getQueuedCount()
+                }
+            })}`);
+        }
+        phases.actual = snapshot();
         const builder = new TrackSummaryBuilder();
 
         for (const [index, handle] of fixture.files.entries()) {
@@ -124,8 +169,6 @@ async function createSession({ actual = false } = {}) {
         );
     }
 
-    const checkbox = path => app.treeView.fileNodes.get(path)
-        ?.querySelector(".gpx-display-toggle");
     const setChecked = async (path, checked) => {
         const input = checkbox(path);
         if (!input) throw new Error(`missing production checkbox: ${path}`);
@@ -146,14 +189,6 @@ async function createSession({ actual = false } = {}) {
                 current.zoom === value.zoom;
         }, "Leaflet map did not reach requested state");
     };
-    const snapshot = () => ({
-        libraryId: app.viewStateCoordinator.getStatus().activeLibraryId,
-        checked: TRACKS.filter(path => checkbox(path)?.checked),
-        runtimeChecked: app.displayState.getCheckedPaths(),
-        map: app.mapView.getViewState(),
-        persisted: JSON.parse(localStorage.getItem("trailbook.viewState") ||
-            '{"libraries":{}}')
-    });
     const saveAndClose = async () => {
         app.viewStateCoordinator.flush();
         await app.displaySnapshotCoordinator.flush("production-path-test");
@@ -162,7 +197,10 @@ async function createSession({ actual = false } = {}) {
         return snapshot();
     };
 
-    return { app, checkbox, setChecked, setMap, snapshot, saveAndClose };
+    return {
+        app, checkbox, setChecked, setMap, snapshot, saveAndClose,
+        phases, appliedMapViews
+    };
 }
 
 async function runChild() {
@@ -185,6 +223,15 @@ async function closeSession(iframe) {
     const state = await iframe.contentWindow.productionSession.saveAndClose();
     iframe.remove();
     return state;
+}
+
+async function replaceSnapshotMap(map) {
+    const store = new DisplaySnapshotStore(Config.displaySnapshot);
+    const snapshot = await store.load();
+
+    if (!snapshot || !await store.save({ ...snapshot, map })) {
+        throw new Error("failed to create the stale Display Snapshot fixture");
+    }
 }
 
 function sameMap(actual, expected) {
@@ -211,16 +258,16 @@ async function runParent() {
 
     let frame = await openSession(true);
     let session = frame.contentWindow.productionSession;
-    await session.setChecked("one.gpx", true);
-    await session.setChecked("two.gpx", true);
+    await session.setChecked("a.gpx", true);
+    await session.setChecked("c.gpx", true);
     await session.setMap(positions[0]);
     const beforeToggle = session.app.mapView.getViewState();
-    await session.setChecked("two.gpx", false);
+    await session.setChecked("c.gpx", false);
     await new Promise(resolve => setTimeout(resolve, 300));
     let afterToggle = session.app.mapView.getViewState();
     assert(sameMap(afterToggle, beforeToggle),
         `Track checkbox OFF moved the production Leaflet map: ${JSON.stringify({ beforeToggle, afterToggle })}`);
-    await session.setChecked("two.gpx", true);
+    await session.setChecked("c.gpx", true);
     await new Promise(resolve => setTimeout(resolve, 300));
     afterToggle = session.app.mapView.getViewState();
     assert(sameMap(afterToggle, beforeToggle),
@@ -229,38 +276,53 @@ async function runParent() {
     const libraryId = first.libraryId;
     frame.remove();
 
-    frame = await openSession(false);
+    frame = await openSession(true);
     session = frame.contentWindow.productionSession;
     let state = session.snapshot();
     assert(state.libraryId === libraryId,
         `Library identity changed A->B: ${libraryId} -> ${state.libraryId}`);
-    assert(state.checked.join(",") === "one.gpx,two.gpx",
-        `A checkbox state did not reach reconstructed DOM: ${state.checked}`);
+    assert(state.checked.join(",") === "a.gpx,c.gpx",
+        `Session 1 checkbox state did not reach actual DOM: ${JSON.stringify({
+            provisional: session.phases.provisional,
+            actual: session.phases.actual,
+            final: state
+        })}`);
     assert(sameMap(state.map, positions[0]),
         `A map state not restored: ${JSON.stringify(state.map)}`);
-    await session.setChecked("two.gpx", false);
+    await session.setChecked("a.gpx", false);
+    await session.setChecked("b.gpx", true);
+    await session.setChecked("c.gpx", false);
     await session.setMap(positions[1]);
     const savedB = await closeSession(frame);
     assert(savedB.persisted.libraries[libraryId]?.visibleTracks?.join(",") ===
-        "one.gpx",
+        "b.gpx",
     `B visibleTracks were not persisted: ${JSON.stringify(savedB.persisted)}`);
+    await replaceSnapshotMap(positions[0]);
 
-    frame = await openSession(false);
+    frame = await openSession(true);
     session = frame.contentWindow.productionSession;
     state = session.snapshot();
     assert(state.libraryId === libraryId,
         `Library identity changed B->C: ${libraryId} -> ${state.libraryId}`);
-    assert(state.checked.join(",") === "one.gpx",
-        `B checkbox state did not reach reconstructed DOM: ${JSON.stringify({ dom: state.checked, runtime: state.runtimeChecked, view: state.persisted.libraries[libraryId] })}`);
+    assert(session.appliedMapViews.every(value => !sameMap(value, positions[0])),
+        `stale Display Snapshot map was visibly applied: ${JSON.stringify(
+            session.appliedMapViews
+        )}`);
+    assert(state.checked.join(",") === "b.gpx",
+        `Session 2 checkbox state did not reach actual DOM: ${JSON.stringify({
+            provisional: session.phases.provisional,
+            actual: session.phases.actual,
+            final: state
+        })}`);
     assert(sameMap(state.map, positions[1]),
         `B map state not restored: ${JSON.stringify(state.map)}`);
-    await session.setChecked("one.gpx", false);
+    await session.setChecked("b.gpx", false);
     await session.setMap(positions[2]);
     const savedC = await closeSession(frame);
     assert(savedC.persisted.libraries[libraryId]?.visibleTracks?.length === 0,
         `C visibleTracks were not persisted: ${JSON.stringify(savedC.persisted)}`);
 
-    frame = await openSession(false);
+    frame = await openSession(true);
     session = frame.contentWindow.productionSession;
     state = session.snapshot();
     assert(state.libraryId === libraryId,

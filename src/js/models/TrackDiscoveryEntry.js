@@ -74,6 +74,7 @@ export default class TrackDiscoveryEntry {
         elevationMax = null,
         fileSize = null,
         lastModified = null,
+        metadataComplete = false,
         status = "ready"
     }) {
 
@@ -123,6 +124,7 @@ export default class TrackDiscoveryEntry {
             lastModified,
             "lastModified"
         );
+        this.metadataComplete = metadataComplete === true;
         this.status = status;
 
         Object.freeze(this);
@@ -147,6 +149,7 @@ export default class TrackDiscoveryEntry {
             elevationMax: this.elevationMax,
             fileSize: this.fileSize,
             lastModified: this.lastModified,
+            metadataComplete: this.metadataComplete,
             status: this.status
         };
     }

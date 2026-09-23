@@ -226,6 +226,7 @@ export default class App {
                 .restore(state, context),
             getLibraryRestoreDiagnostic: () => this.librarySnapshotService.getLastRestoreDiagnostic(),
             markLibraryReady: () => this.librarySnapshotService.markReady(),
+            getProvisionalMapState: libraryId => this.viewStateCoordinator.getLibraryMapState(libraryId),
             restoreProvisionalViewState: context => this.viewStateCoordinator.restoreLibrary(context), debounceMs: this.config.displaySnapshot.debounceMs,
             diagnosticRoot: sidebar
         });
@@ -535,7 +536,6 @@ export default class App {
         preserveMapView = true,
         preserveSelection = false
     }) {
-
         const display = this.displayState.getDisplay(path);
         const rollbackUnavailable = checked && !display?.checked;
         if (!display) {

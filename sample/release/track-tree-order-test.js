@@ -132,6 +132,35 @@ async function run() {
         "2022_11_17-11_trip.gpx"
     ].join(","), "historical Track timestamps are not newest-first");
 
+    const historicalRoot = new Folder("History", { name: "History" });
+
+    historicalRoot.gpxFiles.push(...historical.map(value =>
+        file(value.relativePath)));
+    const historicalTree = new TreeView(new EventBus());
+
+    document.body.append(historicalTree.element);
+    await historicalTree.render(new Library(
+        "History",
+        historicalRoot,
+        1,
+        historical.length
+    ));
+    historicalTree.setDisplayChecked("2022_11_17-11_trip.gpx", true);
+    historicalTree.setDisplayChecked("2022_12_04-04_trip.gpx", true);
+    const checkedNodes = new Map([
+        "2022_11_17-11_trip.gpx",
+        "2022_12_04-04_trip.gpx"
+    ].map(path => [path, historicalTree.fileNodes.get(path)]));
+
+    historicalTree.setTrackOrderEntries(historical);
+    assert(renderedPaths(historicalTree).join(",") ===
+        orderedHistorical.map(value => value.relativePath).join(","),
+    "late historical metadata did not reorder the rendered Folder rows");
+    assert([...checkedNodes].every(([path, node]) =>
+        historicalTree.fileNodes.get(path) === node &&
+        historicalTree.isDisplayChecked(path)),
+    "late historical re-sort changed relativePath checkbox ownership");
+
     output.textContent = `PASS: ${assertions} assertions`;
 }
 

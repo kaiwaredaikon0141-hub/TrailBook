@@ -44,6 +44,7 @@ function normalizeEntry(value) {
         elevationMax: value.elevationMax,
         fileSize: value.fileSize,
         lastModified: value.lastModified,
+        metadataComplete: value.metadataComplete,
         status: value.status || "ready"
     });
 

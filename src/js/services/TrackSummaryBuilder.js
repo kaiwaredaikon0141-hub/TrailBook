@@ -223,6 +223,7 @@ export default class TrackSummaryBuilder {
                 file.lastModified >= 0
                 ? file.lastModified
                 : null,
+            metadataComplete: status === "ready" && Boolean(result),
             status
         });
     }

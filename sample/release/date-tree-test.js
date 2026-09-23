@@ -28,7 +28,8 @@ function entry(path, date, displayName = path) {
         originalFileName: path.split("/").pop(),
         displayName,
         resolvedDate: date,
-        dateSource: date ? DATE_SOURCES.METADATA : DATE_SOURCES.UNKNOWN
+        dateSource: date ? DATE_SOURCES.METADATA : DATE_SOURCES.UNKNOWN,
+        metadataComplete: true
     });
 }
 
@@ -533,12 +534,16 @@ async function testCoordinator() {
         generation: 1,
         isCurrent: () => true
     });
-    assert(loads === 0, "Folder mode eagerly built Discovery Index");
+    await flush();
+    await flush();
+    assert(loads === 2,
+        "Folder mode did not enrich Track ordering metadata once");
     assert(!folderTree.hidden, "Folder Tree hidden before Date mode");
     coordinator.setMode("date");
     await flush();
     await flush();
-    assert(loads === 2, "Date mode did not build one entry per GPX");
+    assert(loads === 2,
+        "Date mode did not reuse Folder ordering metadata");
     assert(folderTree.hidden && !coordinator.dateTree.element.hidden,
         "Folder/Date projection switch");
     assert(coordinator.dateTree.root.children.length === 2,
@@ -616,6 +621,12 @@ async function testFolderOrderingMetadataFlow() {
         path,
         fileHandle: { name: path.split("/").pop() }
     }));
+    const actualDates = new Map([
+        [paths[0], "2022-12-04T01:00:00Z"],
+        [paths[1], "2022-12-06T01:00:00Z"],
+        [paths[2], "2022-12-05T01:00:00Z"],
+        [paths[3], "2026-09-05T01:00:00Z"]
+    ]);
     const coordinator = new TrackDiscoveryCoordinator({
         eventBus,
         displayState,
@@ -624,14 +635,16 @@ async function testFolderOrderingMetadataFlow() {
             setLibraryNamespace() {},
             async loadSummary(path) {
                 loads += 1;
+                const date = new Date(actualDates.get(path));
                 return new TrackDiscoveryEntry({
                     relativePath: path,
                     folderPath: "trips",
-                    originalFileName: "recent.gpx",
-                    displayName: "Recent",
-                    resolvedDate: new Date("2026-09-05T01:00:00Z"),
+                    originalFileName: path.split("/").pop(),
+                    displayName: path,
+                    resolvedDate: date,
                     dateSource: DATE_SOURCES.TRACK_POINT,
-                    startTime: new Date("2026-09-05T01:00:00Z")
+                    startTime: date,
+                    metadataComplete: true
                 });
             }
         }
@@ -669,8 +682,6 @@ async function testFolderOrderingMetadataFlow() {
         isCurrent: () => true
     });
 
-    assert(loads === 0,
-        "Folder ordering eagerly parsed GPX content");
     assert(orderedPaths.join(",") === [
         "trips/2022_12_06.gpx",
         "trips/2022_12_05.gpx",
@@ -679,36 +690,67 @@ async function testFolderOrderingMetadataFlow() {
     ].join(","),
     "resolved-date-only Tracks were not newest-first before GPX metadata load");
 
-    eventBus.emit("selection:changed", { path: "trips/recent.gpx" });
-    await flush();
-    await flush();
-    assert(loads === 1 && orderedPaths[0] === "trips/recent.gpx",
-        "actual GPX startTime did not re-order the Folder tree");
-    assert(orderedPaths.slice(1).join(",") === [
+    for (let attempt = 0; attempt < 10 && loads < paths.length; attempt += 1) {
+        await flush();
+    }
+    assert(loads === paths.length,
+        "Folder mode did not enrich every Track ordering entry");
+    assert(orderedPaths.join(",") === [
+        "trips/recent.gpx",
         "trips/2022_12_06.gpx",
         "trips/2022_12_05.gpx",
         "trips/2022_12_04.gpx"
     ].join(","),
-    "resolved-date-only Tracks lost their descending order after enrichment");
+    "Folder tree did not re-sort after complete metadata enrichment");
     sidebar.closest(".sidebar-shell")?.remove();
 }
 
-function testActualLibraryKeepsSameIdentityOrderingMetadata() {
+async function testOldCachedMetadataSelfHeals() {
     const eventBus = new EventBus();
     const displayState = new DisplayState();
     const modeStore = new DiscoveryViewStateStore({ storage: memoryStorage() });
     const order = new TrackTreeOrder();
     const paths = [
+        "trips/2026_09_23.gpx",
+        "trips/2026_09_22.gpx",
+        "trips/2026_09_21.gpx",
+        "trips/2026_09_05.gpx",
+        "trips/2022_11_17-11_trip.gpx",
+        "trips/2022_11_25-11_trip.gpx",
         "trips/2022_12_04-02_trip.gpx",
-        "trips/2022_12_04-06_trip.gpx",
-        "trips/2022_11_25-11_trip.gpx"
+        "trips/2022_12_04-03_trip.gpx",
+        "trips/2022_12_04-04_trip.gpx",
+        "trips/2022_12_04-05_trip.gpx",
+        "trips/2022_12_04-06_trip.gpx"
     ];
-    const cachedEntries = [
-        entry(paths[0], new Date("2022-12-04T02:00:00Z")),
-        entry(paths[1], new Date("2022-12-06T06:00:00Z")),
-        entry(paths[2], new Date("2022-11-25T11:00:00Z"))
-    ];
+    const authoritativeDates = new Map(paths.map(path => {
+        const fileName = path.split("/").pop();
+        const match = fileName.match(/^(\d{4})_(\d{2})_(\d{2})(?:-(\d{2}))?/);
+        const day = fileName.startsWith("2022_12_04-")
+            ? Number(match[4])
+            : Number(match[3]);
+
+        return [path, new Date(Date.UTC(
+            Number(match[1]), Number(match[2]) - 1, day, 1
+        ))];
+    }));
+    const newPaths = new Set(paths.slice(0, 4));
+    const cachedEntries = paths.map(path => new TrackDiscoveryEntry({
+        relativePath: path,
+        folderPath: "trips",
+        originalFileName: path.split("/").pop(),
+        displayName: path,
+        resolvedDate: newPaths.has(path)
+            ? authoritativeDates.get(path)
+            : new Date("2026-01-01T00:00:00Z"),
+        dateSource: newPaths.has(path)
+            ? DATE_SOURCES.TRACK_POINT
+            : DATE_SOURCES.FILE_MODIFIED,
+        startTime: newPaths.has(path) ? authoritativeDates.get(path) : null,
+        metadataComplete: newPaths.has(path)
+    }));
     let orderedPaths = [];
+    const loadedPaths = [];
     const treeView = {
         setTrackOrderEntries(entries) {
             order.setEntries(entries);
@@ -723,7 +765,21 @@ function testActualLibraryKeepsSameIdentityOrderingMetadata() {
         modeStore,
         loader: {
             setLibraryNamespace() {},
-            async loadSummary() { throw new Error("unexpected GPX load"); }
+            async loadSummary(path) {
+                loadedPaths.push(path);
+                const date = authoritativeDates.get(path);
+
+                return new TrackDiscoveryEntry({
+                    relativePath: path,
+                    folderPath: "trips",
+                    originalFileName: path.split("/").pop(),
+                    displayName: path,
+                    resolvedDate: date,
+                    dateSource: DATE_SOURCES.TRACK_POINT,
+                    startTime: date,
+                    metadataComplete: true
+                });
+            }
         }
     });
     const sidebar = document.createElement("div");
@@ -738,6 +794,14 @@ function testActualLibraryKeepsSameIdentityOrderingMetadata() {
     sidebar.append(folderTree);
     document.body.append(sidebar);
     coordinator.attach({ folderTree, treeView });
+    coordinator.setSourceResolver({
+        resolve: path => ({
+            status: "ready",
+            relativePath: path,
+            actualFileHandle: fileEntries.find(entry => entry.path === path)
+                ?.fileHandle
+        })
+    });
     coordinator.setProvisionalLibrary({
         namespace: "same-library",
         libraryId: "root-name:Same",
@@ -754,8 +818,17 @@ function testActualLibraryKeepsSameIdentityOrderingMetadata() {
         isCurrent: () => true
     });
 
-    assert(orderedPaths.join(",") === [paths[1], paths[0], paths[2]].join(","),
-        "actual Library hydration discarded same-identity ordering metadata");
+    for (let attempt = 0; attempt < 20 && loadedPaths.length < 7; attempt += 1) {
+        await flush();
+    }
+    assert(loadedPaths.length === 7 &&
+        loadedPaths.every(path => !newPaths.has(path)),
+    "metadata migration did not target only incomplete old cache records");
+    const expected = [...paths].sort((first, second) =>
+        authoritativeDates.get(second) - authoritativeDates.get(first));
+
+    assert(orderedPaths.join(",") === expected.join(","),
+        "old cached and new Tracks did not converge to newest-first order");
     sidebar.remove();
 }
 
@@ -771,7 +844,7 @@ try {
     await testProvisionalFolderBatchRollback();
     await testCoordinator();
     await testFolderOrderingMetadataFlow();
-    testActualLibraryKeepsSameIdentityOrderingMetadata();
+    await testOldCachedMetadataSelfHeals();
     output.textContent = `PASS: ${assertions} assertions`;
 } catch (error) {
     output.textContent = `FAIL after ${assertions} assertions: ${error.stack || error}`;

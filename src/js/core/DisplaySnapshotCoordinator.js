@@ -49,6 +49,7 @@ export default class DisplaySnapshotCoordinator {
         getSelectionStyles,
         captureLibrarySnapshot = () => null,
         restoreLibrarySnapshot = async () => false,
+        getProvisionalMapState = () => null,
         restoreProvisionalViewState = async () => false,
         getLibraryRestoreDiagnostic = () => null,
         markLibraryReady = () => {},
@@ -73,6 +74,7 @@ export default class DisplaySnapshotCoordinator {
             getSelectionStyles,
             captureLibrarySnapshot,
             restoreLibrarySnapshot,
+            getProvisionalMapState,
             restoreProvisionalViewState,
             getLibraryRestoreDiagnostic,
             markLibraryReady,
@@ -130,14 +132,21 @@ export default class DisplaySnapshotCoordinator {
         this.libraryIdentity = snapshot.libraryIdentity;
         this.cacheNamespace = snapshot.cacheNamespace;
         this.#updateDiagnostic({ snapshotStatus: "found" });
-        if (this.mapView.isValidViewState(snapshot.map)) {
-            this.mapView.setViewState(snapshot.map, {
+        const viewStateMap = this.getProvisionalMapState(
+            snapshot.libraryIdentity
+        );
+        const initialMap = this.mapView.isValidViewState(viewStateMap)
+            ? viewStateMap
+            : snapshot.map;
+
+        if (this.mapView.isValidViewState(initialMap)) {
+            this.mapView.setViewState(initialMap, {
                 animate: false,
                 silent: true
             });
             this.#updateDiagnostic({
                 mapRestoreStatus:
-                    `${snapshot.map.lat},${snapshot.map.lng} / z${snapshot.map.zoom}`
+                    `${initialMap.lat},${initialMap.lng} / z${initialMap.zoom}`
             });
         }
         this.#restoreSidebar(snapshot.sidebarState);
@@ -480,7 +489,7 @@ export default class DisplaySnapshotCoordinator {
             visibleTracks.length === 0 &&
             this.lastKnownGood?.visibleTracks?.length > 0 &&
             sameKnownLibrary &&
-            reason !== "visible-change"
+            !["visible-change", "phaseB-complete"].includes(reason)
         ) {
             this.lastWriteStatus = "preserved-last-known-good";
             this.#updateDiagnostic();

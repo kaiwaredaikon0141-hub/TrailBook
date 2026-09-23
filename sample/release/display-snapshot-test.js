@@ -233,6 +233,9 @@ async function testCoordinator() {
             order.push(`tree:${state.entries.length}`);
             return true;
         },
+        getProvisionalMapState: libraryId => libraryId === "root-name:GPX"
+            ? { lat: 36, lng: 136, zoom: 12 }
+            : null,
         getLibraryRestoreDiagnostic: () => ({
             status: "completed", totalMs: 5,
             displayPublicationCount: 1, geometryLoadCount: 0
@@ -262,6 +265,8 @@ async function testCoordinator() {
         "sidebar state not restored");
     assert(coordinator.hasInstantRestore(), "phase-A state missing");
     assert(order.includes("map-state"), "map state not restored");
+    assert(mapView.view.lat === 36 && mapView.view.lng === 136,
+        "stale Display Snapshot map outranked the newer Library View State");
     assert(order.indexOf("map-state") < order.indexOf("display:one.gpx"),
         "map state was not restored before geometry");
     assert(order.indexOf("select:one.gpx") < order.indexOf("tree:2"),
@@ -955,7 +960,7 @@ async function testLastKnownGoodAcrossRestarts() {
             store,
             repository,
             mapView: {
-                isValidViewState: () => true,
+                isValidViewState: value => value?.zoom === 12,
                 setViewState: () => {},
                 getViewState: () => ({ lat: 35, lng: 135, zoom: 12 }),
                 invalidateSize: () => {},
@@ -1019,73 +1024,86 @@ async function testLastKnownGoodAcrossRestarts() {
         "restart cycle lost Geometry Cache namespace");
 }
 
-async function testEmptyPhaseBDoesNotReplaceKnownGood() {
-    const adapter = new MemoryAdapter(snapshot(["one.gpx"]));
-    const store = new DisplaySnapshotStore(Config.displaySnapshot, { adapter });
-    const displayState = new DisplayState();
-    const selectionState = new SelectionState();
-    const coordinator = new DisplaySnapshotCoordinator({
-        eventBus: new EventBus(),
-        store,
-        repository: {
-            async getDisplaySnapshot(namespace, path) {
-                return path === "one.gpx"
-                    ? { result: geometry(), summary: { trackNames: ["one"] } }
-                    : null;
-            }
-        },
-        mapView: {
-            isValidViewState: () => true,
-            setViewState: () => {},
-            getViewState: () => ({ lat: 35, lng: 135, zoom: 12 }),
-            invalidateSize: () => {},
-            displayGPX: () => {},
-            setSelectedPath: () => {}
-        },
-        controls: {
-            isSidebarOpen: () => true,
-            getSidebarWidth: () => 320,
-            getTrackInfoHeight: () => 200,
-            setSidebarOpen: () => {},
-            setSidebarWidth: () => {},
-            setTrackInfoHeight: () => {}
-        },
-        displayState,
-        selectionState,
-        getTrackStyle: color => ({ color }),
-        getSelectionStyles: color => ({
-            selectedMainStyle: { color },
-            selectedOutlineStyle: { color: "white" }
-        }),
-        documentTarget: new EventTargetMock(),
-        windowTarget: new EventTargetMock(),
-        reportMetrics: () => {}
-    });
+async function testAuthoritativeEmptyPhaseBCommit() {
+    const createFixture = () => {
+        const adapter = new MemoryAdapter(snapshot(["one.gpx"]));
+        const displayState = new DisplayState();
+        const selectionState = new SelectionState();
+        const coordinator = new DisplaySnapshotCoordinator({
+            eventBus: new EventBus(),
+            store: new DisplaySnapshotStore(Config.displaySnapshot, { adapter }),
+            repository: {
+                async getDisplaySnapshot(namespace, path) {
+                    return path === "one.gpx"
+                        ? { result: geometry(), summary: { trackNames: ["one"] } }
+                        : null;
+                }
+            },
+            mapView: {
+                isValidViewState: value => value?.zoom === 12,
+                setViewState: () => {},
+                getViewState: () => ({ lat: 35, lng: 135, zoom: 12 }),
+                invalidateSize: () => {},
+                displayGPX: () => {},
+                setSelectedPath: () => {}
+            },
+            controls: {
+                isSidebarOpen: () => true,
+                getSidebarWidth: () => 320,
+                getTrackInfoHeight: () => 200,
+                setSidebarOpen: () => {},
+                setSidebarWidth: () => {},
+                setTrackInfoHeight: () => {}
+            },
+            displayState,
+            selectionState,
+            getTrackStyle: color => ({ color }),
+            getSelectionStyles: color => ({
+                selectedMainStyle: { color },
+                selectedOutlineStyle: { color: "white" }
+            }),
+            documentTarget: new EventTargetMock(),
+            windowTarget: new EventTargetMock(),
+            reportMetrics: () => {}
+        });
 
-    await coordinator.initialize();
-    coordinator.beginPhaseB();
-    displayState.setLibrary({});
-    coordinator.setLibraryContext({
+        return { adapter, displayState, selectionState, coordinator };
+    };
+    const empty = createFixture();
+
+    await empty.coordinator.initialize();
+    empty.coordinator.beginPhaseB();
+    empty.displayState.setLibrary({});
+    empty.coordinator.setLibraryContext({
         libraryIdentity: "root-name:GPX",
         cacheNamespace: "local-cache"
     });
-    assert(!await coordinator.completePhaseB({ restored: true }),
-        "temporary empty phase-B state replaced last-known-good snapshot");
-    assert(adapter.value.visibleTracks.length === 1,
-        "last-known-good visible state was not preserved");
-    assert(coordinator.getStatus().lastWriteStatus ===
-        "preserved-last-known-good", "empty-state suppression was not reported");
+    assert(await empty.coordinator.completePhaseB({ restored: true }),
+        "authoritative all-OFF phase-B state did not commit");
+    assert(empty.adapter.value.visibleTracks.length === 0,
+        "all-OFF View State retained stale Display Snapshot visibility");
+    assert(empty.coordinator.getStatus().restoreState === "ready",
+        "all-OFF phase-B convergence did not become ready");
 
-    displayState.registerFile("one.gpx", {}, "#123456");
-    displayState.setChecked("one.gpx", true);
-    selectionState.clear("restore-incomplete");
-    assert(!await coordinator.completePhaseB({ restored: true }),
+    const selected = createFixture();
+
+    await selected.coordinator.initialize();
+    selected.coordinator.beginPhaseB();
+    selected.displayState.setLibrary({});
+    selected.displayState.registerFile("one.gpx", {}, "#123456");
+    selected.displayState.setChecked("one.gpx", true);
+    selected.selectionState.clear("restore-incomplete");
+    selected.coordinator.setLibraryContext({
+        libraryIdentity: "root-name:GPX",
+        cacheNamespace: "local-cache"
+    });
+    assert(!await selected.coordinator.completePhaseB({ restored: true }),
         "phase-B committed before selected Track restoration completed");
-    assert(adapter.value.selectedTrack.relativePath === "one.gpx",
+    assert(selected.adapter.value.selectedTrack.relativePath === "one.gpx",
         "incomplete selection replaced last-known-good selection");
 
-    selectionState.select("one.gpx", "view-state-restore");
-    assert(await coordinator.completePhaseB({ restored: true }),
+    selected.selectionState.select("one.gpx", "view-state-restore");
+    assert(await selected.coordinator.completePhaseB({ restored: true }),
         "valid phase-B state did not commit after selection restoration");
 }
 
@@ -1117,7 +1135,7 @@ try {
     await testLargeStartupTreeRestoreBatch();
     await testLastKnownGoodAcrossRestarts();
     await testLatestLibrarySwitchWinsDelayedSnapshotWrite();
-    await testEmptyPhaseBDoesNotReplaceKnownGood();
+    await testAuthoritativeEmptyPhaseBCommit();
     await testDriveIdentityAndNoHandleDependency();
     output.textContent = `PASS: ${assertions} assertions\n` +
         `Startup restore: ${JSON.stringify(startupRestoreDiagnostic)}`;

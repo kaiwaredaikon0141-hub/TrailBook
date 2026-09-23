@@ -100,7 +100,8 @@ export default class TrackDiscoveryCoordinator {
         const currentPaths = new Set(fileEntries.map(entry => entry.path));
         const cachedEntries = this.libraryId === libraryId &&
             previousEntries.length > 0
-            ? previousEntries.filter(entry => currentPaths.has(entry.relativePath))
+            ? previousEntries.filter(entry =>
+                currentPaths.has(entry.relativePath) && entry.metadataComplete)
             : null;
         this.available = true;
         this.generation = generation;
@@ -127,6 +128,8 @@ export default class TrackDiscoveryCoordinator {
 
         if (this.mode === "date" || this.filterService.isActive(this.activeFilter)) {
             void this.#buildIndex();
+        } else {
+            void this.#enrichTrackOrder();
         }
     }
 
@@ -385,6 +388,29 @@ export default class TrackDiscoveryCoordinator {
             if (generation === this.generation && this.isCurrent()) {
                 this.dateTree.showError();
             }
+        }
+    }
+
+    async #enrichTrackOrder() {
+
+        if (!this.available || this.index.getStatus() === "ready") return;
+        const generation = this.generation;
+
+        try {
+            await this.index.build({
+                isCurrent: candidate => (
+                    candidate === generation && this.isCurrent()
+                )
+            });
+            if (
+                generation === this.generation &&
+                this.isCurrent() &&
+                this.index.getStatus() === "ready"
+            ) {
+                this.#syncTrackOrder();
+            }
+        } catch {
+            // Folder mode keeps filename ordering when metadata is unavailable.
         }
     }
 
