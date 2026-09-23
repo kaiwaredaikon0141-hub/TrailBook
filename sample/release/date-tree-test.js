@@ -693,6 +693,72 @@ async function testFolderOrderingMetadataFlow() {
     sidebar.closest(".sidebar-shell")?.remove();
 }
 
+function testActualLibraryKeepsSameIdentityOrderingMetadata() {
+    const eventBus = new EventBus();
+    const displayState = new DisplayState();
+    const modeStore = new DiscoveryViewStateStore({ storage: memoryStorage() });
+    const order = new TrackTreeOrder();
+    const paths = [
+        "trips/2022_12_04-02_trip.gpx",
+        "trips/2022_12_04-06_trip.gpx",
+        "trips/2022_11_25-11_trip.gpx"
+    ];
+    const cachedEntries = [
+        entry(paths[0], new Date("2022-12-04T02:00:00Z")),
+        entry(paths[1], new Date("2022-12-06T06:00:00Z")),
+        entry(paths[2], new Date("2022-11-25T11:00:00Z"))
+    ];
+    let orderedPaths = [];
+    const treeView = {
+        setTrackOrderEntries(entries) {
+            order.setEntries(entries);
+            orderedPaths = [...paths].sort((first, second) =>
+                order.compare(first, second));
+            return true;
+        }
+    };
+    const coordinator = new TrackDiscoveryCoordinator({
+        eventBus,
+        displayState,
+        modeStore,
+        loader: {
+            setLibraryNamespace() {},
+            async loadSummary() { throw new Error("unexpected GPX load"); }
+        }
+    });
+    const sidebar = document.createElement("div");
+    const folderTree = document.createElement("ul");
+    const fileEntries = paths.map(path => ({
+        path,
+        fileHandle: { name: path.split("/").pop() }
+    }));
+
+    sidebar.className = "sidebar";
+    folderTree.className = "tree-root";
+    sidebar.append(folderTree);
+    document.body.append(sidebar);
+    coordinator.attach({ folderTree, treeView });
+    coordinator.setProvisionalLibrary({
+        namespace: "same-library",
+        libraryId: "root-name:Same",
+        fileEntries,
+        entries: cachedEntries,
+        mode: "folder",
+        filter: {}
+    });
+    coordinator.setLibrary({
+        namespace: "same-library",
+        libraryId: "root-name:Same",
+        fileEntries,
+        generation: 2,
+        isCurrent: () => true
+    });
+
+    assert(orderedPaths.join(",") === [paths[1], paths[0], paths[2]].join(","),
+        "actual Library hydration discarded same-identity ordering metadata");
+    sidebar.remove();
+}
+
 try {
     testBuilder();
     testModeStore();
@@ -705,6 +771,7 @@ try {
     await testProvisionalFolderBatchRollback();
     await testCoordinator();
     await testFolderOrderingMetadataFlow();
+    testActualLibraryKeepsSameIdentityOrderingMetadata();
     output.textContent = `PASS: ${assertions} assertions`;
 } catch (error) {
     output.textContent = `FAIL after ${assertions} assertions: ${error.stack || error}`;

@@ -226,7 +226,7 @@ export default class App {
                 .restore(state, context),
             getLibraryRestoreDiagnostic: () => this.librarySnapshotService.getLastRestoreDiagnostic(),
             markLibraryReady: () => this.librarySnapshotService.markReady(),
-            debounceMs: this.config.displaySnapshot.debounceMs,
+            restoreProvisionalViewState: context => this.viewStateCoordinator.restoreLibrary(context), debounceMs: this.config.displaySnapshot.debounceMs,
             diagnosticRoot: sidebar
         });
         this.previousLibraryCoordinator = new PreviousLibraryCoordinator({
@@ -532,7 +532,7 @@ export default class App {
         path,
         fileHandle,
         checked,
-        preserveMapView = false,
+        preserveMapView = true,
         preserveSelection = false
     }) {
 

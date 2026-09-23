@@ -23,6 +23,7 @@ export default class TrackDiscoveryCoordinator {
         this.mode = modeStore.getMode();
         this.available = false;
         this.generation = 0;
+        this.libraryId = null;
         this.isCurrent = () => false;
         this.fileHandles = new Map();
         this.pendingDisplayPaths = new Set();
@@ -95,8 +96,15 @@ export default class TrackDiscoveryCoordinator {
 
     setLibrary({ namespace, libraryId, fileEntries, generation, isCurrent }) {
 
+        const previousEntries = this.index.getEntries();
+        const currentPaths = new Set(fileEntries.map(entry => entry.path));
+        const cachedEntries = this.libraryId === libraryId &&
+            previousEntries.length > 0
+            ? previousEntries.filter(entry => currentPaths.has(entry.relativePath))
+            : null;
         this.available = true;
         this.generation = generation;
+        this.libraryId = libraryId;
         this.isCurrent = isCurrent;
         this.fileHandles = new Map(
             fileEntries.map(({ path, fileHandle }) => [path, fileHandle])
@@ -104,6 +112,7 @@ export default class TrackDiscoveryCoordinator {
         this.index.setLibrary({
             namespace,
             fileEntries,
+            cachedEntries,
             generation
         });
         this.#syncTrackOrder();
@@ -133,6 +142,7 @@ export default class TrackDiscoveryCoordinator {
 
         this.available = true;
         this.generation += 1;
+        this.libraryId = libraryId;
         this.isCurrent = () => true;
         this.fileHandles = new Map(
             fileEntries.map(({ path, fileHandle }) => [path, fileHandle])
@@ -193,6 +203,7 @@ export default class TrackDiscoveryCoordinator {
 
         this.available = false;
         this.generation += 1;
+        this.libraryId = null;
         this.isCurrent = () => false;
         this.fileHandles.clear();
         this.index.clear();

@@ -49,6 +49,7 @@ export default class DisplaySnapshotCoordinator {
         getSelectionStyles,
         captureLibrarySnapshot = () => null,
         restoreLibrarySnapshot = async () => false,
+        restoreProvisionalViewState = async () => false,
         getLibraryRestoreDiagnostic = () => null,
         markLibraryReady = () => {},
         debounceMs = 750,
@@ -72,6 +73,7 @@ export default class DisplaySnapshotCoordinator {
             getSelectionStyles,
             captureLibrarySnapshot,
             restoreLibrarySnapshot,
+            restoreProvisionalViewState,
             getLibraryRestoreDiagnostic,
             markLibraryReady,
             debounceMs,
@@ -210,6 +212,22 @@ export default class DisplaySnapshotCoordinator {
                 selectedPath
             }
         );
+        if (treeRestored) {
+            const libraryIdentity = snapshot.libraryIdentity;
+            const cacheNamespace = snapshot.cacheNamespace;
+            const generation = this.displayState.getLibraryGeneration();
+
+            await this.restoreProvisionalViewState({
+                libraryId: libraryIdentity,
+                libraryName: snapshot.library?.rootName || "Library",
+                generation,
+                isCurrent: () => (
+                    libraryIdentity === this.libraryIdentity &&
+                    cacheNamespace === this.cacheNamespace &&
+                    generation === this.displayState.getLibraryGeneration()
+                )
+            });
+        }
         const libraryRestoreDiagnostic = this.getLibraryRestoreDiagnostic();
         this.#updateDiagnostic({
             treeSource: treeRestored ? "cached" : "none",

@@ -191,12 +191,12 @@ export default class TrackSummaryBuilder {
         } else if (firstTrackPointDate) {
             resolvedDate = firstTrackPointDate;
             dateSource = DATE_SOURCES.TRACK_POINT;
-        } else if (fileModifiedDate && Number.isFinite(fileModifiedDate.getTime())) {
-            resolvedDate = fileModifiedDate;
-            dateSource = DATE_SOURCES.FILE_MODIFIED;
         } else if (fileNameDate) {
             resolvedDate = fileNameDate;
             dateSource = DATE_SOURCES.FILE_NAME;
+        } else if (fileModifiedDate && Number.isFinite(fileModifiedDate.getTime())) {
+            resolvedDate = fileModifiedDate;
+            dateSource = DATE_SOURCES.FILE_MODIFIED;
         }
 
         return new TrackDiscoveryEntry({

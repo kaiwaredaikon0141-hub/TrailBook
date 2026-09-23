@@ -206,6 +206,48 @@ function testSummaryBuilder() {
         filename.resolvedDate.getMonth() === 7 &&
         filename.resolvedDate.getDate() === 4, "filename date value");
 
+    const historicalNames = new Map([
+        ["2026_09_05.gpx", "2026-09-05"],
+        ["2022_11_17-11_trip.gpx", "2022-11-17"],
+        ["2022_11_25-11_trip.gpx", "2022-11-25"],
+        ["2022_12_04-02_trip.gpx", "2022-12-04"],
+        ["2022_12_04-03_trip.gpx", "2022-12-04"],
+        ["2022_12_04-04_trip.gpx", "2022-12-04"],
+        ["2022_12_04-05_trip.gpx", "2022-12-04"],
+        ["2022_12_04-06_trip.gpx", "2022-12-04"]
+    ]);
+
+    historicalNames.forEach((expected, name) => {
+        const historical = builder.build(name, file(name), noTracks);
+        const localDate = [
+            historical.resolvedDate.getFullYear(),
+            String(historical.resolvedDate.getMonth() + 1).padStart(2, "0"),
+            String(historical.resolvedDate.getDate()).padStart(2, "0")
+        ].join("-");
+
+        assert(historical.dateSource === DATE_SOURCES.FILE_NAME &&
+            localDate === expected,
+        `historical filename date resolution failed: ${name} -> ${localDate}`);
+    });
+
+    const parsedHistorical = builder.build(
+        "2022_12_04-06_trip.gpx",
+        file("2022_12_04-06_trip.gpx"),
+        {
+            metadata: { name: null, time: null },
+            tracks: [{ segments: [{ points: [{
+                latitude: 35,
+                longitude: 135,
+                time: "2022-12-06T06:00:00Z"
+            }] }] }],
+            waypoints: []
+        }
+    );
+    assert(parsedHistorical.dateSource === DATE_SOURCES.TRACK_POINT &&
+        parsedHistorical.resolvedDate.toISOString() ===
+            "2022-12-06T06:00:00.000Z",
+    "parsed Track start did not supersede the filename-derived date");
+
     const invalidFilename = builder.build(
         "ride_20260231.gpx",
         file("ride_20260231.gpx", { lastModified: Number.NaN }),
@@ -459,6 +501,49 @@ async function testLargeWarmIndexContract() {
         "806 entry index contains duplicate paths");
 }
 
+async function testPartialWarmIndexContract() {
+    const builder = new TrackSummaryBuilder();
+    const fileEntries = ["cached.gpx", "added.gpx"].map(path => ({
+        path,
+        fileHandle: handle(file(path))
+    }));
+    const cached = builder.build(
+        "cached.gpx",
+        file("cached.gpx"),
+        parsed({ metadataTime: "2026-08-01T00:00:00Z" })
+    );
+    const stale = builder.build(
+        "removed.gpx",
+        file("removed.gpx"),
+        parsed({ metadataTime: "2020-01-01T00:00:00Z" })
+    );
+    let calls = 0;
+    const index = new LibraryDiscoveryIndexService({
+        loader: {
+            setLibraryNamespace() {},
+            async loadSummary(path, fileHandle) {
+                calls += 1;
+                return builder.build(path, await fileHandle.getFile(), parsed());
+            }
+        },
+        sourceResolver: sourceResolver(fileEntries)
+    });
+
+    index.setLibrary({
+        namespace: "partial-warm",
+        generation: 1,
+        fileEntries,
+        cachedEntries: [cached, stale]
+    });
+    assert(index.getStatus() === "idle",
+        "partial warm index was incorrectly treated as complete");
+    const entries = await index.build();
+    assert(calls === 1, "partial warm index did not load only the added Track");
+    assert(entries.map(entry => entry.relativePath).join(",") ===
+        "added.gpx,cached.gpx",
+    "partial warm index retained a removed Track or omitted an added Track");
+}
+
 function testLazyOrderingMetadata() {
     let loads = 0;
     const index = new LibraryDiscoveryIndexService({
@@ -553,6 +638,7 @@ try {
     await testGenerationGuard();
     await testTargetedEntryReplacement();
     await testLargeWarmIndexContract();
+    await testPartialWarmIndexContract();
     testLazyOrderingMetadata();
     output.textContent = `PASS: ${assertions} assertions`;
 } catch (error) {

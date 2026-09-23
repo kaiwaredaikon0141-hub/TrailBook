@@ -112,20 +112,24 @@ export default class ViewStateCoordinator {
         });
         this.mapView.invalidateSize({ silent: true });
 
-        const visibleDisplays = this.#resolveVisibleDisplays(
-            state?.visibleTracks ?? []
-        );
-        const expectedEnqueueCount = visibleDisplays.length;
+        const displayChanges = state
+            ? this.#resolveDisplayChanges(state.visibleTracks)
+            : [];
+        const expectedEnqueueCount = displayChanges.filter(
+            change => change.checked
+        ).length;
         drivePerformance.setRestoreGeneration(generation, expectedEnqueueCount);
         const restoreEnqueuesComplete = this.displayQueue.whenEnqueued?.({
             generation,
             count: expectedEnqueueCount
         }) ?? Promise.resolve();
-        visibleDisplays.forEach(display => {
+        displayChanges.forEach(({ display, checked }) => {
             this.eventBus.emit("gpx:display-toggled", {
                 path: display.path,
                 fileHandle: display.fileHandle,
-                checked: true,
+                checked,
+                preserveMapView: true,
+                preserveSelection: true,
                 source: "view-state-restore"
             });
         });
@@ -157,7 +161,7 @@ export default class ViewStateCoordinator {
             });
         }
 
-        this.#restoreSelection(state);
+        if (state) this.#restoreSelection(state);
 
         this.restoring = false;
 
@@ -321,22 +325,45 @@ export default class ViewStateCoordinator {
         return saved;
     }
 
-    #resolveVisibleDisplays(paths) {
+    #resolveDisplayChanges(paths) {
 
-        return paths
-            .map(path => this.displayState.getDisplay(path))
-            .filter(display => display && !display.checked);
+        const desiredPaths = new Set(paths);
+        const displayedPaths = new Set(
+            this.mapView.getDisplayedPaths?.() ?? []
+        );
+        const changes = [];
+
+        this.displayState.getDisplays().forEach(display => {
+            const desired = desiredPaths.has(display.path);
+            const displayed = displayedPaths.has(display.path);
+
+            if (desired !== display.checked || (!desired && displayed)) {
+                changes.push({ display, checked: desired });
+            }
+        });
+
+        return changes.sort((first, second) =>
+            Number(first.checked) - Number(second.checked));
     }
 
     #restoreSelection(state) {
 
         const path = state?.selectedTrack;
+        const previousPath = this.selectionState.getSelectedPath();
 
         if (
             this.selectionChangedDuringRestore ||
             !path ||
             !state.visibleTracks.includes(path)
         ) {
+            if (!this.selectionChangedDuringRestore && previousPath) {
+                const change = this.selectionState.clear("system");
+                if (change) this.eventBus.emit("selection:changed", {
+                    path: null,
+                    previousPath: change.previousPath,
+                    reason: "view-state-restore"
+                });
+            }
             return false;
         }
 

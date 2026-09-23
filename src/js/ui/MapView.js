@@ -492,6 +492,11 @@ export default class MapView {
         return this.layerManager?.hasDisplay(path) ?? false;
     }
 
+    getDisplayedPaths() {
+
+        return this.layerManager?.getDisplayedPaths() ?? [];
+    }
+
     setSelectionInteractionEnabled(enabled) {
 
         this.selectionInteractionEnabled = Boolean(enabled);

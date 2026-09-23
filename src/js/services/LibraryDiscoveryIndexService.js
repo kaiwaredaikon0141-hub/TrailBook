@@ -52,9 +52,12 @@ export default class LibraryDiscoveryIndexService {
         this.cancel();
         this.generation = generation;
         this.fileEntries = this.#normalizeFileEntries(fileEntries);
+        const currentPaths = new Set(
+            this.fileEntries.map(entry => entry.relativePath)
+        );
         this.entries = new Map(
             (Array.isArray(cachedEntries) ? cachedEntries : [])
-                .filter(entry => entry?.relativePath)
+                .filter(entry => currentPaths.has(entry?.relativePath))
                 .map(entry => [entry.relativePath, entry])
         );
         this.failures.clear();
@@ -62,7 +65,9 @@ export default class LibraryDiscoveryIndexService {
         this.entryVersions = new Map(
             this.fileEntries.map(entry => [entry.relativePath, 0])
         );
-        this.status = Array.isArray(cachedEntries) ? "ready" : "idle";
+        this.status = Array.isArray(cachedEntries) && this.fileEntries.every(
+            entry => this.entries.has(entry.relativePath)
+        ) ? "ready" : "idle";
         this.buildPromise = null;
         this.loader.setLibraryNamespace?.(namespace);
     }

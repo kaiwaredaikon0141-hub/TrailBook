@@ -89,6 +89,49 @@ async function run() {
         tree.isDisplayChecked("older.gpx"),
     "refresh ordering lost row identity or checkbox state");
 
+    const historical = [
+        entry("2022_11_17-11_trip.gpx", {
+            resolvedDate: new Date("2022-11-17T11:00:00Z")
+        }),
+        entry("2022_11_25-11_trip.gpx", {
+            resolvedDate: new Date("2022-11-25T11:00:00Z")
+        }),
+        entry("2022_12_04-02_trip.gpx", {
+            startTime: new Date("2022-12-02T02:00:00Z")
+        }),
+        entry("2022_12_04-03_trip.gpx", {
+            startTime: new Date("2022-12-03T03:00:00Z")
+        }),
+        entry("2022_12_04-04_trip.gpx", {
+            startTime: new Date("2022-12-04T04:00:00Z")
+        }),
+        entry("2022_12_04-05_trip.gpx", {
+            startTime: new Date("2022-12-05T05:00:00Z")
+        }),
+        entry("2022_12_04-06_trip.gpx", {
+            startTime: new Date("2022-12-06T06:00:00Z")
+        }),
+        entry("2026_09_05.gpx", {
+            resolvedDate: new Date("2026-09-05T00:00:00Z")
+        })
+    ];
+    order.setEntries(historical);
+    const orderedHistorical = [...historical];
+    orderedHistorical.sort((first, second) => order.compare(
+        first.relativePath,
+        second.relativePath
+    ));
+    assert(orderedHistorical.map(value => value.relativePath).join(",") === [
+        "2026_09_05.gpx",
+        "2022_12_04-06_trip.gpx",
+        "2022_12_04-05_trip.gpx",
+        "2022_12_04-04_trip.gpx",
+        "2022_12_04-03_trip.gpx",
+        "2022_12_04-02_trip.gpx",
+        "2022_11_25-11_trip.gpx",
+        "2022_11_17-11_trip.gpx"
+    ].join(","), "historical Track timestamps are not newest-first");
+
     output.textContent = `PASS: ${assertions} assertions`;
 }
 
