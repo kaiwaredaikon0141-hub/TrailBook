@@ -21,6 +21,7 @@ export function clearLibraryRuntime(app) {
 
     app.currentLibrary = null;
     app.currentLibraryId = null;
+    app.eventBus?.emit?.("library:source-changed", { library: null });
     app.clearSelection("library-cache-reset");
     app.displayQueue.clear();
     app.displayState.clearLibrary();

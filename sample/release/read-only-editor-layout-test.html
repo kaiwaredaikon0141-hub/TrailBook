@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Read-only Editor Layout Test</title>
+    <link rel="stylesheet" href="../../src/css/base.css">
+    <link rel="stylesheet" href="../../src/css/layout.css">
+    <link rel="stylesheet" href="../../src/css/theme.css">
+    <style>
+        html, body, #fixture { width:100%; height:100%; margin:0; }
+        #fixture { position:fixed; inset:0; }
+        #fixture .map-view { position:relative; width:100%; height:100%; }
+        #result { position:fixed; z-index:9999; right:0; bottom:0;
+            margin:0; pointer-events:none; }
+    </style>
+</head>
+<body>
+    <div id="fixture"></div>
+    <pre id="result">Running...</pre>
+    <script type="module" src="./read-only-editor-layout-test.js"></script>
+</body>
+</html>

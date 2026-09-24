@@ -46,6 +46,7 @@ export default class TrackEditingPanel {
         this.draftStatus = this.element.querySelector(".editor-draft-status");
         this.target = this.element.querySelector(".editor-target");
         this.selectedPath = null;
+        this.sourceWritable = false;
         this.editingAvailable = true;
         this.draftPath = null;
         this.canSerialize = false;
@@ -61,6 +62,7 @@ export default class TrackEditingPanel {
                 .map(node => [node.dataset.editorAction, node])
         );
         this.#bind();
+        this.element.hidden = true;
         this.setSelectedTrack(null);
         this.showInactive();
     }
@@ -91,6 +93,16 @@ export default class TrackEditingPanel {
 
         this.editingAvailable = Boolean(available);
         this.setSelectedTrack(this.selectedPath);
+    }
+
+    setSourceWritable(writable) {
+
+        const next = writable === true;
+
+        if (this.sourceWritable === next) return false;
+        this.sourceWritable = next;
+        this.element.hidden = !next;
+        return true;
     }
 
     getTolerance() {

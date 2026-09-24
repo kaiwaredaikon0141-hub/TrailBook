@@ -675,6 +675,9 @@ export default class TrackEditingCoordinator {
         this.eventBus.on("library:provisional-state-changed", ({ provisional }) => {
             void this.#refreshEditingAvailability("provisional-changed");
         });
+        this.eventBus.on("library:source-changed", () => {
+            void this.#refreshEditingAvailability("source-changed");
+        });
         this.eventBus.on("selection:changed", ({ path }) => {
             if ((this.session || this.loading) && path !== this.sourcePath) {
                 this.cancel({ restoreFocus: false });
@@ -693,6 +696,13 @@ export default class TrackEditingCoordinator {
     async #refreshEditingAvailability(reason) {
 
         const requestId = ++this.editabilityRequestId;
+        const library = this.getLibraryToken();
+        const sourceReadOnly = library?.capabilities?.readOnly ??
+            library?.readOnly;
+
+        this.panel.setSourceWritable?.(
+            Boolean(library) && sourceReadOnly !== true
+        );
         const selectedPath = this.selectionState.getSelectedPath();
         const context = this.getAvailabilityContext(selectedPath) || {};
         const mobile = Boolean(context.mobile);

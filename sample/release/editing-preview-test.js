@@ -74,6 +74,7 @@ class PanelFake {
         this.editingAvailable = Boolean(value);
         this.setSelectedTrack(this.selectedPath);
     }
+    setSourceWritable(value) { this.sourceWritable = Boolean(value); }
     getTolerance() { return this.tolerance; }
     getMode() { return this.mode; }
     setMode(value) { this.mode = value; }
@@ -1335,6 +1336,44 @@ function testMapSelectionInteractionLifecycle() {
         "Map background selection did not recover after Done");
 }
 
+async function testSourceCapabilityPresentation() {
+    const eventBus = new EventBus();
+    const selectionState = new SelectionState();
+    const panel = new PanelFake();
+    let library = null;
+    const coordinator = new TrackEditingCoordinator({
+        eventBus,
+        selectionState,
+        mapView: new MapViewFake(),
+        getLibraryToken: () => library,
+        getFileEntry: () => null,
+        panel,
+        previewLayers: new PreviewLayersFake(),
+        interactionGuard: new InteractionGuardFake(),
+        saveDialog: new SaveDialogFake()
+    });
+
+    coordinator.attach({});
+    await Promise.resolve();
+    assert(panel.sourceWritable === false,
+        "Editor was visible with no active Library");
+    library = { readOnly: true, capabilities: { readOnly: true } };
+    eventBus.emit("library:source-changed", { library });
+    await Promise.resolve();
+    assert(panel.sourceWritable === false,
+        "read-only Library exposed the Editor");
+    library = { readOnly: false, capabilities: { readOnly: false } };
+    eventBus.emit("library:source-changed", { library });
+    await Promise.resolve();
+    assert(panel.sourceWritable === true,
+        "writable Library did not expose the Editor");
+    library = null;
+    eventBus.emit("library:source-changed", { library });
+    await Promise.resolve();
+    assert(panel.sourceWritable === false,
+        "Editor remained visible after Library detach");
+}
+
 async function run() {
     await testCoordinatorLifecycle();
     await testSelectionAndSourceGuards();
@@ -1349,6 +1388,7 @@ async function run() {
     testPanelAccessibility();
     testInteractionGuard();
     testMapSelectionInteractionLifecycle();
+    await testSourceCapabilityPresentation();
     output.textContent = `PASS: ${assertions} assertions`;
 }
 

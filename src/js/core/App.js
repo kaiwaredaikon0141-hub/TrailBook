@@ -385,6 +385,7 @@ export default class App {
         this.libraryTrackCatalogCoordinator.replaceFromCompleteScan(cacheNamespace, this.treeView.getFileEntries());
         this.searchView.setAvailable(true);
         this.currentLibrary = library;
+        this.eventBus.emit("library:source-changed", { library });
         this.currentLibraryId = this.displaySettingsStore.setActiveLibrary(
             library.identityName || library.name
         );
