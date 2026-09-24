@@ -27,6 +27,7 @@ export default class FolderColorControl {
         this.presentations = new Map();
         this.provisionalPresentations = new Map();
         this.persistenceStatus = "available";
+        this.editable = true;
         this.observer = typeof MutationObserver === "function"
             ? new MutationObserver(records => {
                 if (records.some(record => !this.#isOwnedMutation(record))) {
@@ -113,6 +114,16 @@ export default class FolderColorControl {
             : "available";
     }
 
+    setEditable(editable) {
+
+        const next = editable !== false;
+
+        if (this.editable === next) return false;
+        this.editable = next;
+        this.refresh();
+        return true;
+    }
+
     setFileColor(path, color) {
 
         const metadata = this.treeView.nodeMetadata.get(path);
@@ -176,6 +187,8 @@ export default class FolderColorControl {
 
         button.dataset.colorMode = presentation.mode;
         button.dataset.folderPath = folderPath;
+        button.hidden = !this.editable;
+        button.disabled = !this.editable;
         button.title = `${folderName}: ${persistenceLabel}`;
         button.setAttribute(
             "aria-label",
@@ -196,6 +209,10 @@ export default class FolderColorControl {
             resolvedColor,
             modeLabel
         );
+        row.querySelector(".folder-color-readonly")?.classList.toggle(
+            "is-source-readonly",
+            !this.editable
+        );
     }
 
     #createButton(row) {
@@ -213,6 +230,7 @@ export default class FolderColorControl {
         button.addEventListener("keydown", event => event.stopPropagation());
         button.addEventListener("click", event => {
             event.stopPropagation();
+            if (!this.editable) return;
             const folderPath = button.dataset.folderPath;
             const folderName = row.querySelector(".tree-label")?.textContent ||
                 folderPath || "root";

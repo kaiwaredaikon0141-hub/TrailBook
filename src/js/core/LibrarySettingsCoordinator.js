@@ -59,6 +59,8 @@ export default class LibrarySettingsCoordinator {
         this.storage = storage;
         this.autosaveTimer = null;
         this.autosavePromise = null;
+        this.sharedSettingsWritable = true;
+        this.presentationCacheEnabled = true;
         this.pending = {};
         try {
             const stored = JSON.parse(storage?.getItem("trailbook.pendingSharedSettings") || "{}");
@@ -89,7 +91,12 @@ export default class LibrarySettingsCoordinator {
         this.panel?.setAvailable(false);
     }
 
-    async load(rootHandle, { generation, isCurrent }) {
+    async load(rootHandle, {
+        generation,
+        isCurrent,
+        sharedSettingsWritable = true,
+        presentationCacheEnabled = true
+    }) {
 
         this.#rememberPending();
         clearTimeout(this.autosaveTimer);
@@ -105,7 +112,15 @@ export default class LibrarySettingsCoordinator {
             return null;
         }
 
-        return { requestId, result, rootHandle, generation, isCurrent };
+        return {
+            requestId,
+            result,
+            rootHandle,
+            generation,
+            isCurrent,
+            sharedSettingsWritable,
+            presentationCacheEnabled
+        };
     }
 
     applyLoad(loadContext, {
@@ -126,6 +141,9 @@ export default class LibrarySettingsCoordinator {
         }
 
         this.rootHandle = loadContext.rootHandle;
+        this.sharedSettingsWritable = loadContext.sharedSettingsWritable !== false;
+        this.presentationCacheEnabled =
+            loadContext.presentationCacheEnabled !== false;
         this.libraryId = libraryId;
         this.folderPaths = [...folderPaths];
         this.generation = loadContext.generation;
@@ -237,6 +255,7 @@ export default class LibrarySettingsCoordinator {
 
     markDirty() {
 
+        if (!this.sharedSettingsWritable) return false;
         const activeId = this.folderColorState.activeLibraryId;
         if (activeId && activeId !== this.libraryId) {
             this.#rememberPending();
@@ -260,12 +279,16 @@ export default class LibrarySettingsCoordinator {
 
     scheduleAutosave() {
         clearTimeout(this.autosaveTimer);
+        if (!this.sharedSettingsWritable) return;
         if (!this.state.getStatus().dirty && !this.state.canMigrate()) return;
         this.autosaveTimer = setTimeout(() => void this.flushAutosave(), this.debounceMs);
     }
 
     flushAutosave() {
         clearTimeout(this.autosaveTimer);
+        if (!this.sharedSettingsWritable) {
+            return Promise.resolve({ status: "read-only" });
+        }
         if (this.autosavePromise) return this.autosavePromise;
         this.autosavePromise = this.#autosave().catch(error => {
             console.warn("Shared settings autosave failed", error);
@@ -466,6 +489,8 @@ export default class LibrarySettingsCoordinator {
     detachForCacheReset() {
 
         this.rootHandle = null;
+        this.sharedSettingsWritable = true;
+        this.presentationCacheEnabled = true;
         this.libraryId = null;
         this.folderPaths = [];
         this.generation = null;
@@ -482,6 +507,9 @@ export default class LibrarySettingsCoordinator {
 
     async #startSave(operation, conflictPolicy, automatic = false) {
 
+        if (!this.sharedSettingsWritable) {
+            return { status: "read-only", errorCode: null };
+        }
         const saveRequestId = operation === "migration"
             ? this.state.beginMigration()
             : operation === "overwrite"
@@ -577,6 +605,7 @@ export default class LibrarySettingsCoordinator {
     #cachePresentations(mode) {
 
         if (
+            !this.presentationCacheEnabled ||
             this.state.getStatus().source !== "shared-json" ||
             !this.folderPresentationCache ||
             !this.libraryId
@@ -596,7 +625,7 @@ export default class LibrarySettingsCoordinator {
 
     #render() {
 
-        this.panel?.setAvailable(true);
+        this.panel?.setAvailable(this.sharedSettingsWritable);
         this.panel?.render(this.state.getStatus());
     }
 }

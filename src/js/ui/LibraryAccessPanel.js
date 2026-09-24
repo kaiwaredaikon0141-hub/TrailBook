@@ -20,12 +20,30 @@ export default class LibraryAccessPanel {
         this.manualLibraryButtons = [
             ...this.element.querySelectorAll(".manual-library-open")
         ];
+        this.manualDirectoryInputs = [
+            ...this.element.querySelectorAll(".manual-library-directory")
+        ];
+        this.primaryManualButton = this.element.querySelector(
+            ".manual-library-primary"
+        );
+        this.secondaryManualButton = this.element.querySelector(
+            ".manual-library-secondary"
+        );
+        this.primaryDirectoryInput = this.element.querySelector(
+            ".manual-library-directory-primary"
+        );
+        this.secondaryDirectoryInput = this.element.querySelector(
+            ".manual-library-directory-secondary"
+        );
         this.libraryChange = this.element.querySelector(".library-change");
         this.libraryChangeContainer = this.element.querySelector(
             ".library-change-options"
         );
         this.libraryRefreshButton = this.element.querySelector(
             ".library-refresh-action"
+        );
+        this.libraryRefreshDirectory = this.element.querySelector(
+            ".library-refresh-directory"
         );
         this.libraryRefreshDiagnostic = this.element.querySelector(
             ".library-refresh-diagnostic"
@@ -38,6 +56,10 @@ export default class LibraryAccessPanel {
         this.previousLibraryAction = null;
         this.manualLibraryAction = null;
         this.libraryRefreshAction = null;
+        this.folderPickerMode = "directory-handle";
+        this.fileListSession = false;
+        this.manualPrimaryVisible = false;
+        this.manualSecondaryVisible = false;
         this.provisionalLibrary = false;
         this.libraryRefreshState = Object.freeze({
             runtimeBuildId: null, runtimeMarkerSource: "missing",
@@ -57,8 +79,24 @@ export default class LibraryAccessPanel {
                 this.manualLibraryAction?.();
             });
         });
+        this.manualDirectoryInputs.forEach(input => {
+            input.addEventListener("change", () => {
+                const files = Array.from(input.files || []);
+
+                input.value = "";
+                if (files.length > 0) this.manualLibraryAction?.(files);
+            });
+        });
         this.libraryRefreshButton.addEventListener("click", () => {
             this.libraryRefreshAction?.();
+        });
+        this.libraryRefreshDirectory.addEventListener("change", () => {
+            const files = Array.from(this.libraryRefreshDirectory.files || []);
+
+            this.libraryRefreshDirectory.value = "";
+            if (files.length > 0) {
+                this.manualLibraryAction?.(files, { refresh: true });
+            }
         });
         this.libraryChange.addEventListener("toggle", () => {
             this.#renderLibraryRefreshState();
@@ -116,6 +154,16 @@ export default class LibraryAccessPanel {
         );
     }
 
+    showFileListFallback() {
+
+        this.#show(
+            "端末からライブラリを開く",
+            "この端末ではフォルダを選択して、読み取り専用で利用できます。再起動後は再選択が必要です。",
+            "info",
+            "manual"
+        );
+    }
+
     showLoading(folderName) {
 
         this.#show(
@@ -163,6 +211,21 @@ export default class LibraryAccessPanel {
     setManualLibraryAction(action) {
 
         this.manualLibraryAction = action;
+    }
+
+    setFolderPickerMode(mode) {
+
+        this.folderPickerMode = mode === "file-list"
+            ? "file-list"
+            : "directory-handle";
+        this.#syncManualActions();
+        this.#renderLibraryRefreshState();
+    }
+
+    setFileListSession(active) {
+
+        this.fileListSession = Boolean(active);
+        this.#renderLibraryRefreshState();
     }
 
     setLibraryRefreshAction(action) {
@@ -236,6 +299,11 @@ export default class LibraryAccessPanel {
             }
             button.title = disabled ? disabledReason : "";
         });
+        this.manualDirectoryInputs.forEach(input => {
+            input.disabled = disabled;
+            if (descriptionId) input.setAttribute("aria-describedby", descriptionId);
+            input.title = disabled ? disabledReason : "";
+        });
     }
 
     setPreviousLibraryStatus(status) {
@@ -246,7 +314,8 @@ export default class LibraryAccessPanel {
             "saved / denied",
             "no persistent handle",
             "invalid",
-            "unsupported"
+            "unsupported",
+            "session-only"
         ]);
         const normalized = allowed.has(status)
             ? status
@@ -303,8 +372,9 @@ export default class LibraryAccessPanel {
         this.element.classList.add("is-compact");
         this.primaryContent.hidden = true;
         this.previousLibraryButton.hidden = true;
-        this.element.querySelector(".manual-library-primary").hidden = true;
-        this.element.querySelector(".manual-library-secondary").hidden = false;
+        this.manualPrimaryVisible = false;
+        this.manualSecondaryVisible = true;
+        this.#syncManualActions();
         this.libraryChange.hidden = false;
         this.libraryChange.open = false;
         this.element.hidden = false;
@@ -330,6 +400,9 @@ export default class LibraryAccessPanel {
                     type="button" hidden>
                     端末からライブラリを開く
                 </button>
+                <input class="manual-library-directory manual-library-directory-primary"
+                    type="file" webkitdirectory multiple hidden
+                    aria-label="端末からライブラリを開く">
             </div>
             <details class="library-change" hidden>
                 <summary>ライブラリを変更</summary>
@@ -338,12 +411,22 @@ export default class LibraryAccessPanel {
                         type="button">
                         端末からライブラリを開く
                     </button>
+                    <input class="manual-library-directory manual-library-directory-secondary"
+                        type="file" webkitdirectory multiple hidden
+                        aria-label="端末からライブラリを開く">
                     <p class="library-device-description">
                         端末・Files・Google Driveなど
                     </p>
                     <button class="library-refresh-action" type="button" hidden>
                         更新を確認
                     </button>
+                    <div class="library-refresh-directory-control" hidden>
+                        <span>更新を確認（フォルダを再選択）</span>
+                        <input class="library-refresh-directory" type="file"
+                            webkitdirectory multiple
+                            aria-label="フォルダを再選択してライブラリを更新">
+                        <small>この端末では、フォルダを再度選択するとライブラリを更新できます。</small>
+                    </div>
                 </div>
             </details>
             <small class="previous-library-status">
@@ -369,12 +452,11 @@ export default class LibraryAccessPanel {
         this.element.classList.remove("is-compact");
         this.primaryContent.hidden = false;
         this.previousLibraryButton.hidden = action !== "previous";
-        this.element.querySelector(".manual-library-primary").hidden =
-            action !== "manual";
+        this.manualPrimaryVisible = action === "manual";
         const canChangeLibrary = ["manual", "previous"].includes(action);
 
-        this.element.querySelector(".manual-library-secondary").hidden =
-            !canChangeLibrary;
+        this.manualSecondaryVisible = canChangeLibrary;
+        this.#syncManualActions();
         this.libraryChange.hidden = !canChangeLibrary;
         this.libraryChange.open = false;
         this.element.dataset.state = state;
@@ -397,8 +479,15 @@ export default class LibraryAccessPanel {
         const changedCount = Number(state.addedCount || 0) +
             Number(state.recoveredCount || 0);
 
-        this.libraryRefreshButton.hidden =
-            state.canManualRefresh !== true && !running && !success && !failure;
+        const directoryControl = this.libraryRefreshDirectory.closest(
+            ".library-refresh-directory-control"
+        );
+        const fileListRefresh = this.folderPickerMode === "file-list" &&
+            this.fileListSession;
+
+        directoryControl.hidden = !fileListRefresh;
+        this.libraryRefreshButton.hidden = fileListRefresh ||
+            (state.canManualRefresh !== true && !running && !success && !failure);
         this.libraryRefreshButton.disabled = running;
         this.libraryRefreshButton.textContent = running
             ? "確認中…"
@@ -559,5 +648,16 @@ export default class LibraryAccessPanel {
         ].join("\n");
 
         if (output.textContent !== text) output.textContent = text;
+    }
+
+    #syncManualActions() {
+
+        const fallback = this.folderPickerMode === "file-list";
+
+        this.primaryManualButton.hidden = fallback || !this.manualPrimaryVisible;
+        this.secondaryManualButton.hidden = fallback || !this.manualSecondaryVisible;
+        this.primaryDirectoryInput.hidden = !fallback || !this.manualPrimaryVisible;
+        this.secondaryDirectoryInput.hidden = !fallback ||
+            !this.manualSecondaryVisible;
     }
 }

@@ -239,8 +239,9 @@ window.addEventListener("DOMContentLoaded", () => {
         selectionState: app.selectionState,
         repository: app.gpxGeometryLoader.repository,
         getNamespace: () => app.gpxGeometryLoader.namespace,
-        canRefresh: () => app.displaySnapshotCoordinator.getStatus()
-            .restoreState === "ready" || app.librarySnapshotService.isProvisional(),
+        canRefresh: () => app.currentLibrary?.capabilities?.refreshMode !==
+            "reselect" && (app.displaySnapshotCoordinator.getStatus()
+            .restoreState === "ready" || app.librarySnapshotService.isProvisional()),
         getLibrary: () => app.currentLibrary,
         setLibrary: library => { app.currentLibrary = library; },
         getColor: path => app.getColor(path),
@@ -395,7 +396,9 @@ window.addEventListener("DOMContentLoaded", () => {
         getAvailabilityContext: () => {
             const library = app.currentLibrary;
             const previous = app.previousLibraryCoordinator.getRefreshContext();
-            const currentHandle = library?.rootFolder?.handle || null;
+            const currentHandle = library?.readOnly
+                ? null
+                : library?.rootFolder?.handle || null;
             const directoryHandle = previous.handle || currentHandle;
 
             return {
@@ -434,7 +437,7 @@ window.addEventListener("DOMContentLoaded", () => {
         getRootDirectoryHandle: () => app.currentLibrary?.rootFolder?.handle,
         getLibraryToken: () => app.currentLibrary,
         isLibraryAvailable: () => Boolean(app.currentLibrary) &&
-            !driveLibrary?.isReadOnlyActive(),
+            app.currentLibrary?.readOnly !== true,
         isEditorBusy: () => editor.isBusy(),
         refreshSavedFile: saved => editedFileRefresh.refreshVerifiedFile(saved),
         setBusy: busy => app.toolbar.setFolderPickerBusy(busy)

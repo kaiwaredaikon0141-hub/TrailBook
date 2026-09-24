@@ -8,6 +8,8 @@ export default class Toolbar {
 
         this.pickFolderButton =
             this.element.querySelector("#pick-folder");
+        this.directoryInput =
+            this.element.querySelector("#pick-folder-directory");
 
         this.sidebarToggleButton =
             this.element.querySelector("#toggle-sidebar");
@@ -17,6 +19,14 @@ export default class Toolbar {
             descriptionId: "",
             disabledReason: ""
         };
+        this.folderPickerMode = "directory-handle";
+        this.directoryAction = null;
+        this.directoryInput.addEventListener("change", () => {
+            const files = Array.from(this.directoryInput.files || []);
+
+            this.directoryInput.value = "";
+            if (files.length > 0) this.directoryAction?.(files);
+        });
         this.mobileLayout = false;
 
     }
@@ -39,6 +49,9 @@ export default class Toolbar {
                 <button id="pick-folder" type="button">
                     📁 端末からライブラリを開く
                 </button>
+                <input id="pick-folder-directory" class="folder-directory-input"
+                    type="file" webkitdirectory multiple hidden
+                    aria-label="端末からライブラリを開く">
             </div>
 
             <div class="toolbar-version">
@@ -59,6 +72,19 @@ export default class Toolbar {
         };
 
         this.#applyFolderPickerState(this.folderPickerState);
+    }
+
+    setFolderPickerMode(mode) {
+
+        this.folderPickerMode = mode === "file-list"
+            ? "file-list"
+            : "directory-handle";
+        this.#applyFolderPickerState(this.folderPickerState);
+    }
+
+    setDirectoryAction(action) {
+
+        this.directoryAction = typeof action === "function" ? action : null;
     }
 
     setFolderPickerBusy(busy) {
@@ -108,19 +134,27 @@ export default class Toolbar {
     #applyFolderPickerState({ disabled, descriptionId, disabledReason }) {
 
         this.pickFolderButton.disabled = disabled;
+        this.directoryInput.disabled = disabled;
+        this.pickFolderButton.hidden = this.folderPickerMode === "file-list";
+        this.directoryInput.hidden = this.folderPickerMode !== "file-list";
 
         if (descriptionId) {
             this.pickFolderButton.setAttribute("aria-describedby", descriptionId);
+            this.directoryInput.setAttribute("aria-describedby", descriptionId);
         }
 
         if (disabled) {
             this.pickFolderButton.setAttribute("aria-disabled", "true");
             this.pickFolderButton.title = disabledReason;
+            this.directoryInput.setAttribute("aria-disabled", "true");
+            this.directoryInput.title = disabledReason;
             return;
         }
 
         this.pickFolderButton.removeAttribute("aria-disabled");
         this.pickFolderButton.removeAttribute("title");
+        this.directoryInput.removeAttribute("aria-disabled");
+        this.directoryInput.removeAttribute("title");
     }
 
 }

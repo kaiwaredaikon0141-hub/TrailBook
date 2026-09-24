@@ -2,6 +2,7 @@ import {
     getFolderPickerSupport,
     pickFolder
 } from "../services/FolderScanner.js";
+import FileListDirectorySource from "../services/FileListDirectorySource.js";
 
 const READ_PERMISSION = { mode: "read" };
 
@@ -29,6 +30,7 @@ export default class PreviousLibraryCoordinator {
         hasUsableLibrary = () => Boolean(getCurrentLibrary()),
         getSupport = getFolderPickerSupport,
         pickDirectory = pickFolder,
+        fileListSource = new FileListDirectorySource(),
         performanceNow = () => globalThis.performance?.now?.() ?? Date.now(),
         reportError = (message, error) => console.error(message, error)
     }) {
@@ -46,6 +48,7 @@ export default class PreviousLibraryCoordinator {
         this.hasUsableLibrary = hasUsableLibrary;
         this.getSupport = getSupport;
         this.pickDirectory = pickDirectory;
+        this.fileListSource = fileListSource;
         this.performanceNow = performanceNow;
         this.reportError = reportError;
         this.generation = 0;
@@ -62,8 +65,9 @@ export default class PreviousLibraryCoordinator {
             () => void this.openPrevious()
         );
         this.accessPanel.setManualLibraryAction?.(
-            () => void this.openManual()
+            files => void this.openManual(files)
         );
+        this.toolbar.setDirectoryAction?.(files => void this.openManual(files));
     }
 
     async initialize() {
@@ -74,6 +78,11 @@ export default class PreviousLibraryCoordinator {
         if (!support.available) {
             this.persistenceInitializationStage = "complete";
             this.#setPersistenceStatus("unsupported");
+            return false;
+        }
+        if (support.mode === "file-list") {
+            this.persistenceInitializationStage = "complete";
+            this.#setPersistenceStatus("session-only");
             return false;
         }
 
@@ -125,7 +134,7 @@ export default class PreviousLibraryCoordinator {
         return false;
     }
 
-    async openManual() {
+    async openManual(files = null) {
 
         if (!await this.canSwitchLibrary()) {
             return false;
@@ -136,6 +145,11 @@ export default class PreviousLibraryCoordinator {
         if (!support.available) {
             this.#configureAccess();
             return false;
+        }
+        if (support.mode === "file-list") {
+            return files?.length > 0
+                ? this.#openFileList(files)
+                : false;
         }
 
         try {
@@ -208,12 +222,16 @@ export default class PreviousLibraryCoordinator {
     }
 
     getRefreshHandle() {
-        return this.getCurrentLibrary()?.rootFolder?.handle || this.previousHandle;
+        const library = this.getCurrentLibrary();
+
+        if (library?.capabilities?.refreshMode === "reselect") return null;
+        return library?.rootFolder?.handle || this.previousHandle;
     }
 
     getRefreshContext() {
 
         const handle = this.getRefreshHandle();
+        const fileListSession = this.getCurrentLibrary()?.sourceType === "file-list";
         const prefix = "saved / ";
         const permission = this.persistenceStatus.startsWith(prefix)
             ? this.persistenceStatus.slice(prefix.length)
@@ -224,7 +242,7 @@ export default class PreviousLibraryCoordinator {
         return Object.freeze({
             handle,
             hasHandle: Boolean(handle),
-            permission,
+            permission: fileListSession ? "session-only" : permission,
             handleType: handle?.kind || "unknown",
             initialized: this.persistenceInitializationStage === "complete",
             initializationStage: this.persistenceInitializationStage,
@@ -296,6 +314,9 @@ export default class PreviousLibraryCoordinator {
             disabledReason = "このbrowserではFolder選択を利用できません";
             this.accessPanel.showUnsupportedBrowser();
             if (showEnvironmentStatus) this.statusBar.showUnsupportedEnvironment();
+        } else if (support.mode === "file-list") {
+            this.accessPanel.showFileListFallback?.();
+            if (showEnvironmentStatus) this.statusBar.showInitial();
         } else if (support.isMobile) {
             this.accessPanel.showUnverifiedMobile();
             if (showEnvironmentStatus) this.statusBar.showInitial();
@@ -304,6 +325,8 @@ export default class PreviousLibraryCoordinator {
             if (showEnvironmentStatus) this.statusBar.showInitial();
         }
 
+        this.toolbar.setFolderPickerMode?.(support.mode);
+        this.accessPanel.setFolderPickerMode?.(support.mode);
         this.toolbar.setFolderPickerState({
             disabled: !support.available,
             descriptionId: this.accessPanel.descriptionId,
@@ -367,6 +390,7 @@ export default class PreviousLibraryCoordinator {
                 return false;
             }
 
+            this.accessPanel.setFileListSession?.(false);
             this.previousHandle = handle;
             if (remember) {
                 const saved = await this.store.save(handle, { cacheNamespace });
@@ -404,6 +428,58 @@ export default class PreviousLibraryCoordinator {
                     this.statusBar.showError();
                 }
             }
+            return false;
+        } finally {
+            if (isCurrent()) this.loading = false;
+        }
+    }
+
+    async #openFileList(files) {
+
+        if (!this.fileListSource) return false;
+        this.flushViewState();
+        const generation = ++this.generation;
+        const isCurrent = () => generation === this.generation;
+
+        this.loading = true;
+        try {
+            const enumerationStartedAt = this.performanceNow();
+            const library = await this.fileListSource.scan(files);
+            const enumerationMs = this.performanceNow() - enumerationStartedAt;
+            const scanDiagnostic = this.fileListSource.getLastScanDiagnostic?.();
+
+            if (!isCurrent()) return false;
+            this.beforeLoad();
+            this.accessPanel.showLoading(library.name);
+            this.statusBar.showLibraryLoading(library.name);
+            const applyStartedAt = this.performanceNow();
+            const applied = await this.applyLibrary(library, {
+                generation,
+                isCurrent,
+                cacheNamespace: library.cacheNamespace,
+                persistent: false
+            });
+
+            this.#reportRefreshPerformance({
+                enumerationMs,
+                applyLibraryMs: this.performanceNow() - applyStartedAt,
+                directoryEntryCount: scanDiagnostic?.directoryEntryCount ??
+                    library.folderCount + library.gpxFileCount,
+                gpxCandidateCount: scanDiagnostic?.gpxCandidateCount ??
+                    library.gpxFileCount
+            });
+            if (!applied || !isCurrent()) {
+                if (isCurrent()) this.#restoreAccessState();
+                return false;
+            }
+            this.previousHandle = null;
+            this.previousPermission = "prompt";
+            this.accessPanel.setFileListSession?.(true);
+            this.#setPersistenceStatus("session-only");
+            return true;
+        } catch (error) {
+            if (error?.name !== "AbortError") this.#showLoadFailure(error);
+            this.#restoreAccessState();
             return false;
         } finally {
             if (isCurrent()) this.loading = false;

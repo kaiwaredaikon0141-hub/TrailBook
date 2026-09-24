@@ -355,11 +355,15 @@ export default class App {
         if (!isCurrent()) {
             return false;
         }
+        const persistent = library.capabilities?.persistent !== false;
+        const sharedSettingsWritable = library.capabilities
+            ?.sharedSettingsWritable ?? !library.readOnly;
+        const persistenceChange = this.displaySnapshotCoordinator?.setPersistenceEnabled?.(persistent, { clear: !persistent });
+        if (!persistent) await persistenceChange;
         const settingsLoad = await this.librarySettingsCoordinator.load(
-            library.rootFolder.handle,
-            { generation, isCurrent }
+            library.rootFolder.handle, { generation, isCurrent,
+                sharedSettingsWritable, presentationCacheEnabled: persistent }
         );
-
         if (!settingsLoad) {
             return false;
         }
@@ -375,18 +379,17 @@ export default class App {
         }
         this.gpxGeometryLoader.setLibraryNamespace(cacheNamespace);
         this.displayState.setLibrary(library.rootFolder.handle);
-
         await this.treeView.render(library, { preserveNavigation: preserveCached });
         if (preserveCached) this.treeView.setSelectedPath(this.selectionState.getSelectedPath(), { reveal: false });
-
         if (!isCurrent()) return false;
         this.libraryTrackCatalogCoordinator.replaceFromCompleteScan(cacheNamespace, this.treeView.getFileEntries());
         this.searchView.setAvailable(true);
-
         this.currentLibrary = library;
         this.currentLibraryId = this.displaySettingsStore.setActiveLibrary(
-            library.name
+            library.identityName || library.name
         );
+        this.folderColorControl?.setEditable?.(sharedSettingsWritable);
+        this.libraryAccessPanel.setFileListSession?.(!persistent);
         const folderPaths = this.treeView.getSearchSourceEntries()
             .filter(entry => entry.kind === "folder")
             .map(entry => entry.path);
@@ -397,7 +400,6 @@ export default class App {
             return false;
         }
         this.updateFolderColorPresentation();
-
         this.treeView.getFileEntries().forEach(({ path, fileHandle }) => {
             this.displayState.registerFile(
                 path,
@@ -405,15 +407,12 @@ export default class App {
                 this.getColor(path)
             );
         });
-
         this.statusBar.showLibraryLoaded(library);
-
         if (library.gpxFileCount === 0) {
             this.libraryAccessPanel.showEmpty(library.name);
         } else {
             this.libraryAccessPanel.hide();
         }
-
         this.trackDiscoveryCoordinator.setLibrary({
             namespace: cacheNamespace,
             libraryId: this.currentLibraryId,
@@ -431,13 +430,13 @@ export default class App {
             libraryId: this.currentLibraryId,
             libraryName: library.name,
             generation,
-            isCurrent
+            isCurrent,
+            persistent
         }).then(restored => {
             this.librarySnapshotService.reconcileActual();
             this.trackColorMapProjection.converge(path => this.getColor(path));
             return this.displaySnapshotCoordinator?.completePhaseB({ restored });
         });
-
         return true;
     }
 

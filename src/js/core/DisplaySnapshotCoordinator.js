@@ -96,6 +96,7 @@ export default class DisplaySnapshotCoordinator {
         this.lastWriteReason = null;
         this.lastWriteStatus = "none";
         this.libraryContextGeneration = 0;
+        this.persistenceEnabled = true;
         this.writeQueue = Promise.resolve();
         this.metricsReported = false;
         this.startedAt = now();
@@ -262,7 +263,9 @@ export default class DisplaySnapshotCoordinator {
             return false;
         }
 
-        const saved = await this.#save("phaseB-complete");
+        const saved = this.persistenceEnabled
+            ? await this.#save("phaseB-complete")
+            : true;
 
         if (!saved) return false;
 
@@ -282,6 +285,7 @@ export default class DisplaySnapshotCoordinator {
 
     commitLibrarySwitch() {
 
+        if (!this.persistenceEnabled) return Promise.resolve(true);
         if (this.restoreState !== "phaseB") return Promise.resolve(false);
         if (
             this.lastKnownGood?.libraryIdentity === this.libraryIdentity &&
@@ -303,6 +307,26 @@ export default class DisplaySnapshotCoordinator {
         this.libraryIdentity = libraryIdentity;
         this.cacheNamespace = cacheNamespace;
         this.#updateDiagnostic();
+    }
+
+    async setPersistenceEnabled(enabled, { clear = false } = {}) {
+
+        this.persistenceEnabled = enabled !== false;
+        if (this.persistenceEnabled) return true;
+        this.#cancelTimer();
+        this.libraryContextGeneration += 1;
+        this.pendingExpandedPaths = null;
+        if (!clear) return true;
+        const write = this.writeQueue.then(
+            () => this.store.clear(),
+            () => this.store.clear()
+        );
+
+        this.writeQueue = write.catch(() => false);
+        const cleared = await write;
+
+        this.lastKnownGood = null;
+        return cleared;
     }
 
     hasInstantRestore() {
@@ -381,6 +405,7 @@ export default class DisplaySnapshotCoordinator {
             this.lastKnownGood?.library;
 
         if (
+            !this.persistenceEnabled ||
             (this.restoreState !== "ready" && !provisionalFolderChange) ||
             !this.libraryIdentity ||
             !this.cacheNamespace
@@ -407,6 +432,7 @@ export default class DisplaySnapshotCoordinator {
             ["library-switch", "phaseB-complete"].includes(reason);
 
         if (
+            !this.persistenceEnabled ||
             (this.restoreState !== "ready" && !phaseBCommit) ||
             !this.libraryIdentity ||
             !this.cacheNamespace

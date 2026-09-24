@@ -28,6 +28,10 @@ export function getFolderPickerSupport(
         isSupportedOrigin;
     const hasDirectoryPicker =
         typeof browserWindow.showDirectoryPicker === "function";
+    const directoryInput = browserWindow.document?.createElement?.("input");
+    const hasFileListDirectoryPicker = Boolean(
+        directoryInput && "webkitdirectory" in directoryInput
+    );
     const userAgent = browserNavigator.userAgent || "";
     const isMobile = typeof browserNavigator.userAgentData?.mobile === "boolean"
         ? browserNavigator.userAgentData.mobile
@@ -39,15 +43,19 @@ export function getFolderPickerSupport(
 
     if (!isSecureContext) {
         reason = "insecure-context";
-    } else if (!hasDirectoryPicker) {
+    } else if (!hasDirectoryPicker && !hasFileListDirectoryPicker) {
         reason = "missing-api";
     }
 
     return {
         available: reason === null,
+        mode: reason !== null
+            ? "unsupported"
+            : hasDirectoryPicker ? "directory-handle" : "file-list",
         reason,
         isSecureContext,
         hasDirectoryPicker,
+        hasFileListDirectoryPicker,
         isDesktopChromium,
         isMobile
     };
@@ -134,12 +142,23 @@ export default class FolderScanner {
             ...diagnostic,
             gpxTailPaths: Object.freeze([...diagnostic.gpxTailPaths])
         });
-        return new Library(
+        const library = new Library(
             rootFolder.name,
             rootFolder,
             counts.folderCount,
             counts.gpxFileCount
         );
+
+        library.sourceType = "directory-handle";
+        library.readOnly = false;
+        library.capabilities = Object.freeze({
+            sourceType: "directory-handle",
+            readOnly: false,
+            persistent: true,
+            refreshMode: "rescan",
+            sharedSettingsWritable: true
+        });
+        return library;
     }
 
     async #scanFolder(name, handle, diagnostic, relativeFolderPath) {

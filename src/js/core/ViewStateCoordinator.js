@@ -64,7 +64,13 @@ export default class ViewStateCoordinator {
         return this.#saveSnapshot();
     }
 
-    async restoreLibrary({ libraryId, libraryName, generation, isCurrent }) {
+    async restoreLibrary({
+        libraryId,
+        libraryName,
+        generation,
+        isCurrent,
+        persistent = true
+    }) {
 
         if (!isCurrent()) {
             return false;
@@ -79,7 +85,7 @@ export default class ViewStateCoordinator {
         this.flush();
         this.#cancelTimer();
         this.pendingSave = false;
-        this.activeLibraryId = libraryId;
+        this.activeLibraryId = persistent ? libraryId : null;
         this.activeLibraryGeneration = generation;
         this.isCurrentLibrary = isCurrent;
         this.resetBlocked = false;
@@ -89,7 +95,7 @@ export default class ViewStateCoordinator {
         this.mapChangedDuringRestore = false;
         this.selectionChangedDuringRestore = false;
         this.saveAfterRestore = false;
-        const state = this.store.getLibraryState(libraryId);
+        const state = persistent ? this.store.getLibraryState(libraryId) : null;
 
         this.controls.setLibrary({
             name: libraryName,

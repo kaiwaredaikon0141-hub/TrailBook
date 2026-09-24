@@ -1,4 +1,5 @@
 import EventBus from "../../src/js/core/EventBus.js";
+import Config from "../../src/js/core/Config.js";
 import PreviousLibraryCoordinator from "../../src/js/core/PreviousLibraryCoordinator.js";
 import TrackEditingCoordinator from "../../src/js/core/TrackEditingCoordinator.js";
 import EditingPreviewLayerManager, {
@@ -1318,7 +1319,7 @@ function testInteractionGuard() {
 
 function testMapSelectionInteractionLifecycle() {
     const eventBus = new EventBus();
-    const mapView = new MapView({ map: {} }, eventBus);
+    const mapView = new MapView(Config, eventBus);
     let backgroundClicks = 0;
 
     eventBus.on("map:background-clicked", () => { backgroundClicks += 1; });

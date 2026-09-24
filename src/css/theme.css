@@ -478,9 +478,45 @@ body{
 }
 
 .manual-library-primary,
-.manual-library-secondary{
+.manual-library-secondary,
+.manual-library-directory{
 
     width:100%;
+}
+
+.folder-directory-input,
+.manual-library-directory,
+.library-refresh-directory{
+
+    box-sizing:border-box;
+
+    max-width:100%;
+
+    min-height:36px;
+
+    cursor:pointer;
+}
+
+.folder-directory-input::file-selector-button,
+.manual-library-directory::file-selector-button,
+.library-refresh-directory::file-selector-button{
+
+    min-height:32px;
+
+    cursor:pointer;
+}
+
+.library-refresh-directory-control{
+
+    display:grid;
+
+    gap:4px;
+
+    margin-top:4px;
+
+    color:#667085;
+
+    font-size:11px;
 }
 
 .library-change{
@@ -1653,6 +1689,28 @@ body.is-track-info-resizing{
     display:none;
 }
 
+.folder-color-control[hidden]{
+
+    display:none;
+}
+
+.folder-color-readonly.is-source-readonly{
+
+    display:inline-flex;
+
+    flex:0 0 auto;
+
+    align-items:center;
+
+    gap:3px;
+
+    margin-left:4px;
+
+    color:#52606d;
+
+    font-size:9px;
+}
+
 .folder-color-dialog{
 
     width:min(320px, calc(100vw - 32px));
@@ -2088,7 +2146,8 @@ body.is-track-info-resizing{
         background:rgba(255, 255, 255, 0.96);
     }
 
-    .toolbar.is-mobile-layout #pick-folder{
+    .toolbar.is-mobile-layout #pick-folder,
+    .toolbar.is-mobile-layout #pick-folder-directory{
 
         display:none;
     }
@@ -2248,6 +2307,12 @@ body.is-track-info-resizing{
 
         min-height:44px;
 
+    }
+
+    .manual-library-directory,
+    .library-refresh-directory{
+
+        min-height:44px;
     }
 
     .sidebar-shell:has(.library-diagnostics-disclosure[open]){
