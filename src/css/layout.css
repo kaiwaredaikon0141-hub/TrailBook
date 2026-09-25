@@ -78,6 +78,17 @@ body{
     grid-template-rows:auto minmax(80px, 1fr) auto auto;
 }
 
+.sidebar-shell:has(> .track-info:not(.has-track-info)){
+
+    grid-template-rows:auto minmax(100px, 1fr) 0 auto auto;
+}
+
+.sidebar-shell:has(> .track-info:not(.has-track-info))
+    > .track-info-resize-handle{
+
+    display:none;
+}
+
 .map-view{
 
     min-width:0;

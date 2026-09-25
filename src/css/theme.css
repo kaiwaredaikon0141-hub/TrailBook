@@ -999,6 +999,40 @@ body.is-track-info-resizing{
     margin-top:8px;
 }
 
+.library-settings-panel{
+
+    margin-bottom:6px;
+
+    padding:4px 8px;
+}
+
+.library-settings-summary,
+.track-tools-summary{
+
+    box-sizing:border-box;
+
+    min-height:24px;
+
+    padding:4px 0;
+
+    cursor:pointer;
+
+    font-size:12px;
+}
+
+.library-settings-message{
+
+    display:inline;
+}
+
+.library-settings-panel[data-state="error"]
+    .library-settings-summary{
+
+    color:#b42318;
+
+    font-weight:600;
+}
+
 .settings-conflict-dialog{
 
     width:min(440px, calc(100vw - 32px));
@@ -1049,12 +1083,65 @@ body.is-track-info-resizing{
 
 .search-view{
 
-    margin-bottom:12px;
+    margin-bottom:6px;
 }
 
 .search-disclosure-summary{
 
+    box-sizing:border-box;
+
+    display:flex;
+
+    min-height:28px;
+
+    align-items:center;
+
+    justify-content:space-between;
+
+    padding:4px 2px;
+
+    cursor:pointer;
+
+    font-size:13px;
+
+    font-weight:600;
+
+    list-style:none;
+}
+
+.search-disclosure-summary::-webkit-details-marker{
+
     display:none;
+}
+
+.search-disclosure-summary::after{
+
+    width:7px;
+
+    height:7px;
+
+    border-right:2px solid currentColor;
+
+    border-bottom:2px solid currentColor;
+
+    content:"";
+
+    transform:rotate(45deg) translateY(-2px);
+}
+
+.search-disclosure[open] > .search-disclosure-summary::after{
+
+    transform:rotate(225deg) translate(-2px, -1px);
+}
+
+.search-view.has-active-filter .search-disclosure-summary{
+
+    color:var(--accent);
+}
+
+.search-disclosure-content{
+
+    padding:2px 0 4px;
 }
 
 .search-date-filter{
@@ -1118,7 +1205,12 @@ body.is-track-info-resizing{
 
 .batch-simplification{
 
-    margin:0 0 10px;
+    margin:0;
+}
+
+.track-tools-content{
+
+    padding:2px 0 6px;
 }
 
 .batch-simplification-open,
@@ -1345,6 +1437,30 @@ body.is-track-info-resizing{
     gap:3px 8px;
 
     margin:0;
+}
+
+.track-info:not(.has-track-info){
+
+    padding-top:4px;
+
+    overflow:hidden;
+}
+
+.track-info:not(.has-track-info) .track-info-title{
+
+    font-size:12px;
+}
+
+.track-info:not(.has-track-info) .track-info-state{
+
+    min-height:0;
+
+    margin-bottom:0;
+}
+
+.track-info:not(.has-track-info) .track-info-list{
+
+    display:none;
 }
 
 .track-info-list dt{
@@ -2379,12 +2495,14 @@ body.is-track-info-resizing{
         overflow-y:visible;
     }
 
-    .sidebar-shell:has(.library-maintenance-disclosure[open]){
+    .sidebar-shell:has(.library-maintenance-disclosure[open]),
+    .sidebar-shell:has(.track-tools-disclosure[open]){
 
         overflow-y:auto;
     }
 
-    .sidebar-shell:has(.library-maintenance-disclosure[open]) > .sidebar{
+    .sidebar-shell:has(.library-maintenance-disclosure[open]) > .sidebar,
+    .sidebar-shell:has(.track-tools-disclosure[open]) > .sidebar{
 
         flex:0 0 auto;
 
@@ -2490,53 +2608,9 @@ body.is-track-info-resizing{
 
         box-sizing:border-box;
 
-        display:flex;
-
         min-height:44px;
 
-        align-items:center;
-
-        justify-content:space-between;
-
         padding:4px 8px;
-
-        cursor:pointer;
-
-        font-size:13px;
-
-        font-weight:600;
-
-        list-style:none;
-    }
-
-    .search-disclosure-summary::-webkit-details-marker{
-
-        display:none;
-    }
-
-    .search-disclosure-summary::after{
-
-        width:7px;
-
-        height:7px;
-
-        border-right:2px solid currentColor;
-
-        border-bottom:2px solid currentColor;
-
-        content:"";
-
-        transform:rotate(45deg) translateY(-2px);
-    }
-
-    .search-disclosure[open] > .search-disclosure-summary::after{
-
-        transform:rotate(225deg) translate(-2px, -1px);
-    }
-
-    .search-view.has-active-filter .search-disclosure-summary{
-
-        color:var(--accent);
     }
 
     .search-disclosure-content{
@@ -2612,10 +2686,19 @@ body.is-track-info-resizing{
 
     .sidebar-resize-handle,
     .track-info-resize-handle,
-    .track-editor,
-    .batch-simplification{
+    .track-editor{
 
         display:none !important;
+    }
+
+    .library-settings-summary,
+    .track-tools-summary{
+
+        min-height:44px;
+
+        display:flex;
+
+        align-items:center;
     }
 
     .track-info{

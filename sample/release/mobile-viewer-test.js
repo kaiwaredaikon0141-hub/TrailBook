@@ -364,9 +364,9 @@ async function run() {
     "mobile Sidebar does not reserve its flexible area for the Track Tree");
     assert(themeCss.includes("min-height:44px") &&
         themeCss.includes(".track-editor") &&
-        themeCss.includes(".batch-simplification") &&
+        themeCss.includes(".track-tools-summary") &&
         themeCss.includes("env(safe-area-inset-bottom)"),
-    "touch, editing guard, or safe-area CSS contract missing");
+    "touch, Track tools, or safe-area CSS contract missing");
     assert(themeCss.includes(".mobile-map-controls") &&
         themeCss.includes("top:max(76px") &&
         themeCss.includes("left:max(64px"),

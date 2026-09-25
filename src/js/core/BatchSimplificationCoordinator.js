@@ -34,9 +34,9 @@ export default class BatchSimplificationCoordinator {
         this.cancelRequested = false;
     }
 
-    attach(container) {
+    attach(container, options = {}) {
 
-        this.panel.attach(container);
+        this.panel.attach(container, options);
         this.panel.on("open", () => this.#refreshAvailability());
         this.panel.on("analyze", () => void this.analyze());
         this.panel.on("execute", () => void this.execute());
@@ -47,6 +47,11 @@ export default class BatchSimplificationCoordinator {
     isBusy() {
 
         return this.busy;
+    }
+
+    refreshAvailability() {
+
+        this.#refreshAvailability();
     }
 
     async analyze() {
@@ -200,4 +205,10 @@ export function collectBatchEntries(treeView, scope) {
                 .get(metadata.parentPath)?.model?.handle
         }))
         .filter(entry => entry.directoryHandle);
+}
+
+export function supportsBatchSimplification(library) {
+
+    return Boolean(library?.rootFolder?.handle) &&
+        (library?.capabilities?.readOnly ?? library?.readOnly) !== true;
 }

@@ -19,7 +19,7 @@ export default class SearchView {
 
         this.eventBus = eventBus;
         this.mobileMedia = mobileMedia;
-        this.mobileExpanded = false;
+        this.expanded = false;
         this.results = [];
         this.selectedPath = null;
         this.element = this.#create();
@@ -35,9 +35,7 @@ export default class SearchView {
         this.resultList = this.element.querySelector(".search-results");
         this.handleMobileMediaChange = () => this.#syncDisclosure();
         this.disclosure.addEventListener("toggle", () => {
-            if (this.mobileMedia?.matches) {
-                this.mobileExpanded = this.disclosure.open;
-            }
+            this.expanded = this.disclosure.open;
         });
         this.mobileMedia?.addEventListener?.(
             "change",
@@ -243,7 +241,7 @@ export default class SearchView {
         section.className = "search-view";
         section.setAttribute("aria-label", "Library検索");
         section.innerHTML = `
-            <details class="search-disclosure" open>
+            <details class="search-disclosure">
                 <summary class="search-disclosure-summary">
                     <span class="search-disclosure-label">検索</span>
                 </summary>
@@ -424,9 +422,7 @@ export default class SearchView {
 
     #syncDisclosure() {
 
-        this.disclosure.open = this.mobileMedia?.matches
-            ? this.mobileExpanded
-            : true;
+        this.disclosure.open = this.expanded;
     }
 
     #updateFilterIndicator(filter = null) {

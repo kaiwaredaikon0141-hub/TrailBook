@@ -179,13 +179,53 @@ async function testGPXDecoding() {
 
 function testView() {
     const view = new TrackInfoView();
+    const list = view.element.querySelector(".track-info-list");
+    const shell = document.createElement("div");
+    const fixed = document.createElement("div");
+    const trackList = document.createElement("div");
+    const resizeHandle = document.createElement("div");
+    const footer = document.createElement("div");
+    const mobileLayout = matchMedia(
+        "(max-width: 768px), (max-height: 500px) and (pointer: coarse)"
+    ).matches;
+
+    shell.className = "sidebar-shell";
+    fixed.className = "sidebar-fixed-controls";
+    trackList.className = "sidebar";
+    resizeHandle.className = "track-info-resize-handle";
+    footer.className = "library-sidebar-footer";
+    shell.style.height = "500px";
+    shell.style.width = "300px";
+    shell.append(fixed, trackList, resizeHandle, view.element, footer);
+    document.body.append(shell);
 
     assert(view.element.matches("section.track-info"), "Track Info section missing");
     assert(view.state.getAttribute("aria-live") === "polite", "live status missing");
     assert(field(view, "displayName") === "—", "empty state value");
+    assert(getComputedStyle(list).display === "none",
+        "empty Track Info still reserves its detail list");
+    if (mobileLayout) {
+        assert(getComputedStyle(view.element).display === "none",
+            "empty mobile Track Info remains visible");
+    } else {
+        assert(getComputedStyle(resizeHandle).display === "none" &&
+            view.element.getBoundingClientRect().height > 0 &&
+            view.element.getBoundingClientRect().height < 80,
+        "empty Track Info did not collapse to a concise area");
+    }
 
     view.showLoading();
     assert(view.state.textContent.includes("読み込み中"), "loading state missing");
+    assert(getComputedStyle(list).display === "grid",
+        "selected/loading Track Info details remain compacted");
+    if (mobileLayout) {
+        assert(getComputedStyle(view.element).display === "block",
+            "selected mobile Track Info did not open");
+    } else {
+        assert(getComputedStyle(resizeHandle).display !== "none" &&
+            view.element.getBoundingClientRect().height >= 120,
+        "selected Track Info did not restore its normal resizable area");
+    }
 
     view.showEntry(entry());
     assert(field(view, "displayName") === "Morning Ride", "display name");
@@ -221,7 +261,10 @@ function testView() {
     assert(field(view, "distance") === "—", "failed summary metrics shown");
 
     view.showUnavailable();
-    assert(field(view, "displayName") === "—", "unavailable state not cleared");
+    assert(field(view, "displayName") === "—" &&
+        getComputedStyle(list).display === "none",
+    "unavailable Track Info state not cleared or compacted");
+    shell.remove();
 }
 
 async function testIndexEntryLoad() {

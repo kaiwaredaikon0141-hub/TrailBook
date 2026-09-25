@@ -7,6 +7,7 @@ export default class BatchSimplificationPanel {
 
         this.handlers = new Map();
         this.element = this.#create(defaultToleranceMeters);
+        this.disclosure = this.element.querySelector(".track-tools-disclosure");
         this.body = this.element.querySelector(".batch-simplification-body");
         this.scope = this.element.querySelector(".batch-simplification-scope");
         this.tolerance = this.element.querySelector(".batch-simplification-tolerance");
@@ -20,9 +21,9 @@ export default class BatchSimplificationPanel {
         this.showIdle();
     }
 
-    attach(container) {
+    attach(container, { before = null } = {}) {
 
-        container.append(this.element);
+        container.insertBefore(this.element, before);
     }
 
     on(action, handler) {
@@ -42,8 +43,10 @@ export default class BatchSimplificationPanel {
 
         const open = this.element.querySelector(".batch-simplification-open");
 
+        this.element.hidden = !available;
         open.title = reason;
         if (!available) {
+            this.disclosure.open = false;
             open.setAttribute("aria-expanded", "false");
             this.body.hidden = true;
         }
@@ -179,30 +182,36 @@ export default class BatchSimplificationPanel {
         const section = document.createElement("section");
 
         section.className = "batch-simplification";
+        section.hidden = true;
         section.innerHTML = `
-            <button type="button" class="batch-simplification-open"
-                aria-expanded="false">一括簡略化</button>
-            <div class="batch-simplification-body" hidden>
-                <label>対象
-                    <select class="batch-simplification-scope">
-                        <option value="folder">選択Folder</option>
-                        <option value="library">Library全体</option>
-                    </select>
-                </label>
-                <label>Tolerance (m)
-                    <input class="batch-simplification-tolerance" type="number"
-                        min="0.01" step="0.01" value="${defaultToleranceMeters}">
-                </label>
-                <div class="batch-simplification-actions">
-                    <button type="button" data-batch-action="analyze">解析</button>
-                    <button type="button" data-batch-action="execute">実行</button>
-                    <button type="button" data-batch-action="cancel">キャンセル</button>
+            <details class="track-tools-disclosure">
+                <summary class="track-tools-summary">Track tools</summary>
+                <div class="track-tools-content">
+                    <button type="button" class="batch-simplification-open"
+                        aria-expanded="false">一括簡略化</button>
+                    <div class="batch-simplification-body" hidden>
+                        <label>対象
+                            <select class="batch-simplification-scope">
+                                <option value="folder">選択Folder</option>
+                                <option value="library">Library全体</option>
+                            </select>
+                        </label>
+                        <label>Tolerance (m)
+                            <input class="batch-simplification-tolerance" type="number"
+                                min="0.01" step="0.01" value="${defaultToleranceMeters}">
+                        </label>
+                        <div class="batch-simplification-actions">
+                            <button type="button" data-batch-action="analyze">解析</button>
+                            <button type="button" data-batch-action="execute">実行</button>
+                            <button type="button" data-batch-action="cancel">キャンセル</button>
+                        </div>
+                        <p class="batch-simplification-status" role="status"
+                            aria-live="polite"></p>
+                        <p class="batch-simplification-summary"></p>
+                        <ul class="batch-simplification-errors"></ul>
+                    </div>
                 </div>
-                <p class="batch-simplification-status" role="status"
-                    aria-live="polite"></p>
-                <p class="batch-simplification-summary"></p>
-                <ul class="batch-simplification-errors"></ul>
-            </div>
+            </details>
         `;
         return section;
     }

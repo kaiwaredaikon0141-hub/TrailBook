@@ -1,5 +1,6 @@
 import BatchSimplificationCoordinator, {
-    collectBatchEntries
+    collectBatchEntries,
+    supportsBatchSimplification
 } from "../../src/js/core/BatchSimplificationCoordinator.js";
 import BatchSimplificationService from "../../src/js/services/BatchSimplificationService.js";
 import TrackEditingCoordinator from "../../src/js/core/TrackEditingCoordinator.js";
@@ -64,6 +65,42 @@ async function run() {
         "default tolerance is not 10 meters");
     assert(realPanel.element.querySelectorAll("[data-batch-action]").length === 3,
         "batch panel actions are incomplete");
+    assert(realPanel.element.hidden && !realPanel.disclosure.open,
+        "Track tools are visible without a writable Library");
+    assert(!supportsBatchSimplification(null),
+        "Track tools are available without a Library");
+    assert(!supportsBatchSimplification({
+        readOnly: true,
+        capabilities: { readOnly: true },
+        rootFolder: { handle: {} }
+    }), "Track tools are available for a read-only FileList Library");
+    assert(supportsBatchSimplification({
+        readOnly: false,
+        capabilities: { readOnly: false },
+        rootFolder: { handle: {} }
+    }), "Track tools are unavailable for a writable DirectoryHandle Library");
+    let openRequests = 0;
+    const toolsHost = document.createElement("div");
+    const maintenance = document.createElement("section");
+
+    toolsHost.append(maintenance);
+    realPanel.attach(toolsHost, { before: maintenance });
+    assert(toolsHost.firstElementChild === realPanel.element,
+        "Track tools were not placed before lower maintenance controls");
+    realPanel.on("open", () => { openRequests += 1; });
+    realPanel.setAvailable(true);
+    assert(!realPanel.element.hidden && !realPanel.disclosure.open,
+        "writable Track tools are not visible and collapsed by default");
+    realPanel.disclosure.open = true;
+    realPanel.element.querySelector(".batch-simplification-open").click();
+    assert(openRequests === 1 && !realPanel.body.hidden,
+        "relocated batch simplification action is not wired");
+    assert((realPanel.element.textContent.match(/一括簡略化/g) || []).length === 1,
+        "batch simplification control is duplicated");
+    realPanel.setAvailable(false);
+    assert(realPanel.element.hidden && !realPanel.disclosure.open &&
+        realPanel.body.hidden,
+    "Track tools remained visible for an unavailable Library");
 
     const rootHandle = { name: "root" };
     const folderA = { name: "A", handle: { name: "A" } };

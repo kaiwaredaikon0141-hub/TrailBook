@@ -3,7 +3,8 @@ import CurrentPositionController from "./core/CurrentPositionController.js";
 import DrivingModeController from "./core/DrivingModeController.js";
 import DriveLibraryCoordinator from "./core/DriveLibraryCoordinator.js";
 import BatchSimplificationCoordinator, {
-    collectBatchEntries
+    collectBatchEntries,
+    supportsBatchSimplification
 } from "./core/BatchSimplificationCoordinator.js";
 import EditedGPXLibraryRefreshCoordinator from "./core/EditedGPXLibraryRefreshCoordinator.js";
 import LibraryRefreshCoordinator from "./core/LibraryRefreshCoordinator.js";
@@ -436,17 +437,19 @@ window.addEventListener("DOMContentLoaded", () => {
         getEntries: scope => collectBatchEntries(app.treeView, scope),
         getRootDirectoryHandle: () => app.currentLibrary?.rootFolder?.handle,
         getLibraryToken: () => app.currentLibrary,
-        isLibraryAvailable: () => Boolean(app.currentLibrary) &&
-            app.currentLibrary?.readOnly !== true,
+        isLibraryAvailable: () => supportsBatchSimplification(
+            app.currentLibrary
+        ),
         isEditorBusy: () => editor.isBusy(),
         refreshSavedFile: saved => editedFileRefresh.refreshVerifiedFile(saved),
         setBusy: busy => app.toolbar.setFolderPickerBusy(busy)
     });
-    batchSimplification.attach(
-        app.trackDiscoveryCoordinator.sidebarShell
-            ?.querySelector(".sidebar-fixed-controls") ||
-        app.trackDiscoveryCoordinator.sidebarShell
-    );
+    batchSimplification.attach(sidebarFooter, {
+        before: libraryMaintenance.element
+    });
+    app.eventBus.on("library:source-changed", () => {
+        batchSimplification.refreshAvailability();
+    });
 
     driveLibrary = new DriveLibraryCoordinator({
         config: app.config.googleDrive,

@@ -11,6 +11,9 @@ export default class LibrarySettingsPanel {
 
         this.eventBus = eventBus;
         this.element = this.#create();
+        this.disclosure = this.element.querySelector(
+            ".library-settings-disclosure"
+        );
         this.status = this.element.querySelector(".library-settings-message");
         this.reloadButton = this.element.querySelector(
             ".library-settings-reload"
@@ -58,17 +61,19 @@ export default class LibrarySettingsPanel {
     #create() {
 
         const section = document.createElement("section");
-        const title = document.createElement("h4");
-        const message = document.createElement("p");
+        const disclosure = document.createElement("details");
+        const summary = document.createElement("summary");
+        const message = document.createElement("span");
         const reloadButton = document.createElement("button");
         const actions = document.createElement("div");
 
         section.className = "library-access-panel library-settings-panel";
         section.hidden = true;
-        title.className = "library-access-title";
-        title.textContent = "Shared settings";
+        disclosure.className = "library-settings-disclosure";
+        summary.className = "library-settings-summary";
         message.id = STATUS_ID;
         message.className = "library-access-message library-settings-message";
+        message.textContent = "Shared settings: Local only";
         message.setAttribute("role", "status");
         message.setAttribute("aria-live", "polite");
         message.setAttribute("aria-atomic", "true");
@@ -81,7 +86,9 @@ export default class LibrarySettingsPanel {
             this.eventBus.emit("library-settings:reload-requested");
         });
         actions.append(reloadButton);
-        section.append(title, message, actions);
+        summary.append(message);
+        disclosure.append(summary, actions);
+        section.append(disclosure);
 
         return section;
     }

@@ -72,29 +72,35 @@ async function flush(delay = 0) {
     await new Promise(resolve => setTimeout(resolve, delay));
 }
 
-function testMobileSearchDisclosure() {
+function testSearchDisclosure() {
     const eventBus = new EventBus();
     const mobileMedia = new FakeMedia(true);
     const searchView = new SearchView(eventBus, { mobileMedia });
 
     searchView.setAvailable(true);
     assert(!searchView.disclosure.open,
-        "mobile Search was not collapsed by default");
+        "Search was not collapsed by default");
     searchView.disclosure.open = true;
     searchView.disclosure.dispatchEvent(new Event("toggle"));
-    assert(searchView.mobileExpanded,
-        "mobile Search expanded state was not retained");
+    assert(searchView.expanded,
+        "Search expanded state was not retained during the session");
     searchView.setFilter({ query: "ridge", from: "", to: "" });
     assert(searchView.element.classList.contains("has-active-filter") &&
         searchView.disclosureLabel.textContent === "検索（条件あり）",
     "collapsed Search does not indicate an active filter");
     searchView.disclosure.open = false;
     searchView.disclosure.dispatchEvent(new Event("toggle"));
-    assert(searchView.disclosureLabel.textContent === "検索（条件あり）",
-        "active filter indication disappeared while collapsed");
+    assert(searchView.disclosureLabel.textContent === "検索（条件あり）" &&
+        searchView.getFilter().query === "ridge",
+    "collapsing Search cleared or obscured the active filter");
     mobileMedia.set(false);
-    assert(searchView.disclosure.open,
-        "desktop Search was left collapsed");
+    assert(!searchView.disclosure.open,
+        "viewport change overwrote the session disclosure state");
+    searchView.disclosure.open = true;
+    searchView.disclosure.dispatchEvent(new Event("toggle"));
+    assert(!searchView.input.disabled && !searchView.fromInput.disabled &&
+        !searchView.toInput.disabled && !searchView.clearButton.disabled,
+    "expanded Search controls are unavailable");
     searchView.reset();
     assert(!searchView.element.classList.contains("has-active-filter") &&
         searchView.disclosureLabel.textContent === "検索",
@@ -322,7 +328,7 @@ async function testCoordinator() {
 try {
     testSemantics();
     testStateStore();
-    testMobileSearchDisclosure();
+    testSearchDisclosure();
     await testLazyFolderProjection();
     await testCoordinator();
     output.textContent = `PASS: ${assertions} assertions`;

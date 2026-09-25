@@ -590,6 +590,8 @@ function testPanelAndDialog() {
             originalDocument.body.append(panel.element);
         }
         panel.setAvailable(true);
+        assert(!panel.disclosure.open,
+            "Shared settings are not collapsed by default");
         panel.render({
             dirty: false,
             saving: false,
@@ -599,6 +601,12 @@ function testPanelAndDialog() {
             status: "missing",
             source: "legacy-local"
         });
+        assert(panel.status.textContent.includes("保存待ち") &&
+            panel.element.contains(panel.status),
+        "Shared settings dirty status is not visible in the summary");
+        panel.disclosure.open = true;
+        assert(panel.disclosure.contains(panel.reloadButton),
+            "Shared settings reload is unavailable when expanded");
         assert(!panel.migrationButton && !panel.saveButton, "explicit save UI remained");
         panel.reloadButton.click();
         assert(!events.includes("library-settings:migrate-requested"), "manual migration event remained");
@@ -614,7 +622,10 @@ function testPanelAndDialog() {
             status: "missing",
             source: "legacy-local"
         });
-        assert(!panel.reloadButton.disabled, "conflict recovery is unavailable");
+        assert(!panel.reloadButton.disabled &&
+            panel.status.textContent.includes("Conflict") &&
+            panel.element.dataset.state === "error",
+        "Shared settings error summary or recovery is unavailable");
 
         panel.render({
             dirty: true,
