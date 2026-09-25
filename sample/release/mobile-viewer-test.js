@@ -437,16 +437,28 @@ async function run() {
     const toolbarCopy = new Toolbar("test");
     const accessCopy = new LibraryAccessPanel();
 
+    document.body.append(toolbarCopy.element, accessCopy.element);
     toolbarCopy.setMobileLayout(true);
+    toolbarCopy.element.classList.add("is-mobile-layout");
     assert(toolbarCopy.sidebarToggleButton.textContent.trim() === "" &&
         toolbarCopy.sidebarToggleButton.querySelector("svg path"),
     "mobile Library control does not use the inline SVG icon");
     assert(toolbarCopy.sidebarToggleButton.getAttribute("aria-label") ===
         "ライブラリ" && toolbarCopy.sidebarToggleButton.title === "ライブラリ",
     "mobile Library icon accessible name missing");
+    if (matchMedia(
+        "(max-width: 768px), (max-height: 500px) and (pointer: coarse)"
+    ).matches) {
+        assert(getComputedStyle(toolbarCopy.sidebarToggleButton).display !== "none",
+            "mobile Library/sidebar opener is not reachable");
+    }
     toolbarCopy.setMobileLayout(false);
+    toolbarCopy.element.classList.remove("is-mobile-layout");
     assert(toolbarCopy.sidebarToggleButton.textContent === "サイドバー",
         "desktop Sidebar presentation did not recover");
+    assert(getComputedStyle(toolbarCopy.sidebarToggleButton).display === "none" &&
+        getComputedStyle(toolbarCopy.pickFolderButton).display === "none",
+    "desktop toolbar retains duplicate Sidebar or Library controls");
 
     accessCopy.showInitial();
     assert(toolbarCopy.pickFolderButton.textContent.includes(
@@ -454,19 +466,25 @@ async function run() {
     ), "local Library action wording is unclear");
     assert(accessCopy.element.textContent.includes("端末・Files・Google Driveなど"),
         "local Library source explanation is missing");
-    assert(!accessCopy.element.querySelector(".manual-library-primary").hidden &&
-        accessCopy.previousLibraryButton.hidden,
-    "no-previous state does not prioritize device Library open");
+    assert(accessCopy.previousLibraryButton.hidden &&
+        !accessCopy.manualLibraryButton.hidden,
+    "normal Library selection is not the sole panel action");
     assert(!accessCopy.libraryChange.open,
         "Library change options expanded by default");
-    assert(!accessCopy.element.querySelector(".manual-library-secondary").hidden,
+    assert(!accessCopy.manualLibraryButton.hidden,
         "no-previous Library change route omits device open");
+    accessCopy.setFolderPickerMode("file-list");
+    accessCopy.libraryChange.open = true;
+    assert(accessCopy.manualDirectoryInput.isConnected &&
+        !accessCopy.manualDirectoryInput.hidden &&
+        getComputedStyle(accessCopy.manualDirectoryInput).display !== "none",
+    "mobile FileList Library selection is not directly reachable");
+    accessCopy.setFolderPickerMode("directory-handle");
+    accessCopy.libraryChange.open = false;
     accessCopy.showPreviousLibrary("Previous", "prompt");
-    assert(!accessCopy.previousLibraryButton.hidden &&
-        accessCopy.element.querySelector(".manual-library-primary").hidden,
-    "previous Library is not the primary action");
-    assert(!accessCopy.element.querySelector(".manual-library-secondary").hidden,
-        "device Library change action missing");
+    assert(accessCopy.previousLibraryButton.hidden &&
+        !accessCopy.manualLibraryButton.hidden,
+    "Previous Library exposed a dedicated reconnect action");
     accessCopy.setProvisionalLibrary(true);
     accessCopy.showPreviousLibrary("Previous", "prompt");
     assert(accessCopy.primaryContent.hidden &&
@@ -715,16 +733,14 @@ async function run() {
         getComputedStyle(accessCopy.libraryChange).display !== "none",
     "open Library state does not preserve compact Library change access");
     accessCopy.element.remove();
+    toolbarCopy.element.remove();
     const driveOption = document.createElement("section");
     driveOption.className = "drive-library-control";
     driveOption.textContent = "Google Driveに直接接続";
-    accessCopy.libraryChangeContainer.append(driveOption);
-    accessCopy.libraryChange.open = true;
-    assert(accessCopy.libraryChange.textContent.includes(
-        "端末からライブラリを開く"
-    ) && accessCopy.libraryChange.textContent.includes(
-        "Google Driveに直接接続"
-    ), "Library change disclosure does not contain both open routes");
+    document.body.append(driveOption);
+    assert(getComputedStyle(driveOption).display === "none",
+        "Google Drive-specific reconnect control remains visible");
+    driveOption.remove();
     assert(!themeCss.includes(".mobile-drive-diagnostic"),
         "obsolete Mobile Drive diagnostic CSS remains");
 

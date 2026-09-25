@@ -175,6 +175,8 @@ function testNativeDirectoryInputs() {
 
     document.body.append(toolbar.element, panel.element);
     toolbar.setDirectoryAction(files => { toolbarSelections += files.length; });
+    toolbar.setMobileLayout(false);
+    toolbar.element.classList.remove("is-mobile-layout");
     toolbar.setFolderPickerMode("file-list");
     toolbar.setFolderPickerState({ disabled: false });
     panel.showFileListFallback();
@@ -182,22 +184,44 @@ function testNativeDirectoryInputs() {
     panel.setFileListSession(true);
     panel.setFolderPickerState({ disabled: false });
     panel.setManualLibraryAction(files => { panelSelections += files.length; });
+    panel.libraryChange.open = true;
     const toolbarInput = toolbar.directoryInput;
-    const panelInput = panel.primaryDirectoryInput;
+    const panelInput = panel.manualDirectoryInput;
+    const panelInputStyle = getComputedStyle(panelInput);
 
-    [toolbarInput, panelInput].forEach(input => {
-        assert(input.type === "file" && input.hasAttribute("webkitdirectory") &&
-            input.multiple && input.isConnected && !input.hidden && !input.disabled,
-        "fallback control is not a direct connected directory file input");
-    });
-    assert(panel.libraryRefreshDirectory.isConnected &&
-        !panel.libraryRefreshDirectory.hidden &&
-        !panel.libraryRefreshDirectory.disabled &&
-        panel.libraryRefreshDirectory.hasAttribute("webkitdirectory") &&
-        panel.libraryRefreshDirectory.multiple,
-    "refresh is not a direct connected directory file input");
-    assert(toolbar.pickFolderButton.hidden && panel.primaryManualButton.hidden,
-        "programmatic button proxy remained visible in fallback mode");
+    assert(panelInput.type === "file" &&
+        panelInput.hasAttribute("webkitdirectory") && panelInput.multiple &&
+        panelInput.isConnected && !panelInput.hidden && !panelInput.disabled,
+    "fallback control is not a direct connected directory file input");
+    assert(panelInputStyle.opacity === "1" &&
+        panelInputStyle.pointerEvents !== "none" &&
+        panelInputStyle.position === "static",
+    "fallback directory input is not the direct interactive target");
+    assert(panelInputStyle.fontSize === "0px" &&
+        getComputedStyle(panel.element.querySelector(
+            ".manual-library-directory-label"
+        )).pointerEvents === "none",
+    "browser-native filename status is visibly exposed");
+    assert(panel.element.querySelectorAll(
+        'input[type="file"][webkitdirectory][multiple]'
+    ).length === 1 &&
+        !panel.element.querySelector(".library-refresh-directory"),
+    "Library panel exposes more than one directory picker");
+    const visiblePickerActions = [...panel.element.querySelectorAll(
+        ".manual-library-open, .manual-library-directory"
+    )].filter(element => getComputedStyle(element).display !== "none");
+
+    assert(visiblePickerActions.length === 1 &&
+        visiblePickerActions[0] === panelInput,
+    "Library change panel does not expose exactly one picker action");
+    assert(getComputedStyle(toolbar.sidebarToggleButton).display === "none" &&
+        getComputedStyle(toolbar.pickFolderButton).display === "none" &&
+        getComputedStyle(toolbarInput).display === "none",
+    "desktop toolbar still exposes duplicate Library controls");
+    assert(toolbarInput.type === "file" && toolbarInput.isConnected,
+        "hidden toolbar action/event contract was removed");
+    assert(panel.previousLibraryButton.hidden,
+        "dedicated Previous Library reconnect action remains visible");
     const selected = file("GPX/one.gpx", "<gpx></gpx>");
 
     Object.defineProperty(toolbarInput, "files", {

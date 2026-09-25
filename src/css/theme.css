@@ -477,16 +477,15 @@ body{
     line-height:1.3;
 }
 
-.manual-library-primary,
-.manual-library-secondary,
+.manual-library-open,
+.manual-library-directory-control,
 .manual-library-directory{
 
     width:100%;
 }
 
 .folder-directory-input,
-.manual-library-directory,
-.library-refresh-directory{
+.manual-library-directory{
 
     box-sizing:border-box;
 
@@ -498,25 +497,89 @@ body{
 }
 
 .folder-directory-input::file-selector-button,
-.manual-library-directory::file-selector-button,
-.library-refresh-directory::file-selector-button{
+.manual-library-directory::file-selector-button{
 
     min-height:32px;
 
     cursor:pointer;
 }
 
-.library-refresh-directory-control{
+.manual-library-directory-control{
 
-    display:grid;
+    position:relative;
 
-    gap:4px;
+    min-height:36px;
+}
 
-    margin-top:4px;
+.manual-library-directory{
 
-    color:#667085;
+    min-height:36px;
 
-    font-size:11px;
+    padding:0;
+
+    border:0;
+
+    color:transparent;
+
+    font-size:0;
+}
+
+.manual-library-directory::file-selector-button{
+
+    width:100%;
+
+    margin:0;
+
+    border:1px solid buttonborder;
+
+    border-radius:2px;
+
+    color:transparent;
+
+    font-size:0;
+}
+
+.manual-library-directory-label{
+
+    position:absolute;
+
+    inset:0;
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    color:buttontext;
+
+    font-size:13.3333px;
+
+    pointer-events:none;
+}
+
+.manual-library-directory-control:focus-within{
+
+    outline:2px solid Highlight;
+
+    outline-offset:2px;
+}
+
+.manual-library-directory-control[hidden]{
+
+    display:none;
+}
+
+.toolbar:not(.is-mobile-layout) #toggle-sidebar,
+.toolbar #pick-folder,
+.toolbar #pick-folder-directory{
+
+    display:none;
+}
+
+.drive-library-control{
+
+    display:none;
 }
 
 .library-change{
@@ -556,14 +619,6 @@ body{
     color:#667085;
 
     font-size:11px;
-}
-
-@media (min-width:769px){
-
-    .manual-library-primary{
-
-        display:none;
-    }
 }
 
 .sidebar-resize-handle{
@@ -2061,13 +2116,6 @@ body.is-track-info-resizing{
     display:none;
 }
 
-.drive-library-control{
-
-    display:grid;
-
-    gap:0.35rem;
-}
-
 .drive-library-open{
 
     width:100%;
@@ -2310,7 +2358,7 @@ body.is-track-info-resizing{
     }
 
     .manual-library-directory,
-    .library-refresh-directory{
+    .manual-library-directory-control{
 
         min-height:44px;
     }

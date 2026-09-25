@@ -1856,15 +1856,14 @@ function testPreviousLibraryPanel() {
 
     panel.setPreviousLibraryAction(() => { requests += 1; });
     panel.showPreviousLibrary("Previous", "granted");
-    assert(!panel.previousLibraryButton.hidden,
-        "granted previous Library button hidden before auto restore");
+    assert(panel.previousLibraryButton.hidden && !panel.manualLibraryButton.hidden,
+        "Previous Library exposed a dedicated reconnect action");
     panel.showPreviousLibrary("Previous", "prompt");
-    assert(!panel.previousLibraryButton.hidden, "previous Library button hidden");
+    assert(panel.previousLibraryButton.hidden,
+        "previous Library reconnect action became visible");
     assert(panel.previousLibraryButton.type === "button", "previous button type");
-    assert(panel.previousLibraryButton.getAttribute("aria-label").includes("Previous"),
-        "previous button accessible name");
     panel.previousLibraryButton.click();
-    assert(requests === 1, "previous Library explicit action missing");
+    assert(requests === 1, "internal previous Library action was removed");
     panel.showInitial();
     assert(panel.previousLibraryButton.hidden, "previous button remained visible");
     panel.setPreviousLibraryStatus("saved / granted");
@@ -1872,8 +1871,7 @@ function testPreviousLibraryPanel() {
     assert(!panel.element.hidden, "persistence status hidden with panel content");
     assert(panel.primaryContent.hidden,
         "successful restore retained primary Library content");
-    assert(panel.previousLibraryButton.hidden &&
-        panel.element.querySelector(".manual-library-primary").hidden,
+    assert(panel.previousLibraryButton.hidden,
     "successful restore retained a duplicate primary action");
     assert(!panel.libraryChange.hidden && !panel.libraryChange.open,
         "successful restore removed compact Library change access");
@@ -1886,7 +1884,7 @@ function testPreviousLibraryPanel() {
     assert(!panel.primaryContent.hidden && !panel.libraryChange.hidden,
         "Library recovery UI did not restore primary and change actions");
     panel.showLoadFailure();
-    assert(!panel.element.querySelector(".manual-library-primary").hidden &&
+    assert(!panel.manualLibraryButton.hidden &&
         !panel.libraryChange.hidden,
     "restore failure did not recover manual and change Library actions");
     assert(panel.previousLibraryStatus.textContent.endsWith("saved / granted"),
