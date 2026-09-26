@@ -83,6 +83,9 @@ function run() {
     const store = new ViewStateStore({ ...Config.viewState, storage });
     const mapView = new MapView(Config, eventBus);
 
+    mapView.element.style.width = "900px";
+    mapView.element.style.height = "400px";
+    document.body.append(mapView.element);
     createCoordinator(eventBus, mapView, store);
     eventBus.on("map:display-mode-changed", ({ mode }) => {
         mapView.setMapDisplayMode(mode);
@@ -185,6 +188,56 @@ function run() {
     assert(mapView.element.querySelector(".base-map-select").options.length === 2,
         "base map selector exposes an unsupported provider");
 
+    const toolbar = mapView.element.querySelector(".map-toolbar");
+    const toolbarControls = [...toolbar.children];
+    const toolbarBounds = toolbar.getBoundingClientRect();
+
+    assert(toolbarControls.length === 4 &&
+        toolbar.querySelector(".base-map-control") &&
+        toolbar.querySelector(".map-mode-control") &&
+        toolbar.querySelector(".waypoint-toggle") &&
+        toolbar.querySelector(".map-clear"),
+    "desktop Map toolbar does not contain the four existing controls");
+    assert(toolbar.querySelector(".base-map-control .map-toolbar-label")
+        ?.textContent === "地図" &&
+        toolbar.querySelector(".map-mode-control .map-toolbar-label")
+            ?.textContent === "表示",
+    "desktop Map toolbar retained ambiguous visible labels");
+    assert(getComputedStyle(toolbar).display === "flex" &&
+        getComputedStyle(toolbar).borderTopStyle === "solid" &&
+        toolbarControls.every(control => {
+            const bounds = control.getBoundingClientRect();
+            return bounds.left >= toolbarBounds.left - 1 &&
+                bounds.right <= toolbarBounds.right + 1 &&
+                bounds.top >= toolbarBounds.top - 1 &&
+                bounds.bottom <= toolbarBounds.bottom + 1;
+        }),
+    "desktop Map controls do not share one bounded toolbar");
+
+    const baseMapSelect = toolbar.querySelector(".base-map-select");
+    const displayModeSelect = toolbar.querySelector(".map-mode-select");
+    let waypointVisible = null;
+    let clearRequests = 0;
+
+    eventBus.on("map:waypoint-visibility-toggled", ({ visible }) => {
+        waypointVisible = visible;
+    });
+    eventBus.on("map:clear-requested", () => { clearRequests += 1; });
+    baseMapSelect.value = "osm";
+    baseMapSelect.dispatchEvent(new Event("change"));
+    displayModeSelect.value = "monochrome";
+    displayModeSelect.dispatchEvent(new Event("change"));
+    toolbar.querySelector(".waypoint-toggle input").checked = true;
+    toolbar.querySelector(".waypoint-toggle input").dispatchEvent(
+        new Event("change")
+    );
+    toolbar.querySelector(".map-clear").click();
+    assert(mapView.getBaseMap() === "osm" &&
+        mapView.getMapDisplayMode() === "monochrome" &&
+        waypointVisible === true && clearRequests === 1,
+    "desktop Map toolbar no longer uses the existing behavior paths");
+    eventBus.emit("map:display-mode-changed", { mode: "color" });
+
     const mobileBaseMap = mapView.element.querySelector(
         ".mobile-base-map-toggle"
     );
@@ -216,13 +269,8 @@ function run() {
     assert(mobileBaseMap.querySelector("svg") && mobileMapMode.querySelector("svg"),
         "mobile map toggles do not use inline SVG icons");
 
-    let waypointVisible = null;
-    let clearRequests = 0;
-
-    eventBus.on("map:waypoint-visibility-toggled", ({ visible }) => {
-        waypointVisible = visible;
-    });
-    eventBus.on("map:clear-requested", () => { clearRequests += 1; });
+    waypointVisible = null;
+    clearRequests = 0;
     const sidebarWaypoint = mapView.sidebarDisplayControls.querySelector("input");
 
     sidebarWaypoint.checked = true;

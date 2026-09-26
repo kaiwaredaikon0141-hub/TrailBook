@@ -768,14 +768,14 @@ export default class MapView {
         section.innerHTML = `
             <div class="map-toolbar">
                 <label class="base-map-control">
-                    <span>背景:</span>
+                    <span class="map-toolbar-label">地図</span>
                     <select class="base-map-select" aria-label="背景地図">
                         <option value="osm">OSM</option>
                         <option value="gsiStandard">地理院 標準</option>
                     </select>
                 </label>
                 <label class="map-mode-control">
-                    <span>Map:</span>
+                    <span class="map-toolbar-label">表示</span>
                     <select class="map-mode-select" aria-label="背景地図の表示モード">
                         <option value="color">Color</option>
                         <option value="monochrome">Monochrome</option>
@@ -783,7 +783,7 @@ export default class MapView {
                 </label>
                 <label class="waypoint-toggle">
                     <input type="checkbox" aria-label="Waypointを表示">
-                    <span>Waypointを表示</span>
+                    <span>Waypoint</span>
                 </label>
                 <button class="map-clear" type="button">表示をクリア</button>
             </div>
