@@ -74,8 +74,14 @@ function fixture({
     const coordinator = new AppUpdateCoordinator({
         panel,
         serviceWorkerRegistration: registration,
+        registerServiceWorker: async () => registration,
         navigatorObject: { serviceWorker },
-        locationObject: { href: scope, reload() {} },
+        locationObject: {
+            href: scope,
+            hostname: new URL(scope).hostname,
+            reload() {}
+        },
+        secureContext: true,
         cacheStorage: {
             async keys() { return cacheNames; },
             async delete(name) { deleted.push(name); return true; }
@@ -105,6 +111,8 @@ async function testLatestAndNoAutostart() {
     const test = fixture();
 
     test.coordinator.attach();
+    assert(!test.panel.appUpdateButton.disabled,
+        "current deployed build update action was disabled");
     assert(test.registration.updateCalls === 0,
         "attach automatically checked for an update");
     assert(await test.coordinator.update() === false,
@@ -113,8 +121,22 @@ async function testLatestAndNoAutostart() {
         "button path did not call registration.update once");
     assert(test.panel.appUpdateStatus.textContent === "最新版です。",
         "latest status missing");
+    assert(!test.panel.appUpdateButton.disabled,
+        "latest result left the update action disabled");
     assert(test.deleted.length === 0 && test.reloads.length === 0,
         "latest check changed the app shell");
+}
+
+async function testDeployedStaleBuildAvailability() {
+    const test = fixture({
+        runtimeBuild: "11111111",
+        networkBuild: "22222222"
+    });
+
+    assert(test.coordinator.attach(),
+        "stale deployed build update action was not attached");
+    assert(!test.panel.appUpdateButton.disabled,
+        "stale deployed build update action was disabled");
 }
 
 async function testLocalDevelopmentAvailability() {
@@ -152,6 +174,17 @@ async function testWaitingActivation() {
     assert(test.reloads.length === 1, "controllerchange did not reload once");
     test.serviceWorker.dispatch("controllerchange");
     assert(test.reloads.length === 1, "controllerchange reloaded twice");
+}
+
+async function testUnsupportedAvailability() {
+    const test = fixture();
+
+    test.coordinator.navigatorObject = {};
+    assert(test.coordinator.attach() === false,
+        "unsupported update action was attached");
+    assert(test.panel.appUpdateButton.disabled &&
+        test.panel.appUpdateStatus.textContent.includes("利用できません"),
+    "unsupported update action did not explain its disabled state");
 }
 
 async function testInstallingActivation() {
@@ -205,6 +238,32 @@ async function testSlowInstallationUsesInstallDeadline() {
         "slow app-shell install did not reload exactly once");
 }
 
+async function testTimeoutsRemainRetryable() {
+    const installWorker = new Worker("installing");
+    const installTimeout = fixture({
+        worker: installWorker,
+        installTimeoutMs: 10
+    });
+
+    installTimeout.coordinator.attach();
+    assert(!await installTimeout.coordinator.update(),
+        "install timeout was reported successful");
+    assert(!installTimeout.panel.appUpdateButton.disabled,
+        "install timeout left the update action disabled");
+
+    const installedWorker = new Worker("installed");
+    const activationTimeout = fixture({
+        worker: installedWorker,
+        timeoutMs: 10
+    });
+
+    activationTimeout.coordinator.attach();
+    assert(!await activationTimeout.coordinator.update(),
+        "controller-change timeout was reported successful");
+    assert(!activationTimeout.panel.appUpdateButton.disabled,
+        "controller-change timeout left the update action disabled");
+}
+
 async function testNewInstallingWorkerSupersedesOldWaitingWorker() {
     let serviceWorker;
     const oldWaiting = new Worker("installed");
@@ -248,6 +307,8 @@ async function testFailureAndOfflineSafety() {
     assert(updateFailure.deleted.length === 0 &&
         updateFailure.getUnregisters() === 0,
     "registration failure deleted the working shell");
+    assert(!updateFailure.panel.appUpdateButton.disabled,
+        "registration failure left the update action disabled");
 
     const offline = fixture({
         fetchError: new Error("offline"),
@@ -261,6 +322,8 @@ async function testFailureAndOfflineSafety() {
     "offline check removed the working app shell");
     assert(offline.panel.appUpdateStatus.textContent === "更新できませんでした。",
         "offline error feedback missing");
+    assert(!offline.panel.appUpdateButton.disabled,
+        "recoverable network failure left the update action disabled");
 
     const invalidMetadata = fixture({ networkBody: "invalid build metadata" });
 
@@ -272,10 +335,60 @@ async function testFailureAndOfflineSafety() {
     "update failure diagnostic did not identify the failing stage");
 }
 
+async function testTransientRegistrationRetry() {
+    const test = fixture();
+    let lookupCalls = 0;
+    let registrationCalls = 0;
+
+    test.coordinator.serviceWorkerRegistration = Promise.reject(
+        new Error("initial registration failed")
+    );
+    test.coordinator.navigatorObject.serviceWorker.getRegistration = async () => {
+        lookupCalls += 1;
+        if (lookupCalls === 1) throw new Error("lookup failed");
+        return test.registration;
+    };
+    test.coordinator.registerServiceWorker = async () => {
+        registrationCalls += 1;
+        return test.registration;
+    };
+    test.coordinator.attach();
+
+    assert(!await test.coordinator.update(),
+        "transient registration failure was reported successful");
+    assert(!test.panel.appUpdateButton.disabled,
+        "transient registration failure permanently disabled retry");
+    assert(await test.coordinator.update() === false,
+        "registration retry did not reach the latest-build result");
+    assert(lookupCalls === 2 && registrationCalls === 0,
+        "registration retry did not use the exact existing TrailBook scope");
+}
+
+async function testMissingRegistrationCanRecover() {
+    const test = fixture();
+    let registerCalls = 0;
+
+    test.coordinator.serviceWorkerRegistration = null;
+    test.coordinator.navigatorObject.serviceWorker.getRegistration =
+        async () => null;
+    test.coordinator.registerServiceWorker = async () => {
+        registerCalls += 1;
+        return test.registration;
+    };
+    test.coordinator.attach();
+
+    assert(await test.coordinator.update() === false && registerCalls === 1,
+        "missing deployed registration was not recovered safely");
+    assert(!test.panel.appUpdateButton.disabled,
+        "recovered registration left the update action disabled");
+}
+
 async function testScopedFallback() {
     const test = fixture({
         networkBuild: "22222222",
         runtimeBuild: "11111111",
+        networkBody:
+            'window.TRAILBOOK_BUILD = Object.freeze({commit:"22222222"});',
         cacheNames: [
             "trailbook-app-shell-old",
             "trailbook-app-shell-current",
@@ -322,12 +435,17 @@ async function testConcurrencyAndPanelLifecycle() {
 
 async function run() {
     await testLatestAndNoAutostart();
+    await testDeployedStaleBuildAvailability();
     await testLocalDevelopmentAvailability();
+    await testUnsupportedAvailability();
     await testWaitingActivation();
     await testInstallingActivation();
     await testSlowInstallationUsesInstallDeadline();
+    await testTimeoutsRemainRetryable();
     await testNewInstallingWorkerSupersedesOldWaitingWorker();
     await testFailureAndOfflineSafety();
+    await testTransientRegistrationRetry();
+    await testMissingRegistrationCanRecover();
     await testScopedFallback();
     await testConcurrencyAndPanelLifecycle();
 
@@ -340,6 +458,14 @@ async function run() {
     assert(!source.includes("caches.clear") &&
         source.includes('startsWith(APP_SHELL_CACHE_PREFIX)'),
     "app-shell fallback cache scope is not explicit");
+
+    const mainSource = await fetch("../../src/js/main.js")
+        .then(response => response.text());
+    assert(
+        mainSource.indexOf("appUpdateCoordinator.attach()") <
+            mainSource.indexOf("new TrackSourceResolver"),
+        "manual update recovery is initialized after optional startup work"
+    );
 
     const panel = new LibraryMaintenancePanel({ emit() {} });
     document.querySelector(".sidebar").append(panel.element);

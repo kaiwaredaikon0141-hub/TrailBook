@@ -1,5 +1,9 @@
 import { RUNTIME_BUILD_ID } from "../runtime/RuntimeBuild.js";
-import { isLocalDevelopmentLocation } from "../services/PWAServiceWorker.js";
+import {
+    isLocalDevelopmentLocation,
+    isServiceWorkerLocationAllowed,
+    registerTrailBookServiceWorker
+} from "../services/PWAServiceWorker.js";
 
 const APP_SHELL_CACHE_PREFIX = "trailbook-app-shell-";
 const BUILD_PATTERN = /["']?commit["']?\s*:\s*["']([0-9a-f]{7,40}|local)["']/i;
@@ -17,8 +21,10 @@ export default class AppUpdateCoordinator {
     constructor({
         panel,
         serviceWorkerRegistration = null,
+        registerServiceWorker = () => registerTrailBookServiceWorker(),
         navigatorObject = globalThis.navigator,
         locationObject = globalThis.location,
+        secureContext = globalThis.isSecureContext,
         cacheStorage = globalThis.caches,
         fetchFunction = globalThis.fetch?.bind(globalThis),
         runtimeBuildIdentifier = RUNTIME_BUILD_ID,
@@ -30,8 +36,10 @@ export default class AppUpdateCoordinator {
 
         this.panel = panel;
         this.serviceWorkerRegistration = serviceWorkerRegistration;
+        this.registerServiceWorker = registerServiceWorker;
         this.navigatorObject = navigatorObject;
         this.locationObject = locationObject;
+        this.secureContext = secureContext;
         this.cacheStorage = cacheStorage;
         this.fetchFunction = fetchFunction;
         this.runtimeBuildIdentifier = buildId(runtimeBuildIdentifier);
@@ -48,6 +56,17 @@ export default class AppUpdateCoordinator {
         if (isLocalDevelopmentLocation(this.locationObject)) {
             this.panel?.setAppUpdateHandler?.(null);
             this.panel?.setAppUpdateState?.("local");
+            return false;
+        }
+        if (
+            !this.navigatorObject?.serviceWorker ||
+            !isServiceWorkerLocationAllowed(
+                this.locationObject,
+                this.secureContext
+            )
+        ) {
+            this.panel?.setAppUpdateHandler?.(null);
+            this.panel?.setAppUpdateState?.("unsupported");
             return false;
         }
 
@@ -73,6 +92,7 @@ export default class AppUpdateCoordinator {
             if (!registration?.update) {
                 throw new Error("Application updates are unavailable.");
             }
+            this.#assertTrailBookScope(registration);
 
             let discoveredWorker = null;
             const onUpdateFound = () => {
@@ -130,7 +150,21 @@ export default class AppUpdateCoordinator {
         if (supplied) return supplied;
 
         const scope = new URL("./", this.locationObject.href).href;
-        return this.navigatorObject?.serviceWorker?.getRegistration?.(scope) || null;
+        const existing = await this.navigatorObject?.serviceWorker
+            ?.getRegistration?.(scope);
+
+        if (existing) return existing;
+
+        return this.registerServiceWorker?.() || null;
+    }
+
+    #assertTrailBookScope(registration) {
+
+        const expectedScope = new URL("./", this.locationObject.href).href;
+
+        if (registration.scope !== expectedScope) {
+            throw new Error("Service Worker scope does not match TrailBook.");
+        }
     }
 
     async #activateWorker(registration, worker) {
@@ -231,11 +265,7 @@ export default class AppUpdateCoordinator {
 
     async #refreshAppShell(registration) {
 
-        const expectedScope = new URL("./", this.locationObject.href).href;
-
-        if (registration.scope !== expectedScope) {
-            throw new Error("Service Worker scope does not match TrailBook.");
-        }
+        this.#assertTrailBookScope(registration);
 
         this.panel?.setAppUpdateState?.("reloading");
         const cacheNames = await this.cacheStorage?.keys?.() || [];

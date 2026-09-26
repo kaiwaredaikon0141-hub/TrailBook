@@ -90,6 +90,7 @@ export default class LibraryMaintenancePanel {
             updating: "更新しています…",
             reloading: "再読み込みします…",
             local: "ローカル版は再読み込みで更新されます。",
+            unsupported: "この環境ではアプリ更新を利用できません。",
             failed: "更新できませんでした。"
         };
 

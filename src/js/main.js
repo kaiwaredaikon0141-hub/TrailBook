@@ -50,6 +50,15 @@ window.addEventListener("DOMContentLoaded", () => {
     const app = new App();
 
     app.initialize();
+    const libraryMaintenance = new LibraryMaintenancePanel(app.eventBus);
+    const serviceWorkerRegistration = registerTrailBookServiceWorker();
+    const appUpdateCoordinator = new AppUpdateCoordinator({
+        panel: libraryMaintenance,
+        serviceWorkerRegistration,
+        registerServiceWorker: () => registerTrailBookServiceWorker()
+    });
+
+    appUpdateCoordinator.attach();
     const trackSourceResolver = new TrackSourceResolver({
         catalog: app.libraryTrackCatalogCoordinator.catalog,
         getLibraryIdentity: () => app.gpxGeometryLoader.namespace
@@ -121,7 +130,6 @@ window.addEventListener("DOMContentLoaded", () => {
     void offlineMapsController.attach();
     void offlineMapPackagesController.attach();
     const libraryDiagnostics = new LibraryDiagnosticsPanel();
-    const libraryMaintenance = new LibraryMaintenancePanel(app.eventBus);
 
     libraryMaintenance.attachViewStateControls(app.viewStateControls);
     const buildInfo = createBuildInfoElement();
@@ -474,13 +482,6 @@ window.addEventListener("DOMContentLoaded", () => {
         app.libraryAccessPanel.libraryChangeContainer
     );
 
-    const serviceWorkerRegistration = registerTrailBookServiceWorker();
-    const appUpdateCoordinator = new AppUpdateCoordinator({
-        panel: libraryMaintenance,
-        serviceWorkerRegistration
-    });
-
-    appUpdateCoordinator.attach();
     resolveBuildInfoElements([buildInfo, developmentBuildInfo, mapBuildInfo], {
         serviceWorkerRegistration
     });
