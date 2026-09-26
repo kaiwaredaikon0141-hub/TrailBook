@@ -200,6 +200,100 @@ function createMobileSidebarProbe(trackCount = 1122) {
     };
 }
 
+function testSidebarVisualHierarchy() {
+    const probe = document.createElement("section");
+
+    probe.innerHTML = `
+        <div class="discovery-mode-switch" aria-label="Library表示">
+            <button type="button" aria-pressed="true">Folder</button>
+            <button type="button" aria-pressed="false">Date</button>
+        </div>
+        <section class="offline-maps-panel">
+            <details class="offline-maps-disclosure">
+                <summary>Offline Maps</summary>
+            </details>
+        </section>
+        <div class="tree-row folder-row">
+            <input class="folder-display-toggle" type="checkbox">
+            <span class="tree-icon"></span>
+            <span class="tree-label">Folder</span>
+            <button class="folder-color-control" type="button">
+                <span class="folder-color-swatch"></span>
+                <span class="folder-color-mode">Explicit</span>
+            </button>
+            <span class="folder-color-readonly is-source-readonly">
+                <span class="folder-color-readonly-swatch"></span>
+                <span class="folder-color-readonly-mode">Auto</span>
+            </span>
+        </div>
+        <details class="track-tools-disclosure"><summary class="track-tools-summary">Track tools</summary></details>
+        <details class="library-maintenance-disclosure"><summary>Maintenance</summary></details>
+        <details class="library-diagnostics-disclosure"><summary>About / Diagnostics</summary></details>
+        <footer class="statusbar">表示中: 1130 GPX</footer>`;
+    document.body.append(probe);
+
+    const modes = probe.querySelector(".discovery-mode-switch");
+    const modeButtons = [...modes.querySelectorAll("button")];
+    const modeBounds = modeButtons.map(button => button.getBoundingClientRect());
+    let modeActions = 0;
+
+    modeButtons.forEach(button => button.addEventListener(
+        "click", () => { modeActions += 1; }
+    ));
+    modeButtons.forEach(button => button.click());
+    assert(getComputedStyle(modes).display === "grid" &&
+        getComputedStyle(modes).gap === "0px" &&
+        Math.abs(modeBounds[0].width - modeBounds[1].width) <= 1,
+    "Folder/Date is not one equal-width segmented control");
+    assert(getComputedStyle(modeButtons[0]).backgroundColor !==
+        getComputedStyle(modeButtons[1]).backgroundColor && modeActions === 2,
+    "Folder/Date selected presentation or actions regressed");
+
+    const offline = probe.querySelector(".offline-maps-disclosure");
+
+    assert(!offline.open &&
+        offline.querySelector("summary").getBoundingClientRect().height <= 44,
+    "Offline Maps disclosure is not initially compact and collapsed");
+    offline.querySelector("summary").click();
+    assert(offline.open, "Offline Maps disclosure no longer operates");
+
+    const colorControl = probe.querySelector(".folder-color-control");
+    const readonlyColor = probe.querySelector(".folder-color-readonly");
+
+    assert(colorControl.textContent.includes("Explicit") &&
+        readonlyColor.textContent.includes("Auto") &&
+        colorControl.querySelector(".folder-color-swatch") &&
+        readonlyColor.querySelector(".folder-color-readonly-swatch"),
+    "Folder color metadata lost its mode or swatch");
+    assert(readonlyColor.tagName === "SPAN" &&
+        !readonlyColor.hasAttribute("role") &&
+        getComputedStyle(readonlyColor).borderRadius !== "0px",
+    "read-only Folder color metadata became interactive or lost badge styling");
+
+    const utilitySummaries = [...probe.querySelectorAll(
+        ".track-tools-summary, .library-maintenance-disclosure > summary, " +
+        ".library-diagnostics-disclosure > summary"
+    )];
+    const utilityHeights = utilitySummaries.map(summary =>
+        summary.getBoundingClientRect().height
+    );
+
+    assert(utilityHeights.every(height =>
+        Math.abs(height - utilityHeights[0]) <= 1
+    ), "lower utility disclosures do not share one row geometry");
+    utilitySummaries.forEach(summary => summary.click());
+    assert(utilitySummaries.every(summary => summary.parentElement.open),
+        "lower utility disclosures are not independently operable");
+
+    const status = probe.querySelector(".statusbar");
+
+    assert(status.textContent.includes("1130 GPX") &&
+        getComputedStyle(status).borderTopStyle === "solid" &&
+        getComputedStyle(status).display === "flex",
+    "GPX status footer lost its count or status-bar presentation");
+    probe.remove();
+}
+
 async function testLargeColorProjection() {
     const trackCount = 1050;
     const element = document.createElement("aside");
@@ -266,6 +360,7 @@ async function testLargeColorProjection() {
 
 async function run() {
     testLeafletZoomPresentation();
+    testSidebarVisualHierarchy();
     const media = new FakeMedia(false);
     const fixture = createFixture(media);
 
