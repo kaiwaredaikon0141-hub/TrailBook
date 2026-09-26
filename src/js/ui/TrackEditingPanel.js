@@ -25,17 +25,11 @@ export default class TrackEditingPanel {
         this.candidateFileName = this.element.querySelector(".editor-candidate-filename");
         this.renameCheckbox = this.element.querySelector(".editor-rename-by-date");
         this.renameStatus = this.element.querySelector(".editor-rename-status");
-        this.translationMode = this.element.querySelector(
-            ".editor-translation-mode"
-        );
         this.translationNorth = this.element.querySelector(
             ".editor-translation-north"
         );
         this.translationEast = this.element.querySelector(
             ".editor-translation-east"
-        );
-        this.pointEditingMode = this.element.querySelector(
-            ".editor-point-editing-mode"
         );
         this.pointEditingStatus = this.element.querySelector(
             ".editor-point-editing-status"
@@ -145,25 +139,10 @@ export default class TrackEditingPanel {
             ?.value || "off";
     }
 
-    getTranslationMode() {
-
-        return Boolean(this.translationMode.checked);
-    }
-
-    getPointEditingMode() {
-
-        return Boolean(this.pointEditingMode.checked);
-    }
-
     getPointAddMode() {
 
         return this.actionButtons.get("point-add-mode")
             ?.getAttribute("aria-pressed") === "true";
-    }
-
-    setPointEditingMode(enabled) {
-
-        this.pointEditingMode.checked = Boolean(enabled);
     }
 
     setPointAddMode(enabled) {
@@ -173,11 +152,6 @@ export default class TrackEditingPanel {
         button?.setAttribute("aria-pressed", String(Boolean(enabled)));
     }
 
-    setTranslationMode(enabled) {
-
-        this.translationMode.checked = Boolean(enabled);
-    }
-
     configurePointEditing({
         enabled = false,
         selected = null,
@@ -185,7 +159,6 @@ export default class TrackEditingPanel {
         addMode = this.getPointAddMode()
     } = {}) {
 
-        this.pointEditingMode.checked = Boolean(enabled);
         this.pointEditingStatus.textContent = selected
             ? selected.addedPointId
                 ? `追加point選択中 (${selected.addedPointId})`
@@ -199,9 +172,7 @@ export default class TrackEditingPanel {
 
     configureTranslation({
         northMeters = 0,
-        eastMeters = 0,
-        pending = false,
-        canApply = pending
+        eastMeters = 0
     } = {}) {
 
         this.translationNorth.textContent = this.#formatDirection(
@@ -214,7 +185,6 @@ export default class TrackEditingPanel {
             "東",
             "西"
         );
-        this.actionButtons.get("apply").disabled = !canApply;
     }
 
     getSaveButton() {
@@ -535,13 +505,11 @@ export default class TrackEditingPanel {
                         <dt>距離差</dt><dd data-editor-metric="distanceDifference"></dd>
                         <dt>最大形状差</dt><dd data-editor-metric="maxDeviation"></dd>
                     </dl>
+                    <button type="button" data-editor-action="apply">Apply</button>
                 </fieldset>
                 <fieldset class="editor-point-editing">
                     <legend>ポイント編集</legend>
-                    <label>
-                        <input class="editor-point-editing-mode" type="checkbox">
-                        After Trackのポイントを選択・移動
-                    </label>
+                    <p>After Trackのポイントを直接選択・移動</p>
                     <span class="editor-point-editing-status" role="status"
                         aria-live="polite"></span>
                     <button type="button" data-editor-action="point-selection-clear">
@@ -557,10 +525,7 @@ export default class TrackEditingPanel {
                 </fieldset>
                 <fieldset class="editor-translation">
                     <legend>トラック移動</legend>
-                    <label>
-                        <input class="editor-translation-mode" type="checkbox">
-                        地図上でAfter Trackをドラッグ
-                    </label>
+                    <p>After Track線をドラッグして移動</p>
                     <p>
                         北/南: <span class="editor-translation-north">0.0 m</span><br>
                         東/西: <span class="editor-translation-east">0.0 m</span>
@@ -571,7 +536,6 @@ export default class TrackEditingPanel {
                 <p class="editor-status" role="status" aria-live="polite"></p>
                 <p class="editor-backup-status"></p>
                 <div class="editor-actions">
-                    <button type="button" data-editor-action="apply">Apply</button>
                     <button type="button" data-editor-action="undo">Undo</button>
                     <button type="button" data-editor-action="redo">Redo</button>
                     <button type="button" data-editor-action="save">
@@ -620,10 +584,6 @@ export default class TrackEditingPanel {
                 this.#emit("point-mode", event.target.value);
             } else if (event.target.classList.contains("editor-rename-by-date")) {
                 this.#emit("filename-toggle", event.target.checked);
-            } else if (event.target.classList.contains("editor-translation-mode")) {
-                this.#emit("translation-mode", event.target.checked);
-            } else if (event.target.classList.contains("editor-point-editing-mode")) {
-                this.#emit("point-editing-mode", event.target.checked);
             }
         });
         this.element.addEventListener("keydown", event => {

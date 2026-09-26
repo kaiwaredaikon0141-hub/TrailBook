@@ -218,7 +218,8 @@ async function testPreviewAndHistory() {
         "preview-only tolerance result entered history");
     assert(session.getRetainedPointMasks()[0][0].join() === "true,true,true",
         "preview mutated working state");
-    assert(session.applyPreview(), "changed preview was not applied");
+    assert(session.applySimplificationPreview(),
+        "changed simplification preview was not applied");
     assert(!session.hasPreview, "applied preview was not cleared");
     assert(session.historyLength === 1 && session.canUndo,
         "Apply did not create one command");
@@ -232,7 +233,7 @@ async function testPreviewAndHistory() {
         "Redo did not restore simplified mask");
 
     session.setPreview(await service.createPreview(source, 20));
-    assert(!session.applyPreview(),
+    assert(!session.applySimplificationPreview(),
         "same retained result created a redundant Apply command");
     assert(session.historyLength === 1,
         "same retained result increased history length");

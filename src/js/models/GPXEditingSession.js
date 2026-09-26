@@ -242,6 +242,62 @@ export default class GPXEditingSession {
         return true;
     }
 
+    applySimplificationPreview() {
+
+        this.#assertActive();
+        if (!this.#preview) return false;
+
+        const nextMasks = this.#preview.retainedPointMasks;
+
+        if (this.#masksEqual(this.#retainedPointMasks, nextMasks)) {
+            this.#preview = null;
+            return false;
+        }
+        if (
+            this.#deletedPoints.length > 0 &&
+            !this.#segmentsRemainValid(nextMasks)
+        ) {
+            this.#preview = null;
+            return false;
+        }
+
+        this.#history.record({
+            type: "simplify",
+            before: this.#snapshot(),
+            after: this.#snapshot(nextMasks)
+        });
+        this.#retainedPointMasks = this.#cloneMasks(nextMasks);
+        this.#preview = null;
+        return true;
+    }
+
+    applyTranslationPreview() {
+
+        this.#assertActive();
+        if (!this.#translationPreview) return false;
+
+        const nextTranslation = this.#translationPreview;
+
+        if (this.#translationEqual(this.#translation, nextTranslation)) {
+            this.#translationPreview = null;
+            return false;
+        }
+
+        this.#history.record({
+            type: "translate",
+            before: this.#snapshot(),
+            after: this.#snapshot(
+                this.#retainedPointMasks,
+                this.#timeOffsetMs,
+                this.#desiredFileName,
+                nextTranslation
+            )
+        });
+        this.#translation = this.#translationService.normalize(nextTranslation);
+        this.#translationPreview = null;
+        return true;
+    }
+
     applyRetainedPointMasks(masks, type = "edit") {
 
         this.#assertActive();

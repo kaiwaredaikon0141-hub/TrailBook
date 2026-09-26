@@ -9,6 +9,7 @@ import TrackTranslationService, {
 
 const PREVIEW_MODES = new Set(["before", "after", "both"]);
 const POINT_MODES = new Set(["off", "before", "after", "both"]);
+const TRANSLATION_DRAG_THRESHOLD_PX = 4;
 
 const BEFORE_STYLE = Object.freeze({
     color: "#374151",
@@ -57,7 +58,8 @@ const POINT_EDIT_TARGET_STYLE = Object.freeze({
     fillColor: "#2563eb",
     fillOpacity: 0.7,
     interactive: true,
-    bubblingMouseEvents: false
+    bubblingMouseEvents: false,
+    className: "track-edit-point-target"
 });
 
 const SELECTED_POINT_STYLE = Object.freeze({
@@ -119,6 +121,7 @@ export default class EditingPreviewLayerManager {
         this.translation = ZERO_TRACK_TRANSLATION;
         this.translationMode = false;
         this.translationHandler = null;
+        this.translationCommitHandler = null;
         this.dragState = null;
         this.translationService = translationService;
         this.pointEditingService = pointEditingService;
@@ -139,7 +142,6 @@ export default class EditingPreviewLayerManager {
         this.pointAddCursorActive = false;
         this.pointAddPreviousCursor = "";
         this.pointDragState = null;
-        this.wasDraggingEnabled = false;
         this.pointRenderer = L.canvas({
             padding: 0.5,
             pane: "trailbook-edit-after-points"
@@ -303,6 +305,13 @@ export default class EditingPreviewLayerManager {
             : null;
     }
 
+    setTranslationCommitHandler(handler) {
+
+        this.translationCommitHandler = typeof handler === "function"
+            ? handler
+            : null;
+    }
+
     setPointSelectionHandler(handler) {
 
         this.pointSelectionHandler = typeof handler === "function"
@@ -332,7 +341,6 @@ export default class EditingPreviewLayerManager {
         const next = Boolean(enabled);
 
         if (next === this.pointEditingMode) return true;
-        if (next) this.setTranslationMode(false);
         if (!next) {
             this.setPointAddMode(false);
             this.#closeContextMenu();
@@ -401,14 +409,6 @@ export default class EditingPreviewLayerManager {
 
         if (pane?.style) pane.style.pointerEvents = next ? "auto" : "none";
 
-        if (next) {
-            this.wasDraggingEnabled = Boolean(this.map?.dragging?.enabled?.());
-            this.map?.dragging?.disable?.();
-        } else if (this.wasDraggingEnabled) {
-            this.map?.dragging?.enable?.();
-            this.wasDraggingEnabled = false;
-        }
-
         if (this.source) {
             this.setCandidate(
                 this.source,
@@ -470,7 +470,10 @@ export default class EditingPreviewLayerManager {
             const line = L.polyline(segment.latLngs, {
                 ...style,
                 pane,
-                interactive: Boolean(translation && this.translationMode)
+                interactive: Boolean(translation && this.translationMode),
+                className: translation && this.translationMode
+                    ? "track-edit-translation-target"
+                    : undefined
             }).addTo(group);
 
             if (translation) {
@@ -623,6 +626,10 @@ export default class EditingPreviewLayerManager {
             this.afterLayerGroup,
             this.mode === "after" || this.mode === "both"
         );
+        this.#setVisible(
+            this.pointEditLayerGroup,
+            this.pointEditingMode && this.#afterIsVisible()
+        );
     }
 
     #applyPointMode() {
@@ -659,11 +666,17 @@ export default class EditingPreviewLayerManager {
             pane.style.pointerEvents = this.pointEditingMode ? "auto" : "none";
         }
 
-        if (this.pointEditingMode && !this.pointEditLayerGroup && this.source) {
+        if (
+            this.pointEditingMode && !this.dragState &&
+            !this.pointEditLayerGroup && this.source
+        ) {
             this.pointEditLayerGroup = this.#createPointEditGroup();
         }
 
-        this.#setVisible(this.pointEditLayerGroup, this.pointEditingMode);
+        this.#setVisible(
+            this.pointEditLayerGroup,
+            this.pointEditingMode && !this.dragState && this.#afterIsVisible()
+        );
         this.#applyPointMode();
         this.#applyPointAddMode();
         if (this.pointEditingMode) this.#bindPointInteractions();
@@ -1061,7 +1074,10 @@ export default class EditingPreviewLayerManager {
     #renderSelectedPoint(coordinate = null) {
 
         this.#removeSelectedPointLayer();
-        if (!this.pointEditingMode || !this.pointSelection || !this.source) return;
+        if (
+            this.dragState || !this.pointEditingMode ||
+            !this.pointSelection || !this.source
+        ) return;
 
         const selectedKey = this.pointMutationService.key(this.pointSelection);
         const visible = this.editingGeometry.some(segment =>
@@ -1152,8 +1168,13 @@ export default class EditingPreviewLayerManager {
         originalEvent.stopPropagation?.();
         this.dragState = {
             startPoint: this.map.mouseEventToContainerPoint(originalEvent),
-            base: this.translation
+            base: this.translation,
+            moved: false,
+            wasDraggingEnabled: Boolean(this.map?.dragging?.enabled?.())
         };
+        this.#removeGroup("pointEditLayerGroup");
+        this.#removeSelectedPointLayer();
+        this.map?.dragging?.disable?.();
         document.addEventListener("mousemove", this.#moveDrag);
         document.addEventListener("mouseup", this.#endDrag, { once: true });
     }
@@ -1163,6 +1184,15 @@ export default class EditingPreviewLayerManager {
         if (!this.dragState) return;
 
         const endPoint = this.map.mouseEventToContainerPoint(event);
+        if (
+            !this.dragState.moved &&
+            Math.hypot(
+                endPoint.x - this.dragState.startPoint.x,
+                endPoint.y - this.dragState.startPoint.y
+            ) < TRANSLATION_DRAG_THRESHOLD_PX
+        ) return;
+
+        this.dragState.moved = true;
         const next = this.translationService.calculateFromDrag(
             this.map,
             this.dragState.startPoint,
@@ -1178,14 +1208,21 @@ export default class EditingPreviewLayerManager {
     #endDrag = event => {
 
         event?.preventDefault?.();
+        const state = this.dragState;
+
         this.#finishDrag();
+        if (state?.moved) this.translationCommitHandler?.(this.translation);
+        this.#applyPointEditingMode();
     };
 
     #finishDrag() {
 
         document.removeEventListener("mousemove", this.#moveDrag);
         document.removeEventListener("mouseup", this.#endDrag);
+        const state = this.dragState;
+
         this.dragState = null;
+        if (state?.wasDraggingEnabled) this.map?.dragging?.enable?.();
     }
 
     #startPointDrag(identity, event) {

@@ -81,10 +81,7 @@ class PanelFake {
     setModeDisabled(value) { this.modeDisabled = value; }
     isModeDisabled() { return Boolean(this.modeDisabled); }
     getPointMode() { return this.pointMode; }
-    getTranslationMode() { return false; }
-    getPointEditingMode() { return false; }
     getPointAddMode() { return false; }
-    setTranslationMode(value) { this.translationMode = value; }
     setPointAddMode(value) { this.pointAddMode = value; }
     showLoading(path) { this.calls.push(["loading", path]); }
     showReady(value) { this.calls.push(["ready", value]); }
@@ -125,6 +122,7 @@ class PreviewLayersFake {
         ]);
     }
     setTranslationPreviewHandler(handler) { this.translationHandler = handler; }
+    setTranslationCommitHandler(handler) { this.translationCommitHandler = handler; }
     setPointSelectionHandler(handler) { this.pointSelectionHandler = handler; }
     setPointEditHandler(handler) { this.pointEditHandler = handler; }
     setPointAddHandler(handler) { this.pointAddHandler = handler; }
@@ -268,20 +266,18 @@ async function testCoordinatorLifecycle() {
         ([name]) => name === "candidate"
     ).length;
 
-    panel.emit("point-editing-mode", true);
-    assert(coordinator.session.getPreview() === simplificationPreview,
-        "Point Editing cleared the simplification preview");
-    assert(previewLayers.calls.filter(([name]) => name === "candidate").length ===
-        candidateCountBeforePointEditing,
-    "Point Editing ON regenerated the Before/After candidate geometry");
-    panel.emit("point-editing-mode", false);
-    assert(coordinator.session.getPreview() === simplificationPreview,
-        "Point Editing OFF replaced the simplification preview");
-    assert(previewLayers.calls.filter(([name]) => name === "candidate").length ===
-        candidateCountBeforePointEditing,
-    "Point Editing OFF regenerated the Before/After candidate geometry");
+    assert(previewLayers.calls.some(call =>
+        call[0] === "point-editing-mode" && call[1] === true),
+    "Point Editing was not active immediately after entering the Editor");
+    assert(previewLayers.calls.some(call =>
+        call[0] === "translation-mode" && call[1] === true),
+    "Track line movement was not active immediately after entering the Editor");
+    assert(coordinator.session.getPreview() === simplificationPreview &&
+        previewLayers.calls.filter(([name]) => name === "candidate").length ===
+            candidateCountBeforePointEditing,
+    "direct editing activation changed the simplification preview geometry");
 
-    assert(coordinator.apply(), "Apply did not update working mask");
+    assert(coordinator.applySimplification(), "Apply did not update working mask");
     assert(coordinator.session.historyLength === 1,
         "Apply did not create exactly one command");
     previewLayers.translationHandler({
@@ -290,9 +286,14 @@ async function testCoordinatorLifecycle() {
         northMeters: 11132,
         eastMeters: 18200
     });
-    assert(coordinator.apply(), "translation Apply failed");
+    const historyBeforeTranslation = coordinator.session.historyLength;
+
+    assert(previewLayers.translationCommitHandler(),
+        "translation drag completion was not accepted");
     assert(coordinator.session.getTranslation().latitudeDelta === 0.1,
         "translation was not stored in the Session");
+    assert(coordinator.session.historyLength === historyBeforeTranslation + 1,
+        "one translation drag did not create exactly one history command");
     assert(coordinator.done(), "Done rejected translated draft");
     assert(await coordinator.start(), "translated draft could not resume");
     assert(coordinator.session.getTranslation().longitudeDelta === 0.2,
@@ -305,12 +306,9 @@ async function testCoordinatorLifecycle() {
         "date correction did not enter the editing history");
     assert(coordinator.session.getTimeOffsetMs() === 33 * 24 * 60 * 60 * 1000,
         "date correction offset was not stored in the Session");
-    panel.emit("point-editing-mode", true);
-    assert(panel.mode === "after" && panel.modeDisabled === true &&
-        previewLayers.mode === "after",
-    "Point Editing did not force and lock the After Map preview");
-    assert(panel.pointMode === "off",
-        "Point Editing changed the simplification point preview");
+    assert(panel.mode === "both" && !panel.modeDisabled &&
+        previewLayers.pointEditingMode === true,
+    "direct Point Editing changed or locked the Map preview controls");
     panel.emit("point-add-mode", true);
     assert(previewLayers.pointAddMode === true,
         "point add mode did not propagate from Panel to Preview Layer");
@@ -349,17 +347,11 @@ async function testCoordinatorLifecycle() {
     panel.emit("point-add-mode", false);
     assert(previewLayers.pointAddMode === false,
         "point add mode OFF did not propagate to Preview Layer");
-    panel.emit("point-editing-mode", false);
-    assert(panel.mode === "both" && panel.modeDisabled === false &&
-        previewLayers.mode === "both",
-    "Point Editing OFF did not restore the prior Map preview");
-    assert(panel.pointMode === "off",
-        "Map preview restoration changed Point preview state");
-    panel.emit("point-editing-mode", true);
     assert(coordinator.done(), "Done rejected point-edit draft");
-    assert(panel.mode === "both" && panel.modeDisabled === false,
-        "Done did not restore the pre-edit Map preview controls");
     assert(await coordinator.start(), "point-edit draft could not resume");
+    assert(previewLayers.calls.filter(call =>
+        call[0] === "point-editing-mode" && call[1] === true).length >= 2,
+    "resumed draft did not reactivate direct Point Editing");
     assert(coordinator.session.getPointEdits().length === 1,
         "Done/resume lost point edit state");
     assert(coordinator.session.getAddedPoints().length === 1,
@@ -946,6 +938,8 @@ function createLeafletFakes() {
                 latLng,
                 options,
                 isPoint: true,
+                handlers: {},
+                on(name, handler) { this.handlers[name] = handler; return this; },
                 addTo(group) { group.layers.push(this); return this; }
             };
             createdLines.push(pointLayer);
@@ -1073,9 +1067,21 @@ function testPreviewLayers() {
         "point preview does not share Canvas renderer");
     assert(!manager.setPointMode("invalid"), "invalid point mode was accepted");
     let translated = null;
+    let translationCommits = 0;
 
     manager.setTranslationPreviewHandler(value => { translated = value; });
+    manager.setTranslationCommitHandler(() => { translationCommits += 1; });
     assert(manager.setTranslationMode(true), "Track translation mode rejected");
+    assert(manager.setPointEditingMode(true), "direct Point Editing mode rejected");
+    assert(map.dragging.enabled(),
+        "enabling direct Track movement disabled normal map background panning");
+    const directPointTarget = createdLines.findLast(line =>
+        line.isPoint && line.options.className === "track-edit-point-target");
+
+    assert(typeof directPointTarget?.handlers.mousedown === "function" &&
+        Number(panes.get("trailbook-edit-point-targets").style.zIndex) >
+            Number(panes.get("trailbook-edit-after").style.zIndex),
+    "editable point hit target does not take priority over the Track line");
     assert(panes.get("trailbook-edit-after").style.pointerEvents === "auto",
         "translation mode did not enable After Track hit testing");
     const draggable = createdLines.findLast(line =>
@@ -1083,6 +1089,25 @@ function testPreviewLayers() {
 
     assert(typeof draggable?.handlers.mousedown === "function",
         "interactive After Track has no drag handler");
+    draggable.handlers.mousedown({
+        originalEvent: {
+            clientX: 10,
+            clientY: 10,
+            preventDefault() {},
+            stopPropagation() {}
+        }
+    });
+    assert(!map.dragging.enabled(),
+        "Track line drag did not temporarily suppress map panning");
+    document.dispatchEvent(new MouseEvent("mousemove", {
+        clientX: 12,
+        clientY: 12
+    }));
+    document.dispatchEvent(new MouseEvent("mouseup"));
+    assert(translationCommits === 0 && translated === null,
+        "negligible Track line movement created a translation");
+    assert(map.dragging.enabled(),
+        "no-op Track line gesture did not restore map panning");
     draggable.handlers.mousedown({
         originalEvent: {
             clientX: 10,
@@ -1099,6 +1124,10 @@ function testPreviewLayers() {
     assert(translated?.latitudeDelta === 0.5 &&
         translated?.longitudeDelta === 1,
     "drag did not use project/unproject translation");
+    assert(translationCommits === 1,
+        "one Track line drag did not emit one completed translation");
+    assert(map.dragging.enabled(),
+        "completed Track line drag did not restore map panning");
     manager.setTranslationMode(false);
     assert(panes.get("trailbook-edit-after").style.pointerEvents === "none",
         "translation mode left After Track interactive");
@@ -1112,8 +1141,6 @@ function testPanelAccessibility() {
     let editCount = 0;
     let saveCount = 0;
     let appliedDate = null;
-    let translationMode = null;
-    let pointEditingMode = null;
     let pointSelectionCleared = 0;
     let pointAddMode = null;
     let pointDeleteCount = 0;
@@ -1121,8 +1148,6 @@ function testPanelAccessibility() {
     panel.on("edit", () => { editCount += 1; });
     panel.on("save", () => { saveCount += 1; });
     panel.on("date-apply", value => { appliedDate = value; });
-    panel.on("translation-mode", value => { translationMode = value; });
-    panel.on("point-editing-mode", value => { pointEditingMode = value; });
     panel.on("point-selection-clear", () => { pointSelectionCleared += 1; });
     panel.on("point-add-mode", value => { pointAddMode = value; });
     panel.on("point-delete", () => { pointDeleteCount += 1; });
@@ -1140,8 +1165,15 @@ function testPanelAccessibility() {
     assert(simplificationGroup?.querySelector(".editor-tolerance") &&
         simplificationGroup.querySelector(".editor-preview-modes") &&
         simplificationGroup.querySelector(".editor-point-modes") &&
-        simplificationGroup.querySelector(".editor-metrics"),
+        simplificationGroup.querySelector(".editor-metrics") &&
+        simplificationGroup.querySelector("[data-editor-action='apply']"),
     "simplification controls are not grouped together");
+    assert(panel.element.querySelectorAll("[data-editor-action='apply']").length === 1 &&
+        !panel.element.querySelector(".editor-actions [data-editor-action='apply']"),
+    "simplification Apply is duplicated or remains in the generic footer");
+    assert(!panel.element.querySelector(".editor-point-editing-mode") &&
+        !panel.element.querySelector(".editor-translation-mode"),
+    "obsolete direct-edit mode checkbox remains visible");
     assert(!simplificationGroup.contains(pointEditingGroup) &&
         !simplificationGroup.contains(translationGroup),
     "point editing or translation was nested in simplification");
@@ -1195,16 +1227,8 @@ function testPanelAccessibility() {
     assert(!panel.actionButtons.get("apply").disabled,
         "completed preview did not enable Apply");
     panel.configureTranslation({ northMeters: 0, eastMeters: 0 });
-    assert(panel.actionButtons.get("apply").disabled,
-        "zero translation enabled Apply");
-    panel.translationMode.checked = true;
-    panel.translationMode.dispatchEvent(new Event("change", { bubbles: true }));
-    assert(translationMode === true,
-        "translation mode checkbox did not emit its state");
-    panel.pointEditingMode.checked = true;
-    panel.pointEditingMode.dispatchEvent(new Event("change", { bubbles: true }));
-    assert(pointEditingMode === true,
-        "point editing mode checkbox did not emit its state");
+    assert(!panel.actionButtons.get("apply").disabled,
+        "translation feedback changed simplification Apply availability");
     panel.setMode("after");
     panel.setModeDisabled(true);
     assert(panel.getMode() === "after" && panel.isModeDisabled(),
@@ -1243,8 +1267,7 @@ function testPanelAccessibility() {
         eastMeters: 45.6,
         pending: true
     });
-    assert(!panel.actionButtons.get("apply").disabled &&
-        panel.translationNorth.textContent.includes("南") &&
+    assert(panel.translationNorth.textContent.includes("南") &&
         panel.translationEast.textContent.includes("東"),
     "translation amount/status was not presented");
     assert(panel.status.getAttribute("role") === "status",

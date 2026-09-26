@@ -70,13 +70,30 @@ function run() {
     assert(!session.setTranslationPreview(session.getTranslation()),
         "zero translation became applicable");
     assert(session.setTranslationPreview(translation), "translation preview rejected");
-    assert(session.applyPreview(), "translation Apply failed");
+    assert(session.applyTranslationPreview(),
+        "completed translation drag was not committed");
     assert(session.canUndo, "translation was not added to history");
     assert(session.undo(), "translation Undo failed");
     assert(service.isZero(session.getTranslation()), "Undo did not restore position");
     assert(session.redo(), "translation Redo failed");
     assert(session.getTranslation().latitudeDelta === 0.25,
         "Redo did not restore translation");
+
+    const coexist = new GPXEditingSession(source);
+    const simplificationPreview = {
+        source,
+        retainedPointMasks: coexist.getRetainedPointMasks(),
+        metrics: {}
+    };
+
+    coexist.setPreview(simplificationPreview);
+    coexist.setTranslationPreview(translation);
+    assert(coexist.applyTranslationPreview(),
+        "direct translation could not commit beside simplification preview");
+    assert(coexist.getPreview() !== null && coexist.hasPreview,
+        "direct translation consumed the tool-local simplification preview");
+    assert(coexist.historyLength === 1,
+        "direct translation created more than one history command");
 
     const document = translatedDocument(source, translation);
     const root = document.documentElement;

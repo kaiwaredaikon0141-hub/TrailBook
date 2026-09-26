@@ -825,6 +825,16 @@ body.is-track-info-resizing{
     background:#dbeafe;
 }
 
+.track-edit-point-target{
+
+    cursor:grab;
+}
+
+.track-edit-translation-target{
+
+    cursor:grab;
+}
+
 .track-point-context-menu{
 
     position:fixed;
