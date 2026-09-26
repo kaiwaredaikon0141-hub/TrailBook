@@ -10,6 +10,7 @@ import TrackTranslationService, {
 const PREVIEW_MODES = new Set(["before", "after", "both"]);
 const POINT_MODES = new Set(["off", "before", "after", "both"]);
 const TRANSLATION_DRAG_THRESHOLD_PX = 4;
+const TRACK_MOVE_POINT_TARGET_RADIUS_PX = 4;
 
 const BEFORE_STYLE = Object.freeze({
     color: "#374151",
@@ -83,6 +84,15 @@ const POINT_ADD_LINE_STYLE = Object.freeze({
     opacity: 0,
     interactive: false,
     bubblingMouseEvents: false
+});
+
+const TRANSLATION_TARGET_STYLE = Object.freeze({
+    color: "#000000",
+    weight: 16,
+    opacity: 0,
+    interactive: true,
+    bubblingMouseEvents: false,
+    className: "track-edit-translation-target"
 });
 
 /**
@@ -470,10 +480,7 @@ export default class EditingPreviewLayerManager {
             const line = L.polyline(segment.latLngs, {
                 ...style,
                 pane,
-                interactive: Boolean(translation && this.translationMode),
-                className: translation && this.translationMode
-                    ? "track-edit-translation-target"
-                    : undefined
+                interactive: false
             }).addTo(group);
 
             if (translation) {
@@ -490,7 +497,12 @@ export default class EditingPreviewLayerManager {
             }
 
             if (translation && this.translationMode) {
-                line.on("mousedown", event => this.#startDrag(event));
+                L.polyline(segment.latLngs, {
+                    ...TRANSLATION_TARGET_STYLE,
+                    pane
+                })
+                    .on("mousedown", event => this.#startDrag(event))
+                    .addTo(group);
             }
         });
 
@@ -697,6 +709,9 @@ export default class EditingPreviewLayerManager {
                             ...(this.pointMutationService.isAddedIdentity(identity)
                                 ? ADDED_POINT_STYLE
                                 : POINT_EDIT_TARGET_STYLE),
+                            radius: this.translationMode
+                                ? TRACK_MOVE_POINT_TARGET_RADIUS_PX
+                                : POINT_EDIT_TARGET_STYLE.radius,
                             pane: "trailbook-edit-point-targets",
                             renderer: this.pointEditRenderer
                         }
@@ -1177,6 +1192,10 @@ export default class EditingPreviewLayerManager {
         this.map?.dragging?.disable?.();
         document.addEventListener("mousemove", this.#moveDrag);
         document.addEventListener("mouseup", this.#endDrag, { once: true });
+        document.addEventListener("pointerup", this.#endDrag, { once: true });
+        document.addEventListener("pointercancel", this.#cancelDrag, {
+            once: true
+        });
     }
 
     #moveDrag = event => {
@@ -1215,10 +1234,19 @@ export default class EditingPreviewLayerManager {
         this.#applyPointEditingMode();
     };
 
+    #cancelDrag = event => {
+
+        event?.preventDefault?.();
+        this.#finishDrag();
+        this.#applyPointEditingMode();
+    };
+
     #finishDrag() {
 
         document.removeEventListener("mousemove", this.#moveDrag);
         document.removeEventListener("mouseup", this.#endDrag);
+        document.removeEventListener("pointerup", this.#endDrag);
+        document.removeEventListener("pointercancel", this.#cancelDrag);
         const state = this.dragState;
 
         this.dragState = null;
@@ -1350,5 +1378,7 @@ export {
     BEFORE_STYLE,
     POINT_EDIT_TARGET_STYLE,
     POINT_MODES,
-    PREVIEW_MODES
+    PREVIEW_MODES,
+    TRACK_MOVE_POINT_TARGET_RADIUS_PX,
+    TRANSLATION_TARGET_STYLE
 };

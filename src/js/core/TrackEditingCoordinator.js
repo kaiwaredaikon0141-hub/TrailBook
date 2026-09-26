@@ -76,6 +76,7 @@ export default class TrackEditingCoordinator {
         this.draft = null;
         this.fileNameCandidate = null;
         this.fileNameCandidateOffsetMs = null;
+        this.trackMoveMode = false;
         this.pointAddMode = false;
         this.editabilityRequestId = 0;
         this.editableEntry = null;
@@ -193,7 +194,7 @@ export default class TrackEditingCoordinator {
             );
             this.previewLayers.setMode(this.panel.getMode());
             this.previewLayers.setPointMode(this.panel.getPointMode());
-            this.previewLayers.setTranslationMode?.(true);
+            this.#setTrackMoveMode(false);
             this.previewLayers.setPointEditingMode?.(true);
             this.#configureTranslation();
             let backupExists = null;
@@ -559,6 +560,7 @@ export default class TrackEditingCoordinator {
         const path = this.sourcePath;
 
         this.mapView.setEditingTargetSuppressed(path, false);
+        this.#setTrackMoveMode(false);
         this.pointAddMode = false;
         this.previewLayers.clear();
         this.panel.configurePointEditing?.({ enabled: false });
@@ -597,6 +599,7 @@ export default class TrackEditingCoordinator {
         this.loading = false;
         this.lastSavedMasks = null;
         if (path) this.mapView.setEditingTargetSuppressed(path, false);
+        this.#setTrackMoveMode(false);
         this.pointAddMode = false;
         this.previewLayers.clear();
         this.panel.configurePointEditing?.({ enabled: false });
@@ -645,6 +648,9 @@ export default class TrackEditingCoordinator {
             "point-mode",
             mode => this.previewLayers.setPointMode(mode)
         );
+        this.panel.on("translation-mode", enabled => {
+            this.#setTrackMoveMode(enabled);
+        });
         this.panel.on("point-selection-clear", () => {
             this.previewLayers.clearPointSelection?.();
         });
@@ -845,7 +851,7 @@ export default class TrackEditingCoordinator {
         );
         this.previewLayers.setMode(this.panel.getMode());
         this.previewLayers.setPointMode(this.panel.getPointMode());
-        this.previewLayers.setTranslationMode?.(true);
+        this.#setTrackMoveMode(false);
         this.previewLayers.setPointEditingMode?.(true);
         this.panel.showReady({
             canSerialize: this.session.source.canSerialize
@@ -995,6 +1001,17 @@ export default class TrackEditingCoordinator {
         this.panel.setSaveEnabled(
             this.session.isDirty && this.session.source.canSerialize
         );
+    }
+
+    #setTrackMoveMode(enabled) {
+
+        const next = Boolean(enabled) && Boolean(this.session?.isActive) &&
+            !this.saving;
+
+        this.trackMoveMode = next;
+        this.panel.setTranslationMode?.(next);
+        this.previewLayers.setTranslationMode?.(next);
+        return next;
     }
 
     #commitTranslationPreview() {

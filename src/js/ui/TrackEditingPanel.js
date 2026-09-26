@@ -25,6 +25,9 @@ export default class TrackEditingPanel {
         this.candidateFileName = this.element.querySelector(".editor-candidate-filename");
         this.renameCheckbox = this.element.querySelector(".editor-rename-by-date");
         this.renameStatus = this.element.querySelector(".editor-rename-status");
+        this.translationMode = this.element.querySelector(
+            ".editor-translation-mode"
+        );
         this.translationNorth = this.element.querySelector(
             ".editor-translation-north"
         );
@@ -137,6 +140,16 @@ export default class TrackEditingPanel {
 
         return this.element.querySelector("[name='editor-point-mode']:checked")
             ?.value || "off";
+    }
+
+    getTranslationMode() {
+
+        return Boolean(this.translationMode.checked);
+    }
+
+    setTranslationMode(enabled) {
+
+        this.translationMode.checked = Boolean(enabled);
     }
 
     getPointAddMode() {
@@ -524,8 +537,12 @@ export default class TrackEditingPanel {
                     </button>
                 </fieldset>
                 <fieldset class="editor-translation">
-                    <legend>トラック移動</legend>
-                    <p>After Track線をドラッグして移動</p>
+                    <legend>Track移動</legend>
+                    <label>
+                        <input class="editor-translation-mode" type="checkbox">
+                        Track移動モード
+                    </label>
+                    <p>Track線をドラッグして移動</p>
                     <p>
                         北/南: <span class="editor-translation-north">0.0 m</span><br>
                         東/西: <span class="editor-translation-east">0.0 m</span>
@@ -584,6 +601,8 @@ export default class TrackEditingPanel {
                 this.#emit("point-mode", event.target.value);
             } else if (event.target.classList.contains("editor-rename-by-date")) {
                 this.#emit("filename-toggle", event.target.checked);
+            } else if (event.target.classList.contains("editor-translation-mode")) {
+                this.#emit("translation-mode", event.target.checked);
             }
         });
         this.element.addEventListener("keydown", event => {
