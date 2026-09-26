@@ -8,7 +8,6 @@ import EditingPreviewLayerManager, {
     BEFORE_POINT_STYLE,
     BEFORE_STYLE,
     POINT_EDIT_TARGET_STYLE,
-    TRACK_MOVE_POINT_TARGET_RADIUS_PX,
     TRANSLATION_TARGET_STYLE
 } from "../../src/js/map/EditingPreviewLayerManager.js";
 import LayerManager from "../../src/js/map/LayerManager.js";
@@ -52,6 +51,21 @@ function createSource() {
                     ])
                 })
             ])
+        })])
+    });
+}
+
+function createDenseSource(pointCount = 24) {
+    return Object.freeze({
+        canSerialize: true,
+        sourceFileName: "dense.gpx",
+        tracks: Object.freeze([Object.freeze({
+            segments: Object.freeze([Object.freeze({
+                points: Object.freeze(Array.from(
+                    { length: pointCount },
+                    (_, index) => point(35, 135 + index * 0.00001)
+                ))
+            })])
         })])
     });
 }
@@ -292,8 +306,10 @@ async function testCoordinatorLifecycle() {
         "Apply did not create exactly one command");
     panel.emit("translation-mode", true);
     assert(panel.translationMode === true &&
-        previewLayers.translationMode === true,
-    "Track move mode did not enable the translation layer");
+        previewLayers.translationMode === true &&
+        panel.pointEditing?.enabled === false &&
+        previewLayers.pointAddMode === false,
+    "Track move mode did not exclusively enable the translation layer");
     previewLayers.translationHandler({
         latitudeDelta: 0.1,
         longitudeDelta: 0.2,
@@ -314,7 +330,8 @@ async function testCoordinatorLifecycle() {
     "Done did not reset Track move mode OFF");
     assert(await coordinator.start(), "translated draft could not resume");
     assert(panel.translationMode === false &&
-        previewLayers.translationMode === false,
+        previewLayers.translationMode === false &&
+        panel.pointEditing?.enabled === true,
     "resumed editing session did not default Track move mode OFF");
     assert(coordinator.session.getTranslation().longitudeDelta === 0.2,
         "Done/resume lost Track translation");
@@ -1138,19 +1155,12 @@ function testPreviewLayers() {
         translationCommits === 0 && map.dragging.enabled(),
     "point drag did not work independently while Track move mode was OFF");
     assert(manager.setTranslationMode(true), "Track translation mode rejected");
-    assert(manager.pointEditingMode,
-        "Track move mode disabled direct Point Editing");
+    assert(manager.pointEditingMode && !manager.pointSelection &&
+        !manager.pointEditLayerGroup &&
+        panes.get("trailbook-edit-point-targets").style.pointerEvents === "none",
+    "Track move mode left point interaction or selection active");
     assert(map.dragging.enabled(),
         "enabling direct Track movement disabled normal map background panning");
-    const directPointTarget = createdLines.findLast(line =>
-        line.isPoint && line.options.className === "track-edit-point-target");
-
-    assert(typeof directPointTarget?.handlers.mousedown === "function" &&
-        directPointTarget.options.radius ===
-            TRACK_MOVE_POINT_TARGET_RADIUS_PX &&
-        Number(panes.get("trailbook-edit-point-targets").style.zIndex) >
-            Number(panes.get("trailbook-edit-after").style.zIndex),
-    "editable point hit target does not take priority over the Track line");
     assert(panes.get("trailbook-edit-after").style.pointerEvents === "auto",
         "translation mode did not enable After Track hit testing");
     const draggable = createdLines.findLast(line =>
@@ -1225,6 +1235,80 @@ function testPreviewLayers() {
     "translation mode left the Track interactive or changed point editing");
     manager.clear();
     assert(displayed.size === 0, "point preview clear left layers on Map");
+}
+
+function testDenseTrackMoveExclusivity() {
+    const { map, createdLines, panes } = createLeafletFakes();
+    const manager = new EditingPreviewLayerManager(map);
+    const source = createDenseSource();
+    const masks = [[source.tracks[0].segments[0].points.map(() => true)]];
+    let pointEdits = 0;
+    let translationCommits = 0;
+
+    manager.setSource(source);
+    manager.setCandidate(source, masks);
+    manager.setPointEditingMode(true);
+    manager.setPointEditHandler(() => { pointEdits += 1; return true; });
+    manager.setTranslationCommitHandler(() => { translationCommits += 1; });
+    manager.selectPoint({ trackIndex: 0, segmentIndex: 0, pointIndex: 12 });
+    const stalePointTarget = createdLines.findLast(line =>
+        line.isPoint && line.options.className === "track-edit-point-target");
+
+    assert(manager.pointSelection && manager.pointEditLayerGroup,
+        "dense Track fixture did not start with point interaction active");
+
+    manager.setTranslationMode(true);
+    assert(!manager.pointSelection && !manager.pointEditLayerGroup &&
+        panes.get("trailbook-edit-point-targets").style.pointerEvents === "none",
+    "dense point targets remained active in Track move mode");
+    stalePointTarget.handlers.mousedown({
+        originalEvent: {
+            clientX: 10,
+            clientY: 10,
+            preventDefault() {},
+            stopPropagation() {}
+        }
+    });
+    assert(!manager.pointSelection && map.dragging.enabled(),
+        "detached dense point handler could still intercept Track move mode");
+    const target = createdLines.findLast(line =>
+        !line.isPoint && line.options.interactive);
+    const visibleLine = createdLines.findLast(line =>
+        !line.isPoint && !line.options.interactive &&
+        line.options.color === AFTER_STYLE.color);
+
+    assert(target?.latLngs === visibleLine?.latLngs &&
+        target.latLngs.length === 24,
+    "Track hit corridor did not share the dense Track geometry");
+    target.handlers.mousedown({
+        originalEvent: {
+            clientX: 10,
+            clientY: 10,
+            preventDefault() {},
+            stopPropagation() {}
+        }
+    });
+    document.dispatchEvent(new MouseEvent("mousemove", {
+        clientX: 110,
+        clientY: -40
+    }));
+    document.dispatchEvent(new MouseEvent("mouseup"));
+    const translatedPoints = manager.afterGeometry[0].latLngs;
+
+    assert(translatedPoints.every(([latitude, longitude], index) =>
+        Math.abs(latitude - (35.5)) < 1e-9 &&
+        Math.abs(longitude - (136 + index * 0.00001)) < 1e-9
+    ) && translationCommits === 1 && pointEdits === 0,
+    "dense Track drag did not translate all points uniformly and exclusively");
+    manager.setTranslationMode(false);
+    const restoredTarget = createdLines.findLast(line =>
+        line.isPoint && line.options.className === "track-edit-point-target");
+
+    assert(manager.pointEditLayerGroup &&
+        panes.get("trailbook-edit-point-targets").style.pointerEvents === "auto" &&
+        typeof restoredTarget?.handlers.mousedown === "function",
+    "point interaction was not restored after leaving Track move mode");
+    manager.clear();
 }
 
 function testPanelAccessibility() {
@@ -1510,6 +1594,7 @@ async function run() {
     await testCurrentPermissionHydration();
     await testPreviousLibraryAvailabilityNotification();
     testPreviewLayers();
+    testDenseTrackMoveExclusivity();
     testNormalTrackSuppression();
     testPanelAccessibility();
     testInteractionGuard();

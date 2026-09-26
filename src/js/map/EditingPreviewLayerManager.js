@@ -10,7 +10,6 @@ import TrackTranslationService, {
 const PREVIEW_MODES = new Set(["before", "after", "both"]);
 const POINT_MODES = new Set(["off", "before", "after", "both"]);
 const TRANSLATION_DRAG_THRESHOLD_PX = 4;
-const TRACK_MOVE_POINT_TARGET_RADIUS_PX = 4;
 
 const BEFORE_STYLE = Object.freeze({
     color: "#374151",
@@ -364,7 +363,8 @@ export default class EditingPreviewLayerManager {
 
     setPointAddMode(enabled) {
 
-        const next = Boolean(enabled) && this.pointEditingMode;
+        const next = Boolean(enabled) && this.pointEditingMode &&
+            !this.translationMode;
 
         if (next === this.pointAddMode) return true;
         this.pointAddMode = next;
@@ -377,6 +377,10 @@ export default class EditingPreviewLayerManager {
 
     selectPoint(identity) {
 
+        if (this.translationMode) {
+            this.clearPointSelection();
+            return null;
+        }
         this.pointSelection = identity
             ? this.pointMutationService.normalizeIdentity(identity)
             : null;
@@ -414,6 +418,15 @@ export default class EditingPreviewLayerManager {
         if (next === this.translationMode) return true;
 
         this.#finishDrag();
+        if (next) {
+            this.setPointAddMode(false);
+            this.#closeContextMenu();
+            this.#finishPointDrag();
+            if (this.pointSelection) this.clearPointSelection();
+            else this.#removeSelectedPointLayer();
+            this.#unbindPointInteractions();
+            this.#removeGroup("pointEditLayerGroup");
+        }
         this.translationMode = next;
         const pane = this.map?.getPane?.("trailbook-edit-after");
 
@@ -673,13 +686,15 @@ export default class EditingPreviewLayerManager {
     #applyPointEditingMode() {
 
         const pane = this.map?.getPane?.("trailbook-edit-point-targets");
+        const interactionEnabled = this.pointEditingMode &&
+            !this.translationMode;
 
         if (pane?.style) {
-            pane.style.pointerEvents = this.pointEditingMode ? "auto" : "none";
+            pane.style.pointerEvents = interactionEnabled ? "auto" : "none";
         }
 
         if (
-            this.pointEditingMode && !this.dragState &&
+            interactionEnabled && !this.dragState &&
             !this.pointEditLayerGroup && this.source
         ) {
             this.pointEditLayerGroup = this.#createPointEditGroup();
@@ -687,11 +702,12 @@ export default class EditingPreviewLayerManager {
 
         this.#setVisible(
             this.pointEditLayerGroup,
-            this.pointEditingMode && !this.dragState && this.#afterIsVisible()
+            interactionEnabled && !this.dragState && this.#afterIsVisible()
         );
         this.#applyPointMode();
         this.#applyPointAddMode();
-        if (this.pointEditingMode) this.#bindPointInteractions();
+        if (interactionEnabled) this.#bindPointInteractions();
+        else this.#unbindPointInteractions();
         this.#renderSelectedPoint();
     }
 
@@ -709,9 +725,6 @@ export default class EditingPreviewLayerManager {
                             ...(this.pointMutationService.isAddedIdentity(identity)
                                 ? ADDED_POINT_STYLE
                                 : POINT_EDIT_TARGET_STYLE),
-                            radius: this.translationMode
-                                ? TRACK_MOVE_POINT_TARGET_RADIUS_PX
-                                : POINT_EDIT_TARGET_STYLE.radius,
                             pane: "trailbook-edit-point-targets",
                             renderer: this.pointEditRenderer
                         }
@@ -1090,7 +1103,7 @@ export default class EditingPreviewLayerManager {
 
         this.#removeSelectedPointLayer();
         if (
-            this.dragState || !this.pointEditingMode ||
+            this.dragState || this.translationMode || !this.pointEditingMode ||
             !this.pointSelection || !this.source
         ) return;
 
@@ -1255,7 +1268,10 @@ export default class EditingPreviewLayerManager {
 
     #startPointDrag(identity, event) {
 
-        if (!this.pointEditingMode || !event?.originalEvent) return;
+        if (
+            !this.pointEditingMode || this.translationMode ||
+            !event?.originalEvent
+        ) return;
 
         const originalEvent = event.originalEvent;
         const normalizedIdentity = this.pointMutationService.normalizeIdentity(
@@ -1379,6 +1395,5 @@ export {
     POINT_EDIT_TARGET_STYLE,
     POINT_MODES,
     PREVIEW_MODES,
-    TRACK_MOVE_POINT_TARGET_RADIUS_PX,
     TRANSLATION_TARGET_STYLE
 };

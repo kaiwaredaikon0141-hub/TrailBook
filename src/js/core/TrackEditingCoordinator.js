@@ -656,7 +656,8 @@ export default class TrackEditingCoordinator {
         });
         this.panel.on("point-add-mode", enabled => {
             this.pointAddMode = Boolean(enabled) &&
-                Boolean(this.previewLayers.pointEditingMode);
+                Boolean(this.previewLayers.pointEditingMode) &&
+                !this.trackMoveMode;
             this.previewLayers.setPointAddMode?.(this.pointAddMode);
             this.#configurePointEditing();
         });
@@ -1009,8 +1010,14 @@ export default class TrackEditingCoordinator {
             !this.saving;
 
         this.trackMoveMode = next;
+        if (next) {
+            this.pointAddMode = false;
+            this.previewLayers.setPointAddMode?.(false);
+            this.previewLayers.clearPointSelection?.();
+        }
         this.panel.setTranslationMode?.(next);
         this.previewLayers.setTranslationMode?.(next);
+        this.#configurePointEditing();
         return next;
     }
 
@@ -1113,7 +1120,8 @@ export default class TrackEditingCoordinator {
 
     #configurePointEditing(identity = this.previewLayers.pointSelection) {
 
-        const enabled = Boolean(this.previewLayers.pointEditingMode);
+        const enabled = Boolean(this.previewLayers.pointEditingMode) &&
+            !this.trackMoveMode;
         const addMode = enabled && this.pointAddMode;
         let canDelete = false;
 

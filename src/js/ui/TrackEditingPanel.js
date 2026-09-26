@@ -543,6 +543,7 @@ export default class TrackEditingPanel {
                         Track移動モード
                     </label>
                     <p>Track線をドラッグして移動</p>
+                    <p>移動モード中はポイント編集を無効化</p>
                     <p>
                         北/南: <span class="editor-translation-north">0.0 m</span><br>
                         東/西: <span class="editor-translation-east">0.0 m</span>
