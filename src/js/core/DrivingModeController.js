@@ -65,6 +65,7 @@ export default class DrivingModeController {
         });
         this.trackInfoElement?.classList.add("is-mobile-dismissed");
         this.currentPosition.startFollowing();
+        this.eventBus.emit("driving-mode:changed", { active: true });
         this.#render();
         await this.wakeLock.request();
         this.#render();
@@ -79,6 +80,7 @@ export default class DrivingModeController {
         this.currentPosition.stopFollowing();
         this.workspace.classList.remove("is-driving-mode");
         globalThis.document?.body?.classList.remove("is-driving-mode");
+        this.eventBus.emit("driving-mode:changed", { active: false });
         await this.wakeLock.release();
         this.#render();
         return true;

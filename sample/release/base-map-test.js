@@ -25,6 +25,7 @@ class MemoryStorage {
 
 function installLeafletFake() {
     const tileLayers = [];
+    const polylines = [];
     const layers = new Set();
     const map = {
         center: { lat: 35, lng: 135 },
@@ -58,10 +59,30 @@ function installLeafletFake() {
             tileLayers.push(layer);
             return layer;
         },
-        canvas(options) { return { options }; }
+        canvas(options) { return { options }; },
+        layerGroup() {
+            return {
+                kind: "group",
+                addTo() { layers.add(this); return this; },
+                remove() { layers.delete(this); }
+            };
+        },
+        polyline(latLngs, options) {
+            const layer = {
+                latLngs,
+                options,
+                handlers: new Map(),
+                addTo() { return this; },
+                on(name, handler) { this.handlers.set(name, handler); },
+                setStyle() {}
+            };
+
+            polylines.push(layer);
+            return layer;
+        }
     };
 
-    return { map, layers, tileLayers };
+    return { map, layers, tileLayers, polylines };
 }
 
 function createCoordinator(eventBus, mapView, store) {
@@ -77,7 +98,7 @@ function createCoordinator(eventBus, mapView, store) {
 }
 
 function run() {
-    const { map, layers, tileLayers } = installLeafletFake();
+    const { map, layers, tileLayers, polylines } = installLeafletFake();
     const eventBus = new EventBus();
     const storage = new MemoryStorage();
     const store = new ViewStateStore({ ...Config.viewState, storage });
@@ -96,6 +117,24 @@ function run() {
     assert(tileLayers[0].url === Config.map.tileUrl &&
         tileLayers[0].options.attribution === Config.map.tileAttribution,
     "existing OSM definition changed");
+
+    let clickedTrack = null;
+
+    eventBus.on("map:track-clicked", event => { clickedTrack = event; });
+    mapView.displayGPX("tap.gpx", {
+        tracks: [{ segments: [{ points: [
+            { latitude: 35, longitude: 135 },
+            { latitude: 35.1, longitude: 135.1 }
+        ] }] }],
+        waypoints: []
+    }, Config.map.trackStyle);
+    polylines.at(-1).handlers.get("click")({
+        containerPoint: { x: 123, y: 45 }
+    });
+    assert(clickedTrack?.path === "tap.gpx" &&
+        clickedTrack.point?.x === 123 && clickedTrack.point?.y === 45,
+    "Track tap did not preserve its Leaflet map-container point");
+    mapView.removeGPX("tap.gpx");
 
     const center = map.getCenter();
     const zoom = map.getZoom();

@@ -18,6 +18,8 @@
     --mobile-icon-surface-feedback:rgba(255, 255, 255, 0.92);
 
     --mobile-icon-foreground:rgba(40, 50, 60, 0.84);
+
+    --mobile-zoom-group-width:374px;
 }
 
 body{
@@ -2303,6 +2305,11 @@ body.is-track-info-resizing{
     display:none;
 }
 
+.mobile-track-date-popover{
+
+    display:none;
+}
+
 .map--monochrome .leaflet-tile-pane{
 
     filter:var(--map-monochrome-filter);
@@ -3115,11 +3122,6 @@ body.is-track-info-resizing{
         overflow-y:auto;
     }
 
-    .track-info.has-track-info:not(.is-mobile-dismissed){
-
-        display:block;
-    }
-
     .track-info-close{
 
         display:block;
@@ -3296,6 +3298,39 @@ body.is-track-info-resizing{
         display:none;
     }
 
+    .mobile-track-date-popover:not([hidden]){
+
+        position:absolute;
+
+        z-index:1200;
+
+        display:block;
+
+        box-sizing:border-box;
+
+        padding:5px 9px;
+
+        border:1px solid rgba(100, 116, 139, 0.62);
+
+        border-radius:6px;
+
+        background:rgba(255, 255, 255, 0.9);
+
+        box-shadow:0 2px 8px rgba(15, 23, 42, 0.22);
+
+        color:#1f2937;
+
+        font-size:13px;
+
+        font-weight:600;
+
+        line-height:1.2;
+
+        pointer-events:none;
+
+        white-space:nowrap;
+    }
+
     .current-position-control{
 
         right:max(8px, env(safe-area-inset-right));
@@ -3460,58 +3495,19 @@ body.is-track-info-resizing{
         flex-direction:column;
     }
 
-    .leaflet-control-zoom a,
-    .leaflet-touch .leaflet-control-zoom a{
+    .leaflet-top.leaflet-left .leaflet-control-zoom{
 
-        position:relative;
-
-        height:44px;
-
-        background:transparent;
-
-        font-size:0;
-
-        line-height:44px;
+        width:min(
+            var(--mobile-zoom-group-width),
+            calc(
+                100vw - max(8px, env(safe-area-inset-left)) -
+                max(8px, env(safe-area-inset-right))
+            )
+        );
     }
+}
 
-    .leaflet-control-zoom a::before{
+body.is-driving-mode .mobile-track-date-popover{
 
-        position:absolute;
-
-        top:7px;
-
-        left:50%;
-
-        box-sizing:border-box;
-
-        width:30px;
-
-        height:30px;
-
-        margin-left:-15px;
-
-        border:1px solid #ccc;
-
-        border-radius:4px;
-
-        background:var(--mobile-icon-surface);
-
-        color:var(--mobile-icon-foreground);
-
-        font-size:20px;
-
-        line-height:28px;
-
-        text-align:center;
-    }
-
-    .leaflet-control-zoom .leaflet-control-zoom-out::before{
-
-        content:"−";
-    }
-
-    .leaflet-control-zoom .leaflet-control-zoom-in::before{
-
-        content:"+";
-    }
+    display:none !important;
 }

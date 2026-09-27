@@ -7,6 +7,11 @@ import GPXLoader from "../../src/js/services/GPXLoader.js";
 import GPXParser from "../../src/js/services/GPXParser.js";
 import TrackSummaryBuilder from "../../src/js/services/TrackSummaryBuilder.js";
 import TrackInfoView from "../../src/js/ui/TrackInfoView.js";
+import MobileTrackDatePopover, {
+    formatMobileTrackDate
+} from "../../src/js/ui/MobileTrackDatePopover.js";
+import TrackDiscoveryCoordinator from "../../src/js/core/TrackDiscoveryCoordinator.js";
+import EventBus from "../../src/js/core/EventBus.js";
 
 const output = document.getElementById("result");
 let assertions = 0;
@@ -219,8 +224,8 @@ function testView() {
     assert(getComputedStyle(list).display === "grid",
         "selected/loading Track Info details remain compacted");
     if (mobileLayout) {
-        assert(getComputedStyle(view.element).display === "block",
-            "selected mobile Track Info did not open");
+        assert(getComputedStyle(view.element).display === "none",
+            "selected mobile Track Info opened instead of compact date UI");
     } else {
         assert(getComputedStyle(resizeHandle).display !== "none" &&
             view.element.getBoundingClientRect().height >= 120,
@@ -265,6 +270,165 @@ function testView() {
         getComputedStyle(list).display === "none",
     "unavailable Track Info state not cleared or compacted");
     shell.remove();
+}
+
+async function testMobileTrackDatePresentation() {
+
+    const mobileLayout = matchMedia(
+        "(max-width: 768px), (max-height: 500px) and (pointer: coarse)"
+    ).matches;
+
+    assert(formatMobileTrackDate(new Date("2026-08-08T01:02:03Z")) ===
+        "2026/08/08", "mobile Track date format changed");
+    assert(formatMobileTrackDate(null) === "日付不明",
+        "mobile unknown Track date fallback changed");
+
+    if (!mobileLayout) return;
+
+    const mapContainer = document.createElement("section");
+    const directPopover = new MobileTrackDatePopover();
+
+    mapContainer.style.cssText =
+        "position:relative;width:320px;height:200px;overflow:hidden";
+    document.body.append(mapContainer);
+    directPopover.attach(mapContainer);
+
+    const points = [
+        { x: 0, y: 0 },
+        { x: 320, y: 0 },
+        { x: 0, y: 200 },
+        { x: 320, y: 200 }
+    ];
+
+    for (const point of points) {
+        assert(directPopover.show(entry(), point, "edge.gpx"),
+            "edge Track date was not shown");
+        const containerRect = mapContainer.getBoundingClientRect();
+        const popoverRect = directPopover.element.getBoundingClientRect();
+
+        assert(popoverRect.left >= containerRect.left &&
+            popoverRect.right <= containerRect.right &&
+            popoverRect.top >= containerRect.top &&
+            popoverRect.bottom <= containerRect.bottom - 35,
+        `mobile Track date escaped the map at ${point.x},${point.y}`);
+    }
+    assert(getComputedStyle(directPopover.element).pointerEvents === "none",
+        "mobile Track date consumes map pointer events");
+    assert(mapContainer.querySelectorAll(".mobile-track-date-popover").length === 1,
+        "multiple mobile Track date bubbles accumulated");
+    directPopover.hide();
+    assert(directPopover.element.hidden,
+        "mobile Track date did not dismiss");
+    mapContainer.remove();
+
+    const eventBus = new EventBus();
+    const media = {
+        matches: true,
+        addEventListener() {}
+    };
+    const displayState = {
+        subscribe() {},
+        getDisplay() { return null; }
+    };
+    const modeStore = {
+        getMode() { return "folder"; },
+        setMode() {},
+        setActiveLibrary() {},
+        setFilter() {}
+    };
+    const coordinator = new TrackDiscoveryCoordinator({
+        eventBus,
+        loader: {
+            setLibraryNamespace() {},
+            loadSummary() { return Promise.resolve(null); }
+        },
+        displayState,
+        modeStore,
+        mobileMedia: media
+    });
+    const entries = new Map([
+        ["first.gpx", entry("first.gpx")],
+        ["second.gpx", entry("second.gpx", {
+            resolvedDate: new Date("2026-09-21T00:00:00Z")
+        })],
+        ["unknown.gpx", entry("unknown.gpx", { resolvedDate: null })]
+    ]);
+    const index = {
+        getEntry(path) { return entries.get(path) || null; },
+        loadEntry(path) { return Promise.resolve(entries.get(path) || null); },
+        getOrderingEntries() { return []; },
+        clear() {}
+    };
+    const fixture = document.createElement("div");
+    const sidebar = document.createElement("div");
+    const folderTree = document.createElement("ul");
+    const map = document.createElement("section");
+
+    sidebar.className = "sidebar";
+    map.style.cssText =
+        "position:relative;width:320px;height:200px;overflow:hidden";
+    sidebar.append(folderTree);
+    fixture.append(sidebar, map);
+    document.body.append(fixture);
+    coordinator.index = index;
+    coordinator.trackInfo.index = index;
+    coordinator.available = true;
+    coordinator.generation = 1;
+    coordinator.isCurrent = () => true;
+    coordinator.attach({ folderTree, mapContainer: map });
+    coordinator.bindEvents();
+
+    eventBus.emit("selection:changed", { path: "first.gpx", reason: "map" });
+    eventBus.emit("map:track-clicked", {
+        path: "first.gpx", point: { x: 160, y: 100 }
+    });
+    await Promise.resolve();
+    assert(coordinator.trackInfo.element.classList.contains("has-track-info") ===
+        false, "mobile map Track tap populated the full Track Info panel");
+    assert(coordinator.mobileTrackDate.element.textContent === "2026/08/08",
+        "mobile map Track tap did not show the resolved Track date only");
+
+    const popover = coordinator.mobileTrackDate.element;
+
+    eventBus.emit("selection:changed", { path: "second.gpx", reason: "map" });
+    eventBus.emit("map:track-clicked", {
+        path: "second.gpx", point: { x: 310, y: 10 }
+    });
+    await Promise.resolve();
+    assert(coordinator.mobileTrackDate.element === popover &&
+        popover.textContent === "2026/09/21",
+    "second Track tap did not move/update the same date popover");
+
+    eventBus.emit("map:background-clicked");
+    assert(popover.hidden, "empty map tap did not dismiss Track date");
+    eventBus.emit("selection:changed", { path: "unknown.gpx", reason: "map" });
+    eventBus.emit("map:track-clicked", {
+        path: "unknown.gpx", point: { x: 80, y: 80 }
+    });
+    await Promise.resolve();
+    assert(popover.textContent === "日付不明",
+        "unknown resolved Track date did not use its fallback");
+
+    eventBus.emit("map:clear-requested");
+    assert(popover.hidden, "clear display retained the mobile Track date");
+    eventBus.emit("map:track-clicked", {
+        path: "unknown.gpx", point: { x: 80, y: 80 }
+    });
+    await Promise.resolve();
+    eventBus.emit("driving-mode:changed", { active: true });
+    assert(popover.hidden, "Driving Mode retained the mobile Track date");
+
+    eventBus.emit("selection:changed", { path: "first.gpx", reason: "tree" });
+    await Promise.resolve();
+    assert(popover.hidden,
+        "tree selection fabricated a mobile map Track date position");
+    eventBus.emit("map:track-clicked", {
+        path: "first.gpx", point: { x: 100, y: 100 }
+    });
+    await Promise.resolve();
+    coordinator.clearLibrary();
+    assert(popover.hidden, "Library clear retained the mobile Track date");
+    fixture.remove();
 }
 
 async function testIndexEntryLoad() {
@@ -366,6 +530,7 @@ async function testCoordinator() {
 
 try {
     testView();
+    await testMobileTrackDatePresentation();
     await testGPXDecoding();
     await testIndexEntryLoad();
     await testCoordinator();

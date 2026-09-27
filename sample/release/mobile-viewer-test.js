@@ -23,8 +23,10 @@ function testLeafletZoomPresentation() {
     const control = document.createElement("div");
     const out = document.createElement("a");
     const inside = document.createElement("a");
+    const mobileStack = document.createElement("div");
 
     corner.className = "leaflet-top leaflet-left";
+    corner.style.cssText = "position:fixed;top:0;left:0";
     control.className = "leaflet-control-zoom leaflet-bar";
     out.className = "leaflet-control-zoom-out";
     inside.className = "leaflet-control-zoom-in";
@@ -32,30 +34,62 @@ function testLeafletZoomPresentation() {
     inside.textContent = "+";
     control.append(out, inside);
     corner.append(control);
+    mobileStack.className = "mobile-map-controls";
+    mobileStack.append(
+        document.createElement("button"),
+        document.createElement("button"),
+        document.createElement("button")
+    );
     document.body.classList.add("leaflet-touch");
-    document.body.append(corner);
+    document.body.append(corner, mobileStack);
 
     const landscape = matchMedia(
         "(max-height:500px) and (pointer:coarse)"
     ).matches;
     const outStyle = getComputedStyle(out);
-    const symbolStyle = getComputedStyle(out, "::before");
+    const insideStyle = getComputedStyle(inside);
+    const controlRect = control.getBoundingClientRect();
+    const outRect = out.getBoundingClientRect();
+    const insideRect = inside.getBoundingClientRect();
+    const expectedLeft = 8;
+    const translucentSurface = getComputedStyle(document.documentElement)
+        .getPropertyValue("--mobile-icon-surface").trim();
+    const stackRect = mobileStack.getBoundingClientRect();
 
     if (landscape) {
-        assert(out.getBoundingClientRect().height >= 44,
-            "landscape zoom touch target is below 44px");
-        assert(outStyle.fontSize === "0px" &&
-            Math.round(parseFloat(symbolStyle.width)) === 30 &&
-            Math.round(parseFloat(symbolStyle.height)) === 30,
-        "landscape zoom symbol is not a compact 30px presentation");
-        assert(outStyle.pointerEvents !== "none",
-            "landscape zoom touch target is not interactive");
+        assert(Math.round(controlRect.width) === 374,
+            `landscape zoom group stretched to ${controlRect.width}px`);
+        assert(Math.round(controlRect.left) === Math.round(expectedLeft),
+            `landscape zoom group is not left aligned: ${controlRect.left}px`);
+        assert(Math.round(outRect.height) === 60 &&
+            Math.round(insideRect.height) === 60,
+        "landscape zoom targets do not preserve portrait 60px height");
+        assert(Math.round(outRect.width + insideRect.width) ===
+            Math.round(controlRect.width),
+        "landscape zoom buttons do not fill only their compact group");
+        assert(outStyle.pointerEvents !== "none" &&
+            insideStyle.pointerEvents !== "none",
+        "landscape zoom targets are not interactive");
+        assert(outStyle.backgroundColor === translucentSurface &&
+            insideStyle.backgroundColor === translucentSurface &&
+            translucentSurface.startsWith("rgba("),
+        "landscape zoom translucency changed");
     } else if (matchMedia("(max-width:768px)").matches) {
-        assert(Math.round(out.getBoundingClientRect().height) === 60,
+        assert(Math.round(outRect.height) === 60 &&
+            Math.round(insideRect.height) === 60,
             "portrait zoom presentation changed from 60px");
+        assert(Math.round(controlRect.left) === Math.round(expectedLeft) &&
+            Math.round(controlRect.width) ===
+                document.documentElement.clientWidth - 16,
+        "portrait zoom width or mobile margin changed");
+    }
+    if (landscape || matchMedia("(max-width:768px)").matches) {
+        assert(controlRect.bottom <= stackRect.top,
+            "mobile zoom group overlaps the Folder/Map/Monochrome stack");
     }
 
     corner.remove();
+    mobileStack.remove();
     document.body.classList.remove("leaflet-touch");
 }
 
@@ -593,10 +627,10 @@ async function run() {
         "mobile Leaflet zoom is not a 60px horizontal minus/plus row"
     );
     assert(themeCss.includes("@media (max-height:500px) and (pointer:coarse)") &&
-        themeCss.includes("width:30px") &&
-        themeCss.includes("height:30px") &&
-        themeCss.includes("height:44px"),
-    "mobile landscape Leaflet zoom presentation contract missing");
+        themeCss.includes("--mobile-zoom-group-width:374px") &&
+        themeCss.includes("width:min(") &&
+        !themeCss.includes(".leaflet-control-zoom a::before"),
+    "mobile landscape compact zoom-group contract missing");
     assert(themeCss.includes(".map-toolbar") &&
         themeCss.includes("display:none") &&
         themeCss.includes(".mobile-sidebar-display-controls"),

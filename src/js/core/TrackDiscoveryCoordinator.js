@@ -4,13 +4,23 @@ import DiscoveryFilterService from "../services/DiscoveryFilterService.js";
 import DateTreeView from "../ui/DateTreeView.js";
 import FolderTreeFilterProjection from "../ui/FolderTreeFilterProjection.js";
 import TrackInfoCoordinator from "./TrackInfoCoordinator.js";
+import MobileTrackDatePopover from "../ui/MobileTrackDatePopover.js";
+
+const MOBILE_QUERY =
+    "(max-width: 768px), (max-height: 500px) and (pointer: coarse)";
 
 /**
  * Coordinates lazy Discovery Index construction and Folder / Date projection.
  */
 export default class TrackDiscoveryCoordinator {
 
-    constructor({ eventBus, loader, displayState, modeStore }) {
+    constructor({
+        eventBus,
+        loader,
+        displayState,
+        modeStore,
+        mobileMedia = globalThis.matchMedia?.(MOBILE_QUERY) ?? null
+    }) {
 
         this.eventBus = eventBus;
         this.displayState = displayState;
@@ -20,6 +30,10 @@ export default class TrackDiscoveryCoordinator {
         this.filterService = new DiscoveryFilterService();
         this.dateTree = new DateTreeView(eventBus);
         this.trackInfo = new TrackInfoCoordinator({ index: this.index });
+        this.mobileTrackDate = new MobileTrackDatePopover();
+        this.mobileMedia = mobileMedia;
+        this.selectedPath = null;
+        this.mobileTrackDateRequestId = 0;
         this.mode = modeStore.getMode();
         this.available = false;
         this.generation = 0;
@@ -39,9 +53,19 @@ export default class TrackDiscoveryCoordinator {
         this.#updateControls();
         this.displayState.subscribe(({ path, paths }) =>
             this.#scheduleDisplaySync(path, paths));
+        this.mobileMedia?.addEventListener?.("change", () => {
+            this.mobileTrackDateRequestId += 1;
+            this.mobileTrackDate.hide();
+            void this.#projectSelectedTrackInfo();
+        });
     }
 
-    attach({ folderTree, treeView = null, searchView = null }) {
+    attach({
+        folderTree,
+        treeView = null,
+        searchView = null,
+        mapContainer = null
+    }) {
 
         this.folderTree = folderTree;
         this.treeView = treeView;
@@ -61,6 +85,7 @@ export default class TrackDiscoveryCoordinator {
         fixed.append(this.controls);
         sidebar.append(folderTree, this.dateTree.element);
         shell.append(fixed, sidebar, this.trackInfo.element);
+        if (mapContainer) this.mobileTrackDate.attach(mapContainer);
         this.sidebarShell = shell;
         this.#applyMode();
 
@@ -70,12 +95,32 @@ export default class TrackDiscoveryCoordinator {
     bindEvents() {
 
         this.eventBus.on("selection:changed", ({ path }) => {
+            this.selectedPath = path || null;
             this.dateTree.setSelectedPath(path, {
                 reveal: this.mode === "date"
             });
-            void this.trackInfo.setSelectedPath(path).then(() => {
+            this.mobileTrackDateRequestId += 1;
+            this.mobileTrackDate.hide();
+            void this.#projectSelectedTrackInfo().then(() => {
                 this.#syncTrackOrder();
             });
+        });
+        this.eventBus.on("map:track-clicked", ({ path, point }) => {
+            void this.#showMobileTrackDate(path, point);
+        });
+        this.eventBus.on("map:background-clicked", () => {
+            this.mobileTrackDateRequestId += 1;
+            this.mobileTrackDate.hide();
+        });
+        this.eventBus.on("map:clear-requested", () => {
+            this.mobileTrackDateRequestId += 1;
+            this.mobileTrackDate.hide();
+        });
+        this.eventBus.on("driving-mode:changed", ({ active } = {}) => {
+            if (active) {
+                this.mobileTrackDateRequestId += 1;
+                this.mobileTrackDate.hide();
+            }
         });
         this.eventBus.on("discovery:index-cancel-requested", () => {
             this.index.cancel();
@@ -107,6 +152,9 @@ export default class TrackDiscoveryCoordinator {
         this.generation = generation;
         this.libraryId = libraryId;
         this.isCurrent = isCurrent;
+        this.selectedPath = null;
+        this.mobileTrackDateRequestId += 1;
+        this.mobileTrackDate.hide();
         this.fileHandles = new Map(
             fileEntries.map(({ path, fileHandle }) => [path, fileHandle])
         );
@@ -147,6 +195,9 @@ export default class TrackDiscoveryCoordinator {
         this.generation += 1;
         this.libraryId = libraryId;
         this.isCurrent = () => true;
+        this.selectedPath = null;
+        this.mobileTrackDateRequestId += 1;
+        this.mobileTrackDate.hide();
         this.fileHandles = new Map(
             fileEntries.map(({ path, fileHandle }) => [path, fileHandle])
         );
@@ -185,6 +236,8 @@ export default class TrackDiscoveryCoordinator {
     reconcileLibrary({ namespace, fileEntries, entries }) {
 
         if (!this.available) return false;
+        this.mobileTrackDateRequestId += 1;
+        this.mobileTrackDate.hide();
         this.fileHandles = new Map(
             fileEntries.map(({ path, fileHandle }) => [path, fileHandle])
         );
@@ -208,6 +261,9 @@ export default class TrackDiscoveryCoordinator {
         this.generation += 1;
         this.libraryId = null;
         this.isCurrent = () => false;
+        this.selectedPath = null;
+        this.mobileTrackDateRequestId += 1;
+        this.mobileTrackDate.hide();
         this.fileHandles.clear();
         this.index.clear();
         this.treeView?.setTrackOrderEntries([]);
@@ -412,6 +468,55 @@ export default class TrackDiscoveryCoordinator {
         } catch {
             // Folder mode keeps filename ordering when metadata is unavailable.
         }
+    }
+
+    #projectSelectedTrackInfo() {
+
+        return this.trackInfo.setSelectedPath(
+            this.mobileMedia?.matches ? null : this.selectedPath
+        );
+    }
+
+    async #showMobileTrackDate(path, point) {
+
+        const requestId = ++this.mobileTrackDateRequestId;
+
+        if (
+            !this.mobileMedia?.matches ||
+            !path ||
+            this.selectedPath !== path ||
+            globalThis.document?.body?.classList.contains("is-driving-mode")
+        ) {
+            this.mobileTrackDate.hide();
+            return false;
+        }
+
+        const generation = this.generation;
+        let entry = this.index.getEntry(path);
+
+        if (!entry) {
+            try {
+                entry = await this.index.loadEntry(path, {
+                    isCurrent: candidate => (
+                        candidate === generation && this.isCurrent()
+                    )
+                });
+            } catch {
+                entry = null;
+            }
+        }
+
+        if (
+            requestId !== this.mobileTrackDateRequestId ||
+            generation !== this.generation ||
+            !this.isCurrent() ||
+            !this.mobileMedia?.matches ||
+            this.selectedPath !== path
+        ) {
+            return false;
+        }
+
+        return this.mobileTrackDate.show(entry, point, path);
     }
 
     #showEntries(entries) {

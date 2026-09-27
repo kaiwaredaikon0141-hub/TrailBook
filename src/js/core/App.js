@@ -187,7 +187,7 @@ export default class App {
         const sidebar = this.trackDiscoveryCoordinator.attach({
             folderTree: this.treeView.element.querySelector(".tree-root"),
             treeView: this.treeView,
-            searchView: this.searchView
+            searchView: this.searchView, mapContainer: this.mapView.element
         });
         this.librarySnapshotService = new LibrarySnapshotService({
             treeView: this.treeView, discoveryCoordinator: this.trackDiscoveryCoordinator, trackCatalogCoordinator: this.libraryTrackCatalogCoordinator, getLastKnownFolderPresentations: identity => this.folderPresentationCache.get(identity), applyProvisionalFolderPresentations: presentations => this.folderColorControl.setProvisionalPresentations(presentations),

@@ -153,7 +153,15 @@ export default class MapView {
                     trackRenderer: this.trackRenderer,
                     onTrackClick: (path, event) => {
                         if (this.selectionInteractionEnabled) {
-                            this.eventBus.emit("map:track-clicked", { path });
+                            const point = event?.containerPoint;
+
+                            this.eventBus.emit("map:track-clicked", {
+                                path,
+                                point: Number.isFinite(point?.x) &&
+                                    Number.isFinite(point?.y)
+                                    ? { x: point.x, y: point.y }
+                                    : null
+                            });
                         }
 
                         if (event?.originalEvent) {
