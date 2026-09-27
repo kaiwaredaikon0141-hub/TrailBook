@@ -276,6 +276,9 @@ function testMobileMapControlPresentation() {
                 Math.abs(monochromeRect.top - mapRect.bottom - 6) <= 1 &&
                 folderRect.left < innerWidth / 2,
             "landscape left controls are not Folder -> Map -> Monochrome");
+            assert(drivingRect.top >= 7 &&
+                drivingRect.bottom <= folderRect.top,
+            "landscape Driving control is not fixed at the upper-right edge");
             assert(monochromeRect.right <= innerWidth &&
                 monochromeRect.bottom <=
                     statusBar.element.getBoundingClientRect().top &&
@@ -290,7 +293,8 @@ function testMobileMapControlPresentation() {
                 monochromeRect.right <= drivingRect.left &&
                 Math.abs(mapRect.left - folderRect.right - 8) <= 1 &&
                 Math.abs(monochromeRect.left - mapRect.right - 6) <= 1 &&
-                folderRect.left < innerWidth / 2,
+                folderRect.left < innerWidth / 2 &&
+                Math.abs(drivingRect.top - folderRect.top) <= 1,
             `portrait controls are not Folder -> Map -> Monochrome with Driving right: ${
                 JSON.stringify({
                     folder: [folderRect.x, folderRect.y],
@@ -800,7 +804,8 @@ async function run() {
     "shared translucent mobile icon presentation contract missing");
     assert(themeCss.includes("top:max(130px") &&
         themeCss.includes("flex-direction:column") &&
-        themeCss.includes("left:max(8px, env(safe-area-inset-left))"),
+        themeCss.includes("left:max(8px, env(safe-area-inset-left))") &&
+        themeCss.includes("top:max(8px, env(safe-area-inset-top))"),
     "mobile landscape Folder / Map / Monochrome left stack is missing");
     assert(themeCss.includes("grid-column:1 / -1") &&
         themeCss.includes(".folder-color-readonly") &&

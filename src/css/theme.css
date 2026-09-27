@@ -3670,6 +3670,11 @@ body.is-track-info-resizing{
 
 @media (max-height:500px) and (pointer:coarse){
 
+    :root{
+
+        --mobile-driving-top:max(8px, env(safe-area-inset-top));
+    }
+
     .mobile-map-controls{
 
         top:max(130px, calc(env(safe-area-inset-top) + 122px));
