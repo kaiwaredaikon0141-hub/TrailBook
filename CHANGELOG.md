@@ -1,5 +1,36 @@
 # Changelog
 
+## v1.10.0
+
+### Added
+
+- Device-local Offline Maps support, including Cached Areas and PMTiles packages stored separately from the Library
+- Raster and vector PMTiles rendering with local package import, package lifecycle management, restore, selection, and deletion
+- Read-only, session-only Folder fallback for iPad/iOS FileList environments
+
+### Changed
+
+- Offline PMTiles packages can participate in the OSM / GSI basemap cycle
+- Track ordering is newest-first after authoritative metadata enrichment; incomplete historical Discovery records automatically self-heal
+- Search starts collapsed; Library/sidebar controls and the map toolbar are simplified
+- Track simplification Apply is local to the simplification section
+- Point editing is available immediately in writable Track Editor sessions
+- Whole-Track movement now requires an explicit exclusive Track move mode
+
+### Fixed
+
+- Track checkbox, map position, and historical Track ordering restoration
+- PWA/manual update recovery and coherent app-shell update behavior
+- Android PMTiles import and offline-package/basemap presentation state
+- Read-only Library Track Editor visibility and map-control obstruction
+
+### Data and compatibility
+
+- GPX files, Folder structure, and `trailbook.json` remain authoritative
+- Offline packages remain device-local IndexedDB/OPFS data
+- OSM and GSI bulk tile download remain disabled
+- Existing user data requires no manual migration or cache reset
+
 ## v1.9.1
 
 ### Fixed
@@ -9,7 +40,7 @@
 
 ## v1.9.0
 
-Status: Release candidate; final release commit and tag pending
+Status: Released
 
 ### Added
 

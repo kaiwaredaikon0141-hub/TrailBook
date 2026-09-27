@@ -185,7 +185,7 @@ function createMobileSidebarProbe(trackCount = 1122) {
     }
     sidebar.append(tree);
     buildInfo.className = "trailbook-build-info";
-    buildInfo.textContent = "TrailBook v1.9.1 · testbuild";
+    buildInfo.textContent = "TrailBook v1.10.0 · testbuild";
     diagnosticsPanel.appendBuildInfo(buildInfo);
     diagnosticsPanel.attachPreviousLibrary(previousLibraryStatus);
     diagnosticsPanel.attachFastRestore(fastRestoreDiagnostic);

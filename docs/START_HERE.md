@@ -4,9 +4,9 @@ TrailBookの開発を始める人とAIのための入口です。
 
 ## Current Status
 
-- Current Version: `1.9.1`
-- Current Release: Release 1.9
-- Completed: Release 0.1からRelease 1.9
+- Current Version: `1.10.0`
+- Current Release: Release 1.10
+- Completed: Release 0.1からRelease 1.10
 - Next Release: Not defined
 - Branch: `main`
 
@@ -33,7 +33,7 @@ GPXを独自形式へ取り込むのではなく、ユーザーのGPX資産を�
 9. `CONTRIBUTING.md` — 作業規約
 10. `GLOSSARY.md` — 用語
 11. リポジトリルートの`README.md`、`CHANGELOG.md` — 公開概要とリリース履歴
-12. `RELEASE_CHECKLIST.md` — Release 1.0〜1.9のbaseline / 完了記録
+12. `RELEASE_CHECKLIST.md` — Release 1.0〜1.10のbaseline / 完了記録
 
 ## Current Architecture
 
@@ -73,13 +73,15 @@ Release 1.8はPWA app shell、Previous Library Restore、Mobile Library / Map co
 
 Release 1.9はFast Restore / incremental refreshの安定化、Folder / Track color ownership、shared settings autosave、Library diagnostics / maintenance、maskable PWA icon、permanent build indicatorを完了した。
 
-## Implemented Through Release 1.9
+Release 1.10はdevice-local Cached Areas / PMTiles package、raster / vector PMTiles表示、iPad/iOS向けread-only FileList Folder fallback、Track復元・並び順とPWA updateの安定化、Track EditorとLibrary / Map UIの整理を完了した。
+
+## Implemented Through Release 1.10
 
 Release 1.0 Stable Viewerは完了している。Release 0.9までのFolder Library、GPX Parser、複数GPX表示、Folder / root一括表示、Waypoint option、Searchを維持し、個人利用向けの起動・互換性UX、品質整理、文書、licenseと第三者表記を確定した。
 
 GPXファイル名、Folder名、相対パスをmetadataから検索する。検索のためにGPX内容を解析せず、query入力だけでは表示Queue、解析cache、主選択、表示状態、Mapへ影響させない。
 
-現在の制限としてMobile editing、offline map、GPS track recordingは未実装である。大量GPX表示中のWaypoint ONは操作が重くなるため、大量LibraryではWaypoint OFFを推奨する。OSM / GSI背景tileとGoogle Drive直接接続はオンライン接続を必要とする。
+現在の制限としてMobile editingとGPS track recordingは未実装である。Offline Mapsはdevice-local Cached Areas / PMTiles packageを利用し、OSM / GSI bulk downloadは無効のままである。大量GPX表示中のWaypoint ONは操作が重くなるため、大量LibraryではWaypoint OFFを推奨する。OSM / GSI背景tileとGoogle Drive直接接続はオンライン接続を必要とする。
 
 Release 1.1 Track Selection & Stylingは完了している。zoom連動Track線幅、Map / TreeView / Searchの単一選択同期、selected highlight / outline、Folder色と継承、UI設定限定の`localStorage`、Color / Monochrome背景地図表示を実装した。806 GPX Libraryの人間による定性的性能評価はAcceptableで、明確な回帰やUIが固まる操作は確認されていない。数値benchmarkと20%比較は実施していない。
 
@@ -92,7 +94,7 @@ Release 1.2 Shared Library SettingsはCompletedである。Library root直下の
 - Folder構造とGPXファイルをデータの正本とする。
 - SQLite、IndexedDBなどをFolder / GPXに代わるLibrary正本として持たない。一時的なセッションcacheは独自DBに含めない。
 - Release 1.3追加設計はDecision 0039 / 0040により、IndexedDBをprevious DirectoryHandleと、性能gate不達時の再生成可能geometry cacheにだけ使用可能とする。これはLibrary正本ではなく、削除・失敗時にViewerが継続できるorigin-local補助である。
-- 現行production 1.9はMap表示mode、base map、legacy Folder色fallbackに加え、専用keyへ再生成可能なdevice-local Map / sidebar / visible / selected Track / Discovery UI stateを保存する。Folder色はvalidなshared JSONがある場合にlegacy値を混ぜない。DirectoryHandleはorigin-local IndexedDBだけへ保存し、localStorage / `trailbook.json`へ保存しない。GPS位置、access token、Driving Modeは永続化しない。
+- 現行production 1.10はMap表示mode、base map、legacy Folder色fallbackに加え、専用keyへ再生成可能なdevice-local Map / sidebar / visible / selected Track / Discovery UI stateを保存する。Folder色はvalidなshared JSONがある場合にlegacy値を混ぜない。DirectoryHandleはorigin-local IndexedDBだけへ保存し、localStorage / `trailbook.json`へ保存しない。Offline packageは専用IndexedDB / OPFSに保存する。GPS位置、access token、Driving Modeは永続化しない。
 - `trailbook.json`のFolder色は500ms debounceで自動保存し、prompt / deniedでは自動permission requestを行わずpendingを保持する。
 - Framework、TypeScript、Node.jsを追加しない。
 - UI同士を直接接続せず、EventBusとAppの調停を使用する。

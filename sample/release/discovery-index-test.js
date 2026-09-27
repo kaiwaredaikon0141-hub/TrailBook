@@ -639,7 +639,7 @@ async function testTargetedEntryReplacement() {
 }
 
 try {
-    assert(Config.version === "1.9.1", "Config version is 1.9.1");
+    assert(Config.version === "1.10.0", "Config version is 1.10.0");
     assert(Config.geometryCache.cacheSchemaVersion === 3,
         "Geometry/discovery cache schema not updated");
     assert(Config.geometryCache.textDecoderSchemaVersion === 1,

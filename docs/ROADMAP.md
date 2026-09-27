@@ -1,7 +1,16 @@
 # ROADMAP.md
 
-Version: 1.9 Completed
+Version: 1.10.0 Completed
 Status: Official
+
+## Release 1.10 — Offline Maps and Cross-device Library Access
+
+- Status: Completed.
+- Added device-local Cached Areas and PMTiles package storage, import, download lifecycle, raster/vector rendering, restore, selection, deletion, and basemap-cycle integration.
+- Added read-only, session-only FileList Folder fallback for iPad/iOS-compatible environments.
+- Stabilized Track/View State restoration, newest-first Track ordering, PWA updates, and Android PMTiles import.
+- Simplified Library/sidebar/map controls and made Track movement an explicit exclusive editor mode.
+- Preserved GPX, Folder structure, and `trailbook.json` as authoritative data; OSM/GSI bulk tile download remains disabled.
 
 ## Release 1.9 Unit 2 — Complete Fast Restore UX
 
@@ -16,10 +25,10 @@ Status: Official
 - Persistent Display SnapshotからGeometry Cache hitをLibrary scan前に表示するPhase Aを追加する。
 - Previous Library permission / scan / metadata revalidationはPhase Bとして既存経路を維持する。
 - GPX本文の複製、cache schema変更、Drive自動認証、offline mapは対象外とする。
-Current Release: 1.9.1
+Current Release: 1.10.0
 Next Release: Not defined
 
-Release 1.9 completed Fast Restore and incremental Library refresh stabilization, deterministic Folder / Track color projection, shared `trailbook.json` autosave, consolidated diagnostics, Library maintenance reset, permanent build visibility, and Android maskable PWA icons. GPX and Folder structure remain the data source of truth.
+Release 1.10 completed Offline Maps / PMTiles packages, read-only FileList Folder access, Track/View State and PWA update stabilization, and Track Editor / Library / Map UI refinements. GPX and Folder structure remain the data source of truth.
 
 ## Version Policy
 
@@ -871,7 +880,7 @@ Release 1.2 Shared Library Settings、Release 1.3 Previous View Restoration、Re
 - Advanced TrackPoint Editing（複数選択、範囲削除、Segment / Track split・merge、time / elevation補間、連続描画）
 - Mobile Viewer UX（Release 1.7でCompleted。Mobile editingは未実装）
 - Google Drive large cold-load optimization
-- Offline Map
+- Offline Mapsの追加provider / package catalog拡張
 - Waypoint Performance Optimization
 - Unit 2-equivalent Performance Remeasurement
 - Stable Library Identity / Alias
@@ -895,7 +904,7 @@ Version 2以降の候補として、元RoadmapのFuture Ideasを維持する。
 - 3D
 - AI Search
 - Mobile専用Library入口
-- `input type="file" webkitdirectory`を使うFolder選択fallback
+- FileList fallbackの永続再接続 / writable対応（現行はread-only・session-only）
 - 複数GPXファイル選択
 - ZIP Library読込
 - クラウドFolder import

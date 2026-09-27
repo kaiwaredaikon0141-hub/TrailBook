@@ -4,8 +4,8 @@
 
 ## Current Status
 
-- Current Release: `1.9.1`
-- Completed: Release 0.1からRelease 1.9
+- Current Release: `1.10.0`
+- Completed: Release 0.1からRelease 1.10
 - Next Release: Not defined
 
 Release 1.4 Library Browsing / Track DiscoveryはCompletedです。Release 1.3の前回Library / view restorationとgeometry cacheを維持し、1つのDiscovery IndexからDate Tree、Track Info、Track名 / Folder / date range Search・Filterを提供します。
@@ -19,6 +19,8 @@ Release 1.7はCompletedです。Mobile Viewer、GPS Current Position / Follow、
 Release 1.8はCompletedです。PWA app shell、Previous Library Restore、Mobile Library / Map controls、runtime build diagnostics、Desktop Track Point Move / Add / Deleteを確定します。
 
 Release 1.9はCompletedです。Fast Restore / incremental refresh、Folder / Track color ownership、shared settings autosave、Library diagnostics / maintenance、maskable PWA icon、permanent build indicatorを確定します。
+
+Release 1.10はCompletedです。device-local Cached Areas / PMTiles package、raster / vector PMTiles表示、read-only FileList Folder fallback、Track復元・並び順とPWA updateの安定化、Track EditorとLibrary / Map UIの整理を確定します。
 
 ## Read Order
 
@@ -34,7 +36,7 @@ Release 1.9はCompletedです。Fast Restore / incremental refresh、Folder / Tr
 10. [CONTRIBUTING.md](CONTRIBUTING.md) — Gitと変更手順
 11. [GLOSSARY.md](GLOSSARY.md) — 用語
 
-Release 1.0〜1.9の完了条件と検証記録は[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)に記録しています。
+Release 1.0〜1.10の完了条件と検証記録は[RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)に記録しています。
 
 Release 1.1 Unit roles:
 
@@ -82,7 +84,7 @@ Release 1.5 Unit roles:
 5. Original Backup + In-place Save、verification、reserved Folder、targeted refresh
 6. Integration acceptance、documentation、Release finalization
 
-## Implemented Through Release 1.9
+## Implemented Through Release 1.10
 
 - Folder Libraryと再帰走査
 - GPX Parser
@@ -121,6 +123,8 @@ Release 1.5 Unit roles:
 - GPS現在地 / Follow、Driving Mode、Screen Wake Lock
 - read-only Google Drive Library Reader、pre-download Geometry Cache lookup、cold cache miss 4並列
 - GitHub Pages HTTPS deploymentとruntime Google config
+- device-local Cached Areas / PMTiles packageとraster / vector offline basemap
+- iPad/iOSでのread-only・session-only FileList Folder fallback
 
 実装済み範囲の詳細は[CHANGELOG.md](../CHANGELOG.md)、Release順序は[ROADMAP.md](ROADMAP.md)を正本とします。
 
@@ -130,7 +134,9 @@ Release 1.8はCompletedです。PWA app shell、Previous Library Restore、Mobil
 
 Release 1.9はCompletedです。Fast Restoreとincremental Library refreshを安定化し、Folder / Track colorの一貫性、`trailbook.json`自動保存、Library diagnostics / maintenance、PWA icon / build visibilityを整備しました。
 
-Search / Tree navigation復元、Stable Library Identity / Alias、複数point選択、区間削除、Track分割・結合、Backup overwrite / deleteに加え、Statistics、Replay、HeatMap、vehicle metadata、Cloud Sync、Mobile editing、offline map、Drive large cold-load optimization、Waypoint性能最適化、Plugin、AI Searchなどは未実装の将来候補です。
+Release 1.10はCompletedです。Offline Maps / PMTiles package、FileList Folder fallback、Track復元・並び順とPWA update、Track EditorとUIを安定化しました。
+
+Search / Tree navigation復元、Stable Library Identity / Alias、複数point選択、区間削除、Track分割・結合、Backup overwrite / deleteに加え、Statistics、Replay、HeatMap、vehicle metadata、Cloud Sync、Mobile editing、Drive large cold-load optimization、Waypoint性能最適化、Plugin、AI Searchなどは未実装の将来候補です。
 
 ## Source of Truth
 

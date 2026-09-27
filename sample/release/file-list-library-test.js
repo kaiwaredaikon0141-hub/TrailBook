@@ -168,7 +168,7 @@ async function testFileListSource() {
 }
 
 function testNativeDirectoryInputs() {
-    const toolbar = new Toolbar("1.9.1");
+    const toolbar = new Toolbar("1.10.0");
     const panel = new LibraryAccessPanel();
     let toolbarSelections = 0;
     let panelSelections = 0;

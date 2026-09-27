@@ -4,11 +4,11 @@ TrailBookは、GPXを含むFolderをLibraryとして閲覧する、個人利用�
 
 ## Current Status
 
-- Current Release: `1.9.1`
-- Release 1.9: Completed
+- Current Release: `1.10.0`
+- Release 1.10: Completed
 - Next Release: Not defined
 
-Release 1.9はFast Restoreとincremental Library refreshを安定化し、Folder色の決定・共有・自動保存、Library diagnostics / maintenance、PWA build表示とmaskable iconを整備したCompleted Releaseです。Folder構造とGPXをデータの正本とする境界は維持します。
+Release 1.10はdevice-local Offline Maps / PMTiles、iPad/iOS向けread-only FileList Folder fallback、Track復元・並び順とPWA updateの安定化、Track EditorとLibrary / Map UIの整理を完了したReleaseです。Folder構造とGPXをデータの正本とする境界は維持します。
 
 ## Implemented Features
 
@@ -54,13 +54,16 @@ Release 1.9はFast Restoreとincremental Library refreshを安定化し、Folder
 - Display Snapshot / Geometry CacheによるFast Restoreと高速incremental Library refresh
 - LibraryのMaintenance（表示状態reset / 内部cache reset）と折りたたみDiagnostics
 - Map右下のVersion / Build表示とAndroid用maskable PWA icon
+- device-local Cached AreasとOPFS PMTiles packageによるOffline Maps
+- raster / vector PMTilesのimport、restore、select、deleteとbasemap cycle統合
+- iPad/iOSで利用できるread-only・session-only FileList Folder fallback
 - ローカル同梱したLeaflet 1.9.4による地図表示
 
 従来のFolder名、GPXファイル名、relative path Searchはmetadataだけで動作します。Track名またはdate filterを明示した場合だけDiscovery Indexを遅延構築し、filter入力だけではGPX表示、SelectionState、DisplayState、Map center / zoomを変更しません。
 
 ## Data Principles
 
-- Current Release 1.9も、利用者の明示`保存`時にoriginal bytesのBackupを検証した後だけGPXを更新します。日付filename renameやTrack Point編集でもBackup originalは変更しません。
+- Current Release 1.10も、利用者の明示`保存`時にoriginal bytesのBackupを検証した後だけGPXを更新します。日付filename renameやTrack Point編集でもBackup originalは変更しません。
 - Backup成功前、自動、backgroundではGPXを変更・移動・削除しません。date-based filename renameは明示`保存`と検証成功後だけ旧source pathを削除します。
 - `trailbook.json`のFolder色は変更後にdebounce自動保存します。自動でpermission promptを表示せず、書き込めない間はpending変更を保持します。
 - SQLiteやIndexedDBをFolder / GPXに代わるLibrary正本として使用しません。
@@ -81,6 +84,7 @@ Best effort:
 
 - その他のChromium系desktop browser
 - HTTPSで開いたAndroid Chrome Mobile Viewer（端末機能に依存）
+- iPad/iOSの対応browserによるread-only FileList Folder fallback
 
 非対応または未確認:
 
@@ -88,13 +92,13 @@ Best effort:
 - `file://`
 - 通常のLAN内HTTP IP
 
-File System Access API、secure context、対応originが必要です。対応originはHTTPS、`http://localhost`、`http://127.0.0.1`です。
+DirectoryHandleを使う永続的なLibrary復元と書き込み可能な明示操作にはFile System Access APIが必要です。未対応環境ではread-only・session-onlyのFileList fallbackを使用します。どちらもsecure contextのHTTPS、`http://localhost`、`http://127.0.0.1`を使用してください。
 
 ### Mobile
 
 Release 1.7はMap主体のresponsive layout、overlay Library Sidebar、touch向けcontrol、GPS現在地 / Follow、走行中モードを提供します。GitHub PagesのHTTPS URLでGoogle Drive直接接続を利用できます。
 
-Mobile editingは対象外で、編集入口はmobile幅で非表示です。File System Access API、Geolocation、Wake Lockの利用可否とpermissionはbrowser / OSに依存します。iPhone / iPadのRelease 1.7統合操作は未確認です。
+Mobile editingは対象外で、編集入口はmobile幅またはread-only Libraryで非表示です。DirectoryHandle対応環境では従来のLibrary復元と書き込み可能な明示操作を利用できます。iPad/iOSのFileList fallbackはread-only・session-onlyで、native Files pickerでFolderを選択し、reload後は再選択が必要です。rootの`trailbook.json`は読み込みますが、GPXやshared settingsへのwritebackは行いません。
 
 ## Start TrailBook
 
@@ -135,7 +139,7 @@ GitHub PagesのHTTPS deployment手順は[docs/GITHUB_PAGES.md](docs/GITHUB_PAGES
 2. GPXを含むFolderを選択します。
 3. browserのpermission確認を許可します。
 
-Folder pickerは`showDirectoryPicker({ mode: "read" })`で開きます。Cancelしても既存Libraryは維持されます。Folder色の自動保存はactual Library handleが書き込み可能な場合だけ行い、permission promptを自動表示しません。
+DirectoryHandle対応環境のFolder pickerは`showDirectoryPicker({ mode: "read" })`で開きます。未対応環境ではcompatibleなnative Files pickerによるFileList fallbackを使用します。Cancelしても既存Libraryは維持されます。Folder色の自動保存はactual Library handleが書き込み可能な場合だけ行い、permission promptを自動表示しません。
 
 ### Shared Library Settings
 
@@ -159,7 +163,7 @@ Leaflet本体はTrailBookへ同梱されています。次の処理はOpenStreet
 
 OpenStreetMap背景tileはオンライン依存です。地図を表示・移動・zoomすると、表示地点に対応するtile requestがOpenStreetMapのtile serverへ送信されます。そのため、閲覧中の概略地域がtile server側へ伝わる可能性があります。
 
-TrailBookはGPXファイルやGPX内容を外部serverへアップロードしません。OSM tileのbulk download、prefetch、offline保存は実装していません。
+TrailBookはGPXファイルやGPX内容を外部serverへアップロードしません。Offline MapsのCached AreasとPMTiles packageはdevice-local IndexedDB / OPFSに保存し、選択したGPX Libraryや`trailbook.json`には保存しません。OSM / GSI tileのbulk downloadとprefetchは禁止・無効のままです。
 
 ## Data Protection
 
@@ -176,10 +180,10 @@ TrailBookはGPXファイルやGPX内容を外部serverへアップロードし�
 
 - Mobile editingは未対応です。
 - Android Chrome Mobile Viewerはbest effortで、DirectoryHandle permissionとDocumentsProviderの挙動は端末環境に依存します。
-- iPhone / iPad Chromeは正式対応していません。
+- iPad/iOSのFileList fallbackはread-only・session-onlyで、reload後の自動再接続やsource writebackには対応しません。
 - 大量GPX表示中にWaypointをONにすると、多数のMarker描画により操作が重くなります。大量LibraryではWaypoint OFFを推奨します。
 - Waypointは初期OFFです。
-- OpenStreetMap背景tileはオンライン依存で、offline地図保存はありません。
+- OpenStreetMap / GSI背景tileはオンライン依存で、bulk offline downloadはできません。Offline表示には別管理のdevice-local PMTiles packageを使用します。
 - 複数point選択、区間削除、Track分割・結合、BackupのOverwrite / deleteは未実装です。
 - 編集draftはsession memory限定で、page reload、Library変更、別GPXの編集開始では破棄されます。
 - Folder rename / moveとImport / Exportは未実装です。

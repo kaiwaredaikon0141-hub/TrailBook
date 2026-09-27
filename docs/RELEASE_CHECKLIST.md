@@ -4,6 +4,30 @@ Version: 1.0.0〜1.5.0 release records
 Status: Release 1.0〜1.5 Completed
 Baseline: v1.4.0 for Release 1.5
 
+## Release 1.10 — Release Preparation
+
+Current production/release target: `1.10.0`
+
+Completed scope:
+
+- Device-local Cached Areas and PMTiles package storage, raster/vector rendering, import, download lifecycle, restore, selection, deletion, and basemap-cycle integration
+- Read-only, session-only FileList Folder fallback for iPad/iOS-compatible environments
+- Track/View State restoration, newest-first Track ordering, PWA update recovery, Android PMTiles import, and UI/editor interaction stabilization
+- GPX, Folder structure, and `trailbook.json` remain authoritative; OSM/GSI bulk tile download remains disabled
+
+Release validation:
+
+- [x] Complete all 42 release browser runners and viewport variants (6,708 standard assertions Pass)
+- [x] Confirm `GET /src/` returns HTTP 200 and PWA build/version coherence
+- [x] Confirm 147 reachable / 148 total `src/js` modules, with no missing imports or circular dependencies
+- [ ] Run desktop smoke test
+- [ ] Run Android smoke test
+- [ ] Run iPad/FileList read-only/session-only smoke test
+- [ ] Confirm Offline Maps / PMTiles persistence across reload and Library changes
+- [ ] Confirm manual app update reaches one coherent latest build
+- [ ] Commit and push the `1.10.0` release update
+- [ ] After pushed-build real-device acceptance, create and verify tag `v1.10.0`
+
 ## Release 1.9 — Release Candidate Complete
 
 Current production version: `1.9.1`
@@ -31,9 +55,9 @@ Confirmed release-candidate validation:
 
 Final Git release actions:
 
-- [ ] Commit the `1.9.1` release update
-- [ ] Push `main`
-- [ ] Create and verify tag `v1.9.1`
+- [x] Commit the `1.9.1` release update
+- [x] Push `main`
+- [x] Create and verify tag `v1.9.1`
 
 ## Release 1.9 Unit 2 — Complete Fast Restore UX
 
