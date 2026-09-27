@@ -15,6 +15,18 @@ function assert(condition, message) {
     if (!condition) throw new Error(message);
 }
 
+function resolvedAccentColor() {
+
+    const probe = document.createElement("span");
+
+    probe.style.color = "var(--accent)";
+    document.body.append(probe);
+    const color = getComputedStyle(probe).color;
+
+    probe.remove();
+    return color;
+}
+
 class GeolocationMock {
     constructor() {
         this.watchCalls = [];
@@ -100,6 +112,8 @@ async function run() {
     assert(fixture.geolocation.watchCalls.length === 1,
         "watchPosition did not start");
     assert(fixture.controller.isFollowing(), "tracking did not start with follow ON");
+    assert(fixture.controller.button.getAttribute("aria-pressed") === "true",
+        "Current Location active semantics missing");
     assert(JSON.stringify(fixture.geolocation.watchCalls[0].options) ===
         JSON.stringify(GEOLOCATION_OPTIONS), "Geolocation options changed");
     fixture.service.start(() => {}, () => {});
@@ -113,8 +127,21 @@ async function run() {
     "first position did not create one marker and accuracy circle");
     assert(fixture.setViews.length === 1 && fixture.setViews[0].zoom === 13,
         "first follow changed zoom or did not move");
-    assert(fixture.controller.status.textContent.includes("±8 m"),
-        "accuracy text missing");
+    assert(fixture.controller.status.textContent.includes("±8 m") &&
+        fixture.controller.status.textContent.includes("現在地を表示中") &&
+        !fixture.controller.status.textContent.includes("追従中"),
+    "accuracy text was removed or retained redundant follow confirmation");
+    assert(getComputedStyle(fixture.controller.status).display !== "none",
+        "Current Location accuracy feedback was hidden");
+    if (matchMedia(
+        "(max-width: 768px), (max-height: 500px) and (pointer: coarse)"
+    ).matches) {
+        const activeStyle = getComputedStyle(fixture.controller.button);
+
+        assert(activeStyle.backgroundColor === resolvedAccentColor() &&
+            activeStyle.color === "rgb(255, 255, 255)",
+        "Current Location active state is not blue-filled");
+    }
     assert(fixture.layers.every(layer => layer.options.interactive === false),
         "GPS layers intercept Map interaction");
 
@@ -131,6 +158,10 @@ async function run() {
 
     fixture.controller.button.click();
     assert(!fixture.controller.isFollowing(), "follow did not turn OFF");
+    assert(fixture.controller.button.getAttribute("aria-pressed") === "false" &&
+        getComputedStyle(fixture.controller.button).backgroundColor !==
+            resolvedAccentColor(),
+    "Current Location inactive styling was not restored");
     const viewCount = fixture.setViews.length;
     fixture.geolocation.watchCalls[0].success({
         coords: { latitude: 35.2, longitude: 135.2, accuracy: 6 }
@@ -165,6 +196,7 @@ async function run() {
     permission.controller.button.click();
     permission.geolocation.watchCalls[0].error({ code: 1 });
     assert(permission.controller.status.textContent.includes("許可") &&
+        getComputedStyle(permission.controller.status).display !== "none" &&
         !permission.controller.isTracking() &&
         permission.geolocation.clearCalls.length === 1,
     "permission denied handling failed");
@@ -177,6 +209,16 @@ async function run() {
     unavailable.geolocation.watchCalls[0].error({ code: 3 });
     assert(unavailable.controller.status.textContent.includes("タイムアウト"),
         "timeout message missing");
+
+    const noAccuracy = createController();
+
+    noAccuracy.controller.button.click();
+    noAccuracy.geolocation.watchCalls[0].success({
+        coords: { latitude: 35, longitude: 135 }
+    });
+    assert(noAccuracy.controller.status.textContent === "" &&
+        getComputedStyle(noAccuracy.controller.status).display === "none",
+    "empty normal Current Location status retained a blank bubble");
 
     const unsupported = new CurrentPositionController({
         mapView: fixture.mapView,

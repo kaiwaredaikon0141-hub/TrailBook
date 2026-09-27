@@ -192,9 +192,9 @@ export default class CurrentPositionController {
         const accuracyText = Number.isFinite(accuracy) && accuracy >= 0
             ? ` ±${Math.round(accuracy)} m`
             : "";
-        this.status.textContent = this.following
-            ? `現在地を追従中${accuracyText}`
-            : `現在地を表示中${accuracyText}`;
+        this.status.textContent = accuracyText
+            ? `現在地を表示中${accuracyText}`
+            : "";
     }
 
     #showError(message) {

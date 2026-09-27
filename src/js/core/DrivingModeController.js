@@ -24,6 +24,7 @@ export default class DrivingModeController {
         this.wakeLock = wakeLock;
         this.mobileMedia = mobileMedia;
         this.active = false;
+        this.wakeLockRequestPending = false;
         this.element = this.#create();
         this.button = this.element.querySelector(".driving-mode-button");
         this.label = this.element.querySelector(".driving-mode-label");
@@ -66,8 +67,10 @@ export default class DrivingModeController {
         this.trackInfoElement?.classList.add("is-mobile-dismissed");
         this.currentPosition.startFollowing();
         this.eventBus.emit("driving-mode:changed", { active: true });
+        this.wakeLockRequestPending = true;
         this.#render();
         await this.wakeLock.request();
+        this.wakeLockRequestPending = false;
         this.#render();
         return true;
     }
@@ -100,14 +103,13 @@ export default class DrivingModeController {
             return;
         }
 
-        const follow = this.currentPosition.isFollowing()
-            ? "GPS追従中"
-            : "GPS追従OFF";
-        const wake = this.wakeLock.isActive()
-            ? "画面保持中"
-            : "画面保持不可";
+        const warnings = [];
 
-        this.status.textContent = `${follow}・${wake}`;
+        if (!this.currentPosition.isFollowing()) warnings.push("GPS追従OFF");
+        if (!this.wakeLockRequestPending && !this.wakeLock.isActive()) {
+            warnings.push("画面保持不可");
+        }
+        this.status.textContent = warnings.join("・");
     }
 
     #create() {

@@ -2553,6 +2553,12 @@ body.is-track-info-resizing{
     font-size:12px;
 }
 
+.current-position-status:empty,
+.driving-mode-status:empty{
+
+    display:none;
+}
+
 .current-position-marker,
 .current-position-accuracy{
 
@@ -3389,11 +3395,19 @@ body.is-track-info-resizing{
         gap:5px;
     }
 
+    .current-position-button[aria-pressed="true"],
     .driving-mode-button[aria-pressed="true"]{
+
+        border-color:var(--accent);
 
         color:#fff;
 
         background:var(--accent);
+    }
+
+    .current-position-button[data-state="error"]{
+
+        border-color:#b42318;
     }
 
     .driving-mode-status{

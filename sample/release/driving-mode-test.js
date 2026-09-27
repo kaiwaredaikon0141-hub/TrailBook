@@ -108,6 +108,18 @@ class FakeMedia {
     }
 }
 
+function resolvedAccentColor() {
+
+    const probe = document.createElement("span");
+
+    probe.style.color = "var(--accent)";
+    document.body.append(probe);
+    const color = getComputedStyle(probe).color;
+
+    probe.remove();
+    return color;
+}
+
 async function testDrivingMode() {
     const eventBus = new EventBus();
     const mobileMedia = new FakeMedia(true);
@@ -165,11 +177,23 @@ async function testDrivingMode() {
     assert(trackInfo.classList.contains("is-mobile-dismissed") &&
         workspace.classList.contains("is-driving-mode"),
     "driving mode presentation was not applied");
+    assert(controller.button.getAttribute("aria-pressed") === "true" &&
+        controller.status.textContent === "" &&
+        getComputedStyle(controller.status).display === "none",
+    "normal Driving state retained its redundant status bubble");
+    if (matchMedia(MOBILE_LAYOUT_QUERY).matches) {
+        const activeStyle = getComputedStyle(controller.button);
+
+        assert(activeStyle.backgroundColor === resolvedAccentColor() &&
+            activeStyle.color === "rgb(255, 255, 255)",
+        "Driving active state is not blue-filled");
+    }
 
     currentPosition.following = false;
     eventBus.emit("map:user-drag-started");
     assert(controller.isActive() &&
-        controller.status.textContent.includes("GPS追従OFF"),
+        controller.status.textContent.includes("GPS追従OFF") &&
+        getComputedStyle(controller.status).display !== "none",
     "Map drag disabled driving mode or did not show Follow OFF");
     gpsButton.click();
 
@@ -181,6 +205,12 @@ async function testDrivingMode() {
     assert(currentPosition.stops === 1 && wakeLock.releases === 1 &&
         !workspace.classList.contains("is-driving-mode"),
     "driving mode cleanup failed");
+    assert(controller.button.getAttribute("aria-pressed") === "false" &&
+        controller.status.textContent === "" &&
+        getComputedStyle(controller.status).display === "none" &&
+        getComputedStyle(controller.button).backgroundColor !==
+            resolvedAccentColor(),
+    "Driving inactive state retained active styling or a blank status bubble");
 
     assert(controller.element.hidden && !await controller.enable(),
         "Desktop exposed an active driving-mode entry");
@@ -199,7 +229,8 @@ async function testDrivingMode() {
         mobileMedia: new FakeMedia(true)
     });
     assert(await rejectedController.enable() && rejectedGps.starts === 1 &&
-        rejectedController.status.textContent.includes("画面保持不可"),
+        rejectedController.status.textContent.includes("画面保持不可") &&
+        getComputedStyle(rejectedController.status).display !== "none",
     "Wake Lock rejection stopped GPS driving mode");
     await rejectedController.disable();
     assert(!new DrivingModeController({
