@@ -108,16 +108,33 @@ class FakeMedia {
     }
 }
 
-function resolvedAccentColor() {
+function resolvedMobileActiveSurface() {
 
     const probe = document.createElement("span");
 
-    probe.style.color = "var(--accent)";
+    probe.style.backgroundColor = "var(--mobile-tracking-active-surface)";
     document.body.append(probe);
-    const color = getComputedStyle(probe).color;
+    const color = getComputedStyle(probe).backgroundColor;
 
     probe.remove();
     return color;
+}
+
+function footprint(element) {
+    const rect = element.getBoundingClientRect();
+
+    return [rect.x, rect.y, rect.width, rect.height]
+        .map(value => Math.round(value * 100) / 100);
+}
+
+function isMobileStatusVisuallyHidden(element) {
+    const style = getComputedStyle(element);
+
+    return style.position === "absolute" &&
+        style.width === "1px" &&
+        style.height === "1px" &&
+        style.overflow === "hidden" &&
+        style.clipPath === "inset(50%)";
 }
 
 async function testDrivingMode() {
@@ -164,6 +181,8 @@ async function testDrivingMode() {
     });
 
     controller.attach(document.body);
+    const mobileLayout = matchMedia(MOBILE_LAYOUT_QUERY).matches;
+    const inactiveFootprint = footprint(controller.button);
     assert(controller.button.querySelector("svg") &&
         controller.button.querySelector(".driving-mode-label") &&
         controller.button.title && controller.button.getAttribute("aria-label"),
@@ -181,20 +200,30 @@ async function testDrivingMode() {
         controller.status.textContent === "" &&
         getComputedStyle(controller.status).display === "none",
     "normal Driving state retained its redundant status bubble");
-    if (matchMedia(MOBILE_LAYOUT_QUERY).matches) {
+    if (mobileLayout) {
         const activeStyle = getComputedStyle(controller.button);
 
-        assert(activeStyle.backgroundColor === resolvedAccentColor() &&
+        assert(activeStyle.backgroundColor === resolvedMobileActiveSurface() &&
             activeStyle.color === "rgb(255, 255, 255)",
-        "Driving active state is not blue-filled");
+        "Driving active state is not translucent blue-filled");
+        assert(JSON.stringify(footprint(controller.button)) ===
+            JSON.stringify(inactiveFootprint),
+        "Driving activation changed the button footprint");
     }
 
     currentPosition.following = false;
     eventBus.emit("map:user-drag-started");
     assert(controller.isActive() &&
         controller.status.textContent.includes("GPS追従OFF") &&
-        getComputedStyle(controller.status).display !== "none",
+        (mobileLayout
+            ? isMobileStatusVisuallyHidden(controller.status)
+            : getComputedStyle(controller.status).display !== "none"),
     "Map drag disabled driving mode or did not show Follow OFF");
+    if (mobileLayout) {
+        assert(JSON.stringify(footprint(controller.button)) ===
+            JSON.stringify(inactiveFootprint),
+        "Driving warning feedback changed the button footprint");
+    }
     gpsButton.click();
 
     mobileMedia.set(false);
@@ -209,8 +238,13 @@ async function testDrivingMode() {
         controller.status.textContent === "" &&
         getComputedStyle(controller.status).display === "none" &&
         getComputedStyle(controller.button).backgroundColor !==
-            resolvedAccentColor(),
+            resolvedMobileActiveSurface(),
     "Driving inactive state retained active styling or a blank status bubble");
+    if (mobileLayout) {
+        assert(JSON.stringify(footprint(controller.button)) ===
+            JSON.stringify(inactiveFootprint),
+        "Driving deactivation changed the button footprint");
+    }
 
     assert(controller.element.hidden && !await controller.enable(),
         "Desktop exposed an active driving-mode entry");
@@ -228,9 +262,12 @@ async function testDrivingMode() {
         },
         mobileMedia: new FakeMedia(true)
     });
+    rejectedController.attach(document.body);
     assert(await rejectedController.enable() && rejectedGps.starts === 1 &&
         rejectedController.status.textContent.includes("画面保持不可") &&
-        getComputedStyle(rejectedController.status).display !== "none",
+        (mobileLayout
+            ? isMobileStatusVisuallyHidden(rejectedController.status)
+            : getComputedStyle(rejectedController.status).display !== "none"),
     "Wake Lock rejection stopped GPS driving mode");
     await rejectedController.disable();
     assert(!new DrivingModeController({

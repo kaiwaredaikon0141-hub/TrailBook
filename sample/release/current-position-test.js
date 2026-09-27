@@ -8,6 +8,8 @@ import CurrentPositionService, {
 import MapView from "../../src/js/ui/MapView.js";
 
 const output = document.getElementById("result");
+const MOBILE_LAYOUT_QUERY =
+    "(max-width: 768px), (max-height: 500px) and (pointer: coarse)";
 let assertions = 0;
 
 function assert(condition, message) {
@@ -15,16 +17,33 @@ function assert(condition, message) {
     if (!condition) throw new Error(message);
 }
 
-function resolvedAccentColor() {
+function resolvedMobileActiveSurface() {
 
     const probe = document.createElement("span");
 
-    probe.style.color = "var(--accent)";
+    probe.style.backgroundColor = "var(--mobile-tracking-active-surface)";
     document.body.append(probe);
-    const color = getComputedStyle(probe).color;
+    const color = getComputedStyle(probe).backgroundColor;
 
     probe.remove();
     return color;
+}
+
+function footprint(element) {
+    const rect = element.getBoundingClientRect();
+
+    return [rect.x, rect.y, rect.width, rect.height]
+        .map(value => Math.round(value * 100) / 100);
+}
+
+function isMobileStatusVisuallyHidden(element) {
+    const style = getComputedStyle(element);
+
+    return style.position === "absolute" &&
+        style.width === "1px" &&
+        style.height === "1px" &&
+        style.overflow === "hidden" &&
+        style.clipPath === "inset(50%)";
 }
 
 class GeolocationMock {
@@ -103,6 +122,8 @@ function createController({ portrait = true } = {}) {
 
 async function run() {
     const fixture = createController();
+    const mobile = matchMedia(MOBILE_LAYOUT_QUERY).matches;
+    const inactiveFootprint = footprint(fixture.controller.button);
 
     assert(fixture.controller.button.querySelector("svg") &&
         fixture.controller.button.title &&
@@ -114,6 +135,11 @@ async function run() {
     assert(fixture.controller.isFollowing(), "tracking did not start with follow ON");
     assert(fixture.controller.button.getAttribute("aria-pressed") === "true",
         "Current Location active semantics missing");
+    if (mobile) {
+        assert(JSON.stringify(footprint(fixture.controller.button)) ===
+            JSON.stringify(inactiveFootprint),
+        "Current Location activation changed the button footprint");
+    }
     assert(JSON.stringify(fixture.geolocation.watchCalls[0].options) ===
         JSON.stringify(GEOLOCATION_OPTIONS), "Geolocation options changed");
     fixture.service.start(() => {}, () => {});
@@ -131,16 +157,19 @@ async function run() {
         fixture.controller.status.textContent.includes("現在地を表示中") &&
         !fixture.controller.status.textContent.includes("追従中"),
     "accuracy text was removed or retained redundant follow confirmation");
-    assert(getComputedStyle(fixture.controller.status).display !== "none",
-        "Current Location accuracy feedback was hidden");
-    if (matchMedia(
-        "(max-width: 768px), (max-height: 500px) and (pointer: coarse)"
-    ).matches) {
+    assert(mobile
+        ? isMobileStatusVisuallyHidden(fixture.controller.status)
+        : getComputedStyle(fixture.controller.status).display !== "none",
+        "Current Location accuracy text remained visually exposed on Mobile");
+    if (mobile) {
         const activeStyle = getComputedStyle(fixture.controller.button);
 
-        assert(activeStyle.backgroundColor === resolvedAccentColor() &&
+        assert(activeStyle.backgroundColor === resolvedMobileActiveSurface() &&
             activeStyle.color === "rgb(255, 255, 255)",
-        "Current Location active state is not blue-filled");
+        "Current Location active state is not translucent blue-filled");
+        assert(JSON.stringify(footprint(fixture.controller.button)) ===
+            JSON.stringify(inactiveFootprint),
+        "Current Location accuracy feedback changed the button footprint");
     }
     assert(fixture.layers.every(layer => layer.options.interactive === false),
         "GPS layers intercept Map interaction");
@@ -160,8 +189,13 @@ async function run() {
     assert(!fixture.controller.isFollowing(), "follow did not turn OFF");
     assert(fixture.controller.button.getAttribute("aria-pressed") === "false" &&
         getComputedStyle(fixture.controller.button).backgroundColor !==
-            resolvedAccentColor(),
+            resolvedMobileActiveSurface(),
     "Current Location inactive styling was not restored");
+    if (mobile) {
+        assert(JSON.stringify(footprint(fixture.controller.button)) ===
+            JSON.stringify(inactiveFootprint),
+        "Current Location deactivation changed the button footprint");
+    }
     const viewCount = fixture.setViews.length;
     fixture.geolocation.watchCalls[0].success({
         coords: { latitude: 35.2, longitude: 135.2, accuracy: 6 }
@@ -196,7 +230,9 @@ async function run() {
     permission.controller.button.click();
     permission.geolocation.watchCalls[0].error({ code: 1 });
     assert(permission.controller.status.textContent.includes("許可") &&
-        getComputedStyle(permission.controller.status).display !== "none" &&
+        (mobile
+            ? isMobileStatusVisuallyHidden(permission.controller.status)
+            : getComputedStyle(permission.controller.status).display !== "none") &&
         !permission.controller.isTracking() &&
         permission.geolocation.clearCalls.length === 1,
     "permission denied handling failed");

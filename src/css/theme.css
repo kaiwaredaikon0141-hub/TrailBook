@@ -19,6 +19,12 @@
 
     --mobile-icon-foreground:rgba(40, 50, 60, 0.84);
 
+    --mobile-tracking-active-surface:rgba(37, 99, 235, 0.84);
+
+    --mobile-tracking-control-width:128px;
+
+    --mobile-tracking-control-height:48px;
+
     --mobile-zoom-group-width:374px;
 }
 
@@ -3343,9 +3349,7 @@ body.is-track-info-resizing{
 
         bottom:max(40px, calc(env(safe-area-inset-bottom) + 32px));
 
-        flex-direction:column;
-
-        align-items:flex-end;
+        width:var(--mobile-tracking-control-width);
     }
 
     .map-build-indicator{
@@ -3367,24 +3371,35 @@ body.is-track-info-resizing{
 
         display:flex;
 
-        max-width:calc(100% - 96px);
-
-        align-items:center;
-
-        gap:6px;
+        width:var(--mobile-tracking-control-width);
     }
 
+    .current-position-button,
     .driving-mode-button{
 
-        min-width:88px;
+        box-sizing:border-box;
 
-        min-height:48px;
+        width:var(--mobile-tracking-control-width);
+
+        min-width:var(--mobile-tracking-control-width);
+
+        max-width:var(--mobile-tracking-control-width);
+
+        height:var(--mobile-tracking-control-height);
+
+        min-height:var(--mobile-tracking-control-height);
+
+        max-height:var(--mobile-tracking-control-height);
+
+        padding:8px 12px;
 
         border:1px solid var(--border);
 
         border-radius:6px;
 
-        background:rgba(255, 255, 255, 0.96);
+        background:var(--mobile-icon-surface);
+
+        color:var(--mobile-icon-foreground);
 
         display:inline-flex;
 
@@ -3392,7 +3407,13 @@ body.is-track-info-resizing{
 
         justify-content:center;
 
-        gap:5px;
+        gap:6px;
+
+        font-size:14px;
+
+        font-weight:600;
+
+        line-height:1;
     }
 
     .current-position-button[aria-pressed="true"],
@@ -3402,7 +3423,7 @@ body.is-track-info-resizing{
 
         color:#fff;
 
-        background:var(--accent);
+        background:var(--mobile-tracking-active-surface);
     }
 
     .current-position-button[data-state="error"]{
@@ -3410,15 +3431,28 @@ body.is-track-info-resizing{
         border-color:#b42318;
     }
 
+    .current-position-status,
     .driving-mode-status{
 
-        padding:5px 8px;
+        position:absolute;
 
-        border-radius:6px;
+        width:1px;
 
-        background:rgba(255, 255, 255, 0.92);
+        height:1px;
 
-        font-size:12px;
+        padding:0;
+
+        margin:-1px;
+
+        overflow:hidden;
+
+        clip:rect(0 0 0 0);
+
+        clip-path:inset(50%);
+
+        border:0;
+
+        white-space:nowrap;
     }
 
     body.is-driving-mode .toolbar,

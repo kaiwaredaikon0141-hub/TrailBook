@@ -99,6 +99,10 @@ function testMobileMapControlPresentation() {
     const controls = document.createElement("div");
     const currentPositionControl = document.createElement("div");
     const currentPosition = document.createElement("button");
+    const currentPositionStatus = document.createElement("span");
+    const drivingControl = document.createElement("div");
+    const drivingButton = document.createElement("button");
+    const drivingStatus = document.createElement("span");
     const statusBar = new StatusBar();
     const buildInfo = createBuildInfoElement({
         config: Config,
@@ -119,14 +123,29 @@ function testMobileMapControlPresentation() {
     `;
     currentPositionControl.className = "current-position-control";
     currentPosition.className = "current-position-button";
-    currentPosition.textContent = "Position";
-    currentPositionControl.append(currentPosition);
+    currentPosition.setAttribute("aria-pressed", "false");
+    currentPosition.innerHTML = `
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /></svg>
+        <span>Position</span>
+    `;
+    currentPositionStatus.className = "current-position-status";
+    currentPositionControl.append(currentPosition, currentPositionStatus);
+    drivingControl.className = "driving-mode-control";
+    drivingButton.className = "driving-mode-button";
+    drivingButton.setAttribute("aria-pressed", "false");
+    drivingButton.innerHTML = `
+        <svg viewBox="0 0 24 24"><path d="M5 20h14" /></svg>
+        <span>Driving End</span>
+    `;
+    drivingStatus.className = "driving-mode-status";
+    drivingControl.append(drivingButton, drivingStatus);
     statusBar.showDisplaySummary(12, 0);
     statusBar.attachBuildInfo(buildInfo);
     frame.append(
         toolbar.element,
         controls,
         currentPositionControl,
+        drivingControl,
         statusBar.element
     );
     document.body.append(frame);
@@ -147,10 +166,21 @@ function testMobileMapControlPresentation() {
     ).matches;
 
     if (mobile) {
-        const iconControls = [folder, map, monochrome, currentPosition];
+        const iconControls = [folder, map, monochrome, currentPosition,
+            drivingButton];
         const backgrounds = iconControls.map(control =>
             getComputedStyle(control).backgroundColor
         );
+        const currentStyle = getComputedStyle(currentPosition);
+        const drivingStyle = getComputedStyle(drivingButton);
+        const currentRect = currentPosition.getBoundingClientRect();
+        const drivingRect = drivingButton.getBoundingClientRect();
+        const currentOrigin = [currentRect.x, currentRect.y,
+            currentRect.width, currentRect.height];
+        const drivingOrigin = [drivingRect.x, drivingRect.y,
+            drivingRect.width, drivingRect.height];
+        const activeSurface = getComputedStyle(document.documentElement)
+            .getPropertyValue("--mobile-tracking-active-surface").trim();
 
         assert(iconControls.every(control =>
             control.getBoundingClientRect().height >= 44 &&
@@ -159,13 +189,58 @@ function testMobileMapControlPresentation() {
         ), "mobile icon translucency reduced a touch target or disabled input");
         assert(backgrounds.every(color => /rgba\(.+, 0\.[0-9]+\)/.test(color)),
             "mobile icon controls do not share translucent surfaces");
+        assert(Math.round(currentRect.width) === Math.round(drivingRect.width) &&
+            Math.round(currentRect.height) === Math.round(drivingRect.height) &&
+            currentStyle.padding === drivingStyle.padding &&
+            currentStyle.borderRadius === drivingStyle.borderRadius &&
+            currentStyle.fontSize === drivingStyle.fontSize &&
+            currentStyle.gap === drivingStyle.gap &&
+            currentPosition.querySelector("svg").getBoundingClientRect().width ===
+                drivingButton.querySelector("svg").getBoundingClientRect().width,
+        "Driving and Current Location do not share one mobile control footprint");
         map.setAttribute("aria-pressed", "true");
-        currentPosition.disabled = true;
+        currentPosition.setAttribute("aria-pressed", "true");
+        drivingButton.setAttribute("aria-pressed", "true");
+        currentPositionStatus.textContent = "Current position ±8 m";
+        drivingStatus.textContent = "GPS follow off";
         assert(getComputedStyle(map).backgroundColor !== backgrounds[1] &&
-            getComputedStyle(currentPosition).backgroundColor !== backgrounds[3],
-        "active and disabled icon states are not distinct from enabled controls");
+            getComputedStyle(currentPosition).backgroundColor === activeSurface &&
+            getComputedStyle(drivingButton).backgroundColor === activeSurface &&
+            getComputedStyle(currentPosition).color === "rgb(255, 255, 255)" &&
+            getComputedStyle(drivingButton).color === "rgb(255, 255, 255)",
+        "mobile tracking active states do not share the translucent blue token");
+        assert(getComputedStyle(currentPositionStatus).position === "absolute" &&
+            getComputedStyle(drivingStatus).position === "absolute" &&
+            getComputedStyle(currentPositionStatus).clipPath === "inset(50%)" &&
+            getComputedStyle(drivingStatus).clipPath === "inset(50%)",
+        "mobile tracking auxiliary text remains visibly laid out");
+        assert(JSON.stringify(currentOrigin) === JSON.stringify([
+            currentPosition.getBoundingClientRect().x,
+            currentPosition.getBoundingClientRect().y,
+            currentPosition.getBoundingClientRect().width,
+            currentPosition.getBoundingClientRect().height
+        ]) && JSON.stringify(drivingOrigin) === JSON.stringify([
+            drivingButton.getBoundingClientRect().x,
+            drivingButton.getBoundingClientRect().y,
+            drivingButton.getBoundingClientRect().width,
+            drivingButton.getBoundingClientRect().height
+        ]), "mobile tracking activation or status text shifted the controls");
         map.setAttribute("aria-pressed", "false");
-        currentPosition.disabled = false;
+        currentPosition.setAttribute("aria-pressed", "false");
+        drivingButton.setAttribute("aria-pressed", "false");
+        currentPositionStatus.textContent = "";
+        drivingStatus.textContent = "";
+        assert(JSON.stringify(currentOrigin) === JSON.stringify([
+            currentPosition.getBoundingClientRect().x,
+            currentPosition.getBoundingClientRect().y,
+            currentPosition.getBoundingClientRect().width,
+            currentPosition.getBoundingClientRect().height
+        ]) && JSON.stringify(drivingOrigin) === JSON.stringify([
+            drivingButton.getBoundingClientRect().x,
+            drivingButton.getBoundingClientRect().y,
+            drivingButton.getBoundingClientRect().width,
+            drivingButton.getBoundingClientRect().height
+        ]), "mobile tracking deactivation shifted the controls");
         assert(buildInfo.getBoundingClientRect().right <=
                 statusBar.element.getBoundingClientRect().right + 1 &&
             buildInfo.getBoundingClientRect().left >=
