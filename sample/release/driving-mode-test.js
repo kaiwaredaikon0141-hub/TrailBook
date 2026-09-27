@@ -194,6 +194,12 @@ async function testDrivingMode() {
             inactiveFootprint[2] === 48 && inactiveFootprint[3] === 48
         : controller.button.innerText.trim() !== "",
     "Driving mobile icon-only or desktop label contract failed");
+    if (mobilePresentation) {
+        const rect = controller.button.getBoundingClientRect();
+
+        assert(innerWidth - rect.right >= 7 && rect.top < innerHeight / 2,
+            "Driving control is not anchored to the upper-right safe area");
+    }
     assert(await controller.enable() && controller.isActive(),
         "Mobile driving mode did not start");
     assert(currentPosition.starts === 1 && currentPosition.isFollowing(),

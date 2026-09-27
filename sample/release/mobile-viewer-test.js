@@ -262,24 +262,59 @@ function testMobileMapControlPresentation() {
         const folderRect = folder.getBoundingClientRect();
         const mapRect = map.getBoundingClientRect();
         const monochromeRect = monochrome.getBoundingClientRect();
+        const currentControlRect = currentPosition.getBoundingClientRect();
+        const overlaps = (left, right) =>
+            left.left < right.right && left.right > right.left &&
+            left.top < right.bottom && left.bottom > right.top;
 
         if (landscape) {
-            assert(folderRect.bottom <= mapRect.top &&
+            assert(drivingRect.bottom <= folderRect.top &&
+                folderRect.bottom <= mapRect.top &&
                 mapRect.bottom <= monochromeRect.top &&
+                Math.abs(drivingRect.left - folderRect.left) <= 1 &&
                 Math.abs(folderRect.left - mapRect.left) <= 1 &&
                 Math.abs(mapRect.left - monochromeRect.left) <= 1,
-            "landscape controls are not Folder -> Map -> Monochrome vertically");
+            "landscape rail is not Driving -> Folder -> Map -> Monochrome");
             assert(monochromeRect.right <= innerWidth &&
                 monochromeRect.bottom <=
                     statusBar.element.getBoundingClientRect().top &&
-                monochromeRect.right <=
-                    currentPositionControl.getBoundingClientRect().left,
+                monochromeRect.bottom <= currentControlRect.top,
             "landscape control stack overflows or overlaps the bottom bar");
         } else {
-            assert(Math.abs(mapRect.top - monochromeRect.top) <= 1 &&
-                mapRect.right <= monochromeRect.left,
-            "portrait Map / Monochrome row changed arrangement");
+            assert(Math.abs(folderRect.top - mapRect.top) <= 1 &&
+                Math.abs(mapRect.top - monochromeRect.top) <= 1 &&
+                Math.abs(monochromeRect.top - drivingRect.top) <= 1 &&
+                folderRect.right <= mapRect.left &&
+                mapRect.right <= monochromeRect.left &&
+                monochromeRect.right <= drivingRect.left,
+            `portrait right rail is not Folder -> Map -> Monochrome -> Driving: ${
+                JSON.stringify({
+                    folder: [folderRect.x, folderRect.y],
+                    map: [mapRect.x, mapRect.y],
+                    monochrome: [monochromeRect.x, monochromeRect.y],
+                    driving: [drivingRect.x, drivingRect.y]
+                })
+            }`);
         }
+        assert(!overlaps(drivingRect, folderRect) &&
+            !overlaps(drivingRect, mapRect) &&
+            !overlaps(drivingRect, monochromeRect) &&
+            !overlaps(folderRect, mapRect) &&
+            !overlaps(folderRect, monochromeRect) &&
+            !overlaps(mapRect, monochromeRect),
+        "mobile right-rail hit rectangles overlap");
+        assert(innerWidth - drivingRect.right >= 7 &&
+            drivingRect.top >= 0 && currentControlRect.top > drivingRect.bottom,
+        "Driving safe-area or Current Location separation changed");
+        document.body.classList.add("is-driving-mode");
+        assert(document.querySelectorAll(".driving-mode-control").length === 1 &&
+            JSON.stringify(drivingOrigin) === JSON.stringify([
+                drivingButton.getBoundingClientRect().x,
+                drivingButton.getBoundingClientRect().y,
+                drivingButton.getBoundingClientRect().width,
+                drivingButton.getBoundingClientRect().height
+            ]), "Driving Mode duplicated or moved the Driving control");
+        document.body.classList.remove("is-driving-mode");
     } else {
         assert(getComputedStyle(controls).display === "none" &&
             getComputedStyle(toolbar.element).position !== "fixed",
@@ -697,9 +732,10 @@ async function run() {
         themeCss.includes("env(safe-area-inset-bottom)"),
     "touch, Track tools, or safe-area CSS contract missing");
     assert(themeCss.includes(".mobile-map-controls") &&
-        themeCss.includes("top:max(76px") &&
-        themeCss.includes("left:max(64px"),
-    "mobile map controls are not placed below the zoom row");
+        themeCss.includes("--mobile-control-rail-top") &&
+        themeCss.includes("--mobile-control-rail-right") &&
+        themeCss.includes("--mobile-control-rail-step"),
+    "mobile controls do not share the responsive right-rail authority");
     assert(
         themeCss.includes(".leaflet-top.leaflet-left .leaflet-control-zoom") &&
         themeCss.includes("display:flex") &&
@@ -757,10 +793,10 @@ async function run() {
         themeCss.includes(".current-position-button") &&
         themeCss.includes(".leaflet-control-zoom a"),
     "shared translucent mobile icon presentation contract missing");
-    assert(themeCss.includes("top:max(130px") &&
+    assert(themeCss.includes("var(--mobile-control-rail-step)") &&
         themeCss.includes("flex-direction:column") &&
-        themeCss.includes("left:max(8px, env(safe-area-inset-left))"),
-    "mobile landscape Folder / Map / Monochrome stack contract missing");
+        themeCss.includes("right:var(--mobile-control-rail-right)"),
+    "mobile landscape Driving / Folder / Map / Monochrome rail is missing");
     assert(themeCss.includes("grid-column:1 / -1") &&
         themeCss.includes(".folder-color-readonly") &&
         themeCss.includes("flex:0 0 18px") &&

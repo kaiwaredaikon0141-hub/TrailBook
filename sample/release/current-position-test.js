@@ -134,6 +134,12 @@ async function run() {
             inactiveFootprint[2] === 48 && inactiveFootprint[3] === 48
         : fixture.controller.button.innerText.trim() !== "",
     "Current Location mobile icon-only or desktop label contract failed");
+    if (mobile) {
+        const rect = fixture.controller.button.getBoundingClientRect();
+
+        assert(innerWidth - rect.right >= 7 && rect.top > innerHeight / 2,
+            "Current Location moved away from the lower-right safe area");
+    }
     fixture.controller.button.click();
     assert(fixture.geolocation.watchCalls.length === 1,
         "watchPosition did not start");
