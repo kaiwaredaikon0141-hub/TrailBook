@@ -25,16 +25,12 @@
 
     --mobile-tracking-control-height:48px;
 
-    --mobile-control-rail-gap:6px;
-
-    --mobile-control-rail-step:54px;
-
-    --mobile-control-rail-top:max(
+    --mobile-driving-top:max(
         76px,
         calc(env(safe-area-inset-top) + 68px)
     );
 
-    --mobile-control-rail-right:max(8px, env(safe-area-inset-right));
+    --mobile-driving-right:max(8px, env(safe-area-inset-right));
 
     --mobile-zoom-group-width:374px;
 }
@@ -2626,16 +2622,9 @@ body.is-track-info-resizing{
 
         z-index:1700;
 
-        top:var(--mobile-control-rail-top);
+        top:max(76px, calc(env(safe-area-inset-top) + 68px));
 
-        right:calc(
-            var(--mobile-control-rail-right) +
-            var(--mobile-control-rail-step) +
-            var(--mobile-control-rail-step) +
-            var(--mobile-control-rail-step)
-        );
-
-        left:auto;
+        left:max(8px, env(safe-area-inset-left));
 
         width:auto;
 
@@ -2710,22 +2699,17 @@ body.is-track-info-resizing{
 
     .mobile-map-controls{
 
-        position:fixed;
+        position:absolute;
 
         z-index:1000;
 
-        top:var(--mobile-control-rail-top);
+        top:max(76px, calc(env(safe-area-inset-top) + 68px));
 
-        right:calc(
-            var(--mobile-control-rail-right) +
-            var(--mobile-control-rail-step)
-        );
-
-        left:auto;
+        left:max(64px, calc(env(safe-area-inset-left) + 56px));
 
         display:flex;
 
-        gap:var(--mobile-control-rail-gap);
+        gap:6px;
     }
 
     .mobile-map-controls button{
@@ -3388,9 +3372,9 @@ body.is-track-info-resizing{
 
         z-index:1750;
 
-        top:var(--mobile-control-rail-top);
+        top:var(--mobile-driving-top);
 
-        right:var(--mobile-control-rail-right);
+        right:var(--mobile-driving-right);
 
         bottom:auto;
 
@@ -3578,9 +3562,9 @@ body.is-track-info-resizing{
 
         z-index:1750;
 
-        top:var(--mobile-control-rail-top);
+        top:var(--mobile-driving-top);
 
-        right:var(--mobile-control-rail-right);
+        right:var(--mobile-driving-right);
 
         bottom:auto;
 
@@ -3686,27 +3670,11 @@ body.is-track-info-resizing{
 
 @media (max-height:500px) and (pointer:coarse){
 
-    .toolbar.is-mobile-layout{
-
-        top:calc(
-            var(--mobile-control-rail-top) +
-            var(--mobile-control-rail-step)
-        );
-
-        right:var(--mobile-control-rail-right);
-    }
-
     .mobile-map-controls{
 
-        top:calc(
-            var(--mobile-control-rail-top) +
-            var(--mobile-control-rail-step) +
-            var(--mobile-control-rail-step)
-        );
+        top:max(130px, calc(env(safe-area-inset-top) + 122px));
 
-        right:var(--mobile-control-rail-right);
-
-        left:auto;
+        left:max(8px, env(safe-area-inset-left));
 
         flex-direction:column;
     }
