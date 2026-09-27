@@ -8,8 +8,8 @@ import CurrentPositionService, {
 import MapView from "../../src/js/ui/MapView.js";
 
 const output = document.getElementById("result");
-const MOBILE_LAYOUT_QUERY =
-    "(max-width: 768px), (max-height: 500px) and (pointer: coarse)";
+const MOBILE_PRESENTATION_QUERY =
+    "(max-width: 768px), (pointer: coarse)";
 let assertions = 0;
 
 function assert(condition, message) {
@@ -122,13 +122,18 @@ function createController({ portrait = true } = {}) {
 
 async function run() {
     const fixture = createController();
-    const mobile = matchMedia(MOBILE_LAYOUT_QUERY).matches;
+    const mobile = matchMedia(MOBILE_PRESENTATION_QUERY).matches;
     const inactiveFootprint = footprint(fixture.controller.button);
 
     assert(fixture.controller.button.querySelector("svg") &&
         fixture.controller.button.title &&
         fixture.controller.button.getAttribute("aria-label"),
     "GPS control is not a labelled platform-independent icon");
+    assert(mobile
+        ? fixture.controller.button.innerText.trim() === "" &&
+            inactiveFootprint[2] === 48 && inactiveFootprint[3] === 48
+        : fixture.controller.button.innerText.trim() !== "",
+    "Current Location mobile icon-only or desktop label contract failed");
     fixture.controller.button.click();
     assert(fixture.geolocation.watchCalls.length === 1,
         "watchPosition did not start");

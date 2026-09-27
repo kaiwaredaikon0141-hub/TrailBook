@@ -21,7 +21,7 @@
 
     --mobile-tracking-active-surface:rgba(37, 99, 235, 0.84);
 
-    --mobile-tracking-control-width:128px;
+    --mobile-tracking-control-width:48px;
 
     --mobile-tracking-control-height:48px;
 
@@ -3391,7 +3391,7 @@ body.is-track-info-resizing{
 
         max-height:var(--mobile-tracking-control-height);
 
-        padding:8px 12px;
+        padding:12px;
 
         border:1px solid var(--border);
 
@@ -3407,13 +3407,19 @@ body.is-track-info-resizing{
 
         justify-content:center;
 
-        gap:6px;
+        gap:0;
 
         font-size:14px;
 
         font-weight:600;
 
         line-height:1;
+    }
+
+    .current-position-button > span,
+    .driving-mode-label{
+
+        display:none;
     }
 
     .current-position-button[aria-pressed="true"],
@@ -3529,6 +3535,121 @@ body.is-track-info-resizing{
         border-radius:0;
 
         background:transparent;
+    }
+}
+
+@media (min-width:769px) and (max-width:1366px) and (pointer:coarse){
+
+    .current-position-control{
+
+        width:var(--mobile-tracking-control-width);
+    }
+
+    .driving-mode-control:not([hidden]){
+
+        position:absolute;
+
+        z-index:1750;
+
+        left:max(8px, env(safe-area-inset-left));
+
+        bottom:max(40px, calc(env(safe-area-inset-bottom) + 32px));
+
+        display:flex;
+
+        width:var(--mobile-tracking-control-width);
+    }
+
+    .current-position-button,
+    .driving-mode-button{
+
+        box-sizing:border-box;
+
+        width:var(--mobile-tracking-control-width);
+
+        min-width:var(--mobile-tracking-control-width);
+
+        max-width:var(--mobile-tracking-control-width);
+
+        height:var(--mobile-tracking-control-height);
+
+        min-height:var(--mobile-tracking-control-height);
+
+        max-height:var(--mobile-tracking-control-height);
+
+        padding:12px;
+
+        border:1px solid var(--border);
+
+        border-radius:6px;
+
+        background:var(--mobile-icon-surface);
+
+        color:var(--mobile-icon-foreground);
+
+        display:inline-flex;
+
+        align-items:center;
+
+        justify-content:center;
+
+        gap:0;
+
+        font-size:14px;
+
+        font-weight:600;
+
+        line-height:1;
+    }
+
+    .current-position-button > span,
+    .driving-mode-label{
+
+        display:none;
+    }
+
+    .current-position-button[aria-pressed="true"],
+    .driving-mode-button[aria-pressed="true"]{
+
+        border-color:var(--accent);
+
+        background:var(--mobile-tracking-active-surface);
+
+        color:#fff;
+    }
+
+    .current-position-status,
+    .driving-mode-status{
+
+        position:absolute;
+
+        width:1px;
+
+        height:1px;
+
+        padding:0;
+
+        margin:-1px;
+
+        overflow:hidden;
+
+        clip:rect(0 0 0 0);
+
+        clip-path:inset(50%);
+
+        border:0;
+
+        white-space:nowrap;
+    }
+
+    body.is-driving-mode .toolbar,
+    body.is-driving-mode .map-toolbar,
+    body.is-driving-mode .sidebar-shell,
+    body.is-driving-mode .mobile-sidebar-backdrop,
+    body.is-driving-mode .track-info,
+    body.is-driving-mode .statusbar{
+
+        display:none !important;
     }
 }
 

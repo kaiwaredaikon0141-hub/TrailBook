@@ -5,7 +5,9 @@ import ScreenWakeLockService from
 
 const output = document.getElementById("result");
 const MOBILE_LAYOUT_QUERY =
-    "(max-width: 768px), (max-height: 500px) and (pointer: coarse)";
+    "(max-width: 768px), (max-width: 1366px) and (pointer: coarse)";
+const MOBILE_PRESENTATION_QUERY =
+    "(max-width: 768px), (pointer: coarse)";
 let assertions = 0;
 
 function assert(condition, message) {
@@ -181,12 +183,17 @@ async function testDrivingMode() {
     });
 
     controller.attach(document.body);
-    const mobileLayout = matchMedia(MOBILE_LAYOUT_QUERY).matches;
+    const mobilePresentation = matchMedia(MOBILE_PRESENTATION_QUERY).matches;
     const inactiveFootprint = footprint(controller.button);
     assert(controller.button.querySelector("svg") &&
         controller.button.querySelector(".driving-mode-label") &&
         controller.button.title && controller.button.getAttribute("aria-label"),
     "driving control is not a labelled platform-independent icon");
+    assert(mobilePresentation
+        ? controller.button.innerText.trim() === "" &&
+            inactiveFootprint[2] === 48 && inactiveFootprint[3] === 48
+        : controller.button.innerText.trim() !== "",
+    "Driving mobile icon-only or desktop label contract failed");
     assert(await controller.enable() && controller.isActive(),
         "Mobile driving mode did not start");
     assert(currentPosition.starts === 1 && currentPosition.isFollowing(),
@@ -200,7 +207,7 @@ async function testDrivingMode() {
         controller.status.textContent === "" &&
         getComputedStyle(controller.status).display === "none",
     "normal Driving state retained its redundant status bubble");
-    if (mobileLayout) {
+    if (mobilePresentation) {
         const activeStyle = getComputedStyle(controller.button);
 
         assert(activeStyle.backgroundColor === resolvedMobileActiveSurface() &&
@@ -215,11 +222,11 @@ async function testDrivingMode() {
     eventBus.emit("map:user-drag-started");
     assert(controller.isActive() &&
         controller.status.textContent.includes("GPS追従OFF") &&
-        (mobileLayout
+        (mobilePresentation
             ? isMobileStatusVisuallyHidden(controller.status)
             : getComputedStyle(controller.status).display !== "none"),
     "Map drag disabled driving mode or did not show Follow OFF");
-    if (mobileLayout) {
+    if (mobilePresentation) {
         assert(JSON.stringify(footprint(controller.button)) ===
             JSON.stringify(inactiveFootprint),
         "Driving warning feedback changed the button footprint");
@@ -240,7 +247,8 @@ async function testDrivingMode() {
         getComputedStyle(controller.button).backgroundColor !==
             resolvedMobileActiveSurface(),
     "Driving inactive state retained active styling or a blank status bubble");
-    if (mobileLayout) {
+    if (mobilePresentation &&
+        getComputedStyle(controller.element).display !== "none") {
         assert(JSON.stringify(footprint(controller.button)) ===
             JSON.stringify(inactiveFootprint),
         "Driving deactivation changed the button footprint");
@@ -265,7 +273,7 @@ async function testDrivingMode() {
     rejectedController.attach(document.body);
     assert(await rejectedController.enable() && rejectedGps.starts === 1 &&
         rejectedController.status.textContent.includes("画面保持不可") &&
-        (mobileLayout
+        (mobilePresentation
             ? isMobileStatusVisuallyHidden(rejectedController.status)
             : getComputedStyle(rejectedController.status).display !== "none"),
     "Wake Lock rejection stopped GPS driving mode");

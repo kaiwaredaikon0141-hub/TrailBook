@@ -124,6 +124,7 @@ function testMobileMapControlPresentation() {
     currentPositionControl.className = "current-position-control";
     currentPosition.className = "current-position-button";
     currentPosition.setAttribute("aria-pressed", "false");
+    currentPosition.setAttribute("aria-label", "Current Location");
     currentPosition.innerHTML = `
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /></svg>
         <span>Position</span>
@@ -133,9 +134,10 @@ function testMobileMapControlPresentation() {
     drivingControl.className = "driving-mode-control";
     drivingButton.className = "driving-mode-button";
     drivingButton.setAttribute("aria-pressed", "false");
+    drivingButton.setAttribute("aria-label", "Driving Mode");
     drivingButton.innerHTML = `
         <svg viewBox="0 0 24 24"><path d="M5 20h14" /></svg>
-        <span>Driving End</span>
+        <span class="driving-mode-label">Driving End</span>
     `;
     drivingStatus.className = "driving-mode-status";
     drivingControl.append(drivingButton, drivingStatus);
@@ -191,6 +193,8 @@ function testMobileMapControlPresentation() {
             "mobile icon controls do not share translucent surfaces");
         assert(Math.round(currentRect.width) === Math.round(drivingRect.width) &&
             Math.round(currentRect.height) === Math.round(drivingRect.height) &&
+            Math.round(currentRect.width) === 48 &&
+            Math.round(currentRect.height) === 48 &&
             currentStyle.padding === drivingStyle.padding &&
             currentStyle.borderRadius === drivingStyle.borderRadius &&
             currentStyle.fontSize === drivingStyle.fontSize &&
@@ -198,6 +202,11 @@ function testMobileMapControlPresentation() {
             currentPosition.querySelector("svg").getBoundingClientRect().width ===
                 drivingButton.querySelector("svg").getBoundingClientRect().width,
         "Driving and Current Location do not share one mobile control footprint");
+        assert(currentPosition.innerText.trim() === "" &&
+            drivingButton.innerText.trim() === "" &&
+            currentPosition.getAttribute("aria-label") === "Current Location" &&
+            drivingButton.getAttribute("aria-label") === "Driving Mode",
+        "mobile tracking controls retained visible labels or lost accessible names");
         map.setAttribute("aria-pressed", "true");
         currentPosition.setAttribute("aria-pressed", "true");
         drivingButton.setAttribute("aria-pressed", "true");
