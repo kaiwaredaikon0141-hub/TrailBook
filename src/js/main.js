@@ -137,7 +137,7 @@ window.addEventListener("DOMContentLoaded", () => {
         compact: true,
         mapIndicator: true
     });
-    app.mapView.element.append(mapBuildInfo);
+    app.statusBar.attachBuildInfo(mapBuildInfo);
     const localDevelopment = location.hostname === "localhost" ||
         location.hostname === "127.0.0.1" || location.hostname === "[::1]";
     const developmentBuildInfo = localDevelopment

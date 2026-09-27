@@ -12,6 +12,12 @@
 
     --map-monochrome-filter:
         grayscale(100%) brightness(108%) contrast(82%);
+
+    --mobile-icon-surface:rgba(255, 255, 255, 0.72);
+
+    --mobile-icon-surface-feedback:rgba(255, 255, 255, 0.92);
+
+    --mobile-icon-foreground:rgba(40, 50, 60, 0.84);
 }
 
 body{
@@ -445,11 +451,11 @@ body{
 
 .map-build-indicator{
 
-    position:absolute;
+    position:fixed;
 
     right:10px;
 
-    bottom:84px;
+    bottom:112px;
 
     z-index:900;
 
@@ -2423,6 +2429,22 @@ body.is-track-info-resizing{
     line-height:1.2;
 }
 
+.statusbar-message{
+
+    min-width:0;
+
+    overflow:hidden;
+
+    text-overflow:ellipsis;
+
+    white-space:nowrap;
+}
+
+.statusbar-build-slot{
+
+    margin-left:auto;
+}
+
 .mobile-sidebar-close,
 .mobile-sidebar-backdrop,
 .track-info-close{
@@ -2678,9 +2700,70 @@ body.is-track-info-resizing{
 
         border-radius:6px;
 
-        background:rgba(255, 255, 255, 0.96);
+        background:var(--mobile-icon-surface);
+
+        color:var(--mobile-icon-foreground);
+    }
+
+    .toolbar.is-mobile-layout #toggle-sidebar,
+    .current-position-button,
+    .leaflet-control-zoom a,
+    .leaflet-touch .leaflet-control-zoom a{
+
+        background:var(--mobile-icon-surface);
+
+        color:var(--mobile-icon-foreground);
+    }
+
+    .toolbar.is-mobile-layout #toggle-sidebar:hover,
+    .toolbar.is-mobile-layout #toggle-sidebar:focus-visible,
+    .toolbar.is-mobile-layout #toggle-sidebar:active,
+    .mobile-map-controls button:hover,
+    .mobile-map-controls button:focus-visible,
+    .mobile-map-controls button:active,
+    .current-position-button:hover,
+    .current-position-button:focus-visible,
+    .current-position-button:active,
+    .leaflet-control-zoom a:hover,
+    .leaflet-control-zoom a:focus-visible,
+    .leaflet-control-zoom a:active{
+
+        background:var(--mobile-icon-surface-feedback);
 
         color:#28323c;
+    }
+
+    .toolbar.is-mobile-layout #toggle-sidebar:focus-visible,
+    .mobile-map-controls button:focus-visible,
+    .current-position-button:focus-visible,
+    .leaflet-control-zoom a:focus-visible{
+
+        outline:2px solid var(--accent);
+
+        outline-offset:2px;
+    }
+
+    .toolbar.is-mobile-layout #toggle-sidebar[aria-pressed="true"]{
+
+        border-color:var(--accent);
+
+        background:var(--mobile-icon-surface-feedback);
+
+        color:var(--accent);
+    }
+
+    .toolbar.is-mobile-layout #toggle-sidebar:disabled,
+    .mobile-map-controls button:disabled,
+    .current-position-button:disabled,
+    .leaflet-control-zoom a.leaflet-disabled{
+
+        border-color:rgba(148, 163, 184, 0.55);
+
+        background:rgba(255, 255, 255, 0.46);
+
+        color:rgba(71, 85, 105, 0.42);
+
+        cursor:not-allowed;
     }
 
     .mobile-map-controls button[aria-pressed="true"]{
@@ -3331,9 +3414,51 @@ body.is-track-info-resizing{
 
         pointer-events:none;
     }
+
+    .statusbar-message{
+
+        flex:1 1 auto;
+    }
+
+    .statusbar-build-slot{
+
+        display:flex;
+
+        flex:0 0 auto;
+
+        justify-content:flex-end;
+    }
+
+    .statusbar .map-build-indicator{
+
+        position:static;
+
+        box-sizing:content-box;
+
+        height:auto;
+
+        margin:0;
+
+        padding:0;
+
+        border:0;
+
+        border-radius:0;
+
+        background:transparent;
+    }
 }
 
 @media (max-height:500px) and (pointer:coarse){
+
+    .mobile-map-controls{
+
+        top:max(130px, calc(env(safe-area-inset-top) + 122px));
+
+        left:max(8px, env(safe-area-inset-left));
+
+        flex-direction:column;
+    }
 
     .leaflet-control-zoom a,
     .leaflet-touch .leaflet-control-zoom a{
@@ -3369,9 +3494,9 @@ body.is-track-info-resizing{
 
         border-radius:4px;
 
-        background:#fff;
+        background:var(--mobile-icon-surface);
 
-        color:#000;
+        color:var(--mobile-icon-foreground);
 
         font-size:20px;
 

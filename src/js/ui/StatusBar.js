@@ -22,10 +22,20 @@ export default class StatusBar {
         footer.setAttribute("role", "status");
         footer.setAttribute("aria-live", "polite");
         footer.setAttribute("aria-atomic", "true");
-        footer.textContent = "ライブラリを開いてください";
+        footer.innerHTML = `
+            <span class="statusbar-message">ライブラリを開いてください</span>
+            <span class="statusbar-build-slot"></span>
+        `;
+        this.message = footer.querySelector(".statusbar-message");
+        this.buildSlot = footer.querySelector(".statusbar-build-slot");
 
         return footer;
 
+    }
+
+    attachBuildInfo(element) {
+
+        this.buildSlot.replaceChildren(element);
     }
 
     /**
@@ -37,13 +47,13 @@ export default class StatusBar {
     showLibraryLoaded(library) {
 
         if (library.gpxFileCount === 0) {
-            this.element.textContent =
+            this.message.textContent =
                 `${library.name}: GPX 0件 — ` +
                 "このFolderにはGPXファイルがありません";
             return;
         }
 
-        this.element.textContent =
+        this.message.textContent =
             `${library.name}: ${library.folderCount} folders, ` +
             `${library.gpxFileCount} GPX files`;
     }
@@ -55,22 +65,22 @@ export default class StatusBar {
      */
     showError() {
 
-        this.element.textContent = "ライブラリを開けませんでした";
+        this.message.textContent = "ライブラリを開けませんでした";
     }
 
     showInitial() {
 
-        this.element.textContent = "ライブラリを開いてください";
+        this.message.textContent = "ライブラリを開いてください";
     }
 
     showUnsupportedEnvironment() {
 
-        this.element.textContent = "この環境ではライブラリを開けません";
+        this.message.textContent = "この環境ではライブラリを開けません";
     }
 
     showLibraryLoading(folderName) {
 
-        this.element.textContent = `ライブラリを読み込み中: ${folderName}`;
+        this.message.textContent = `ライブラリを読み込み中: ${folderName}`;
     }
 
     /**
@@ -80,19 +90,19 @@ export default class StatusBar {
      */
     showMapError() {
 
-        this.element.textContent = "地図を表示できません";
+        this.message.textContent = "地図を表示できません";
     }
 
 
     showDisplaySummary(displayedCount, loadingCount) {
 
-        this.element.textContent = loadingCount > 0
+        this.message.textContent = loadingCount > 0
             ? `表示中: ${displayedCount} GPX / 読み込み中: ${loadingCount}`
             : `表示中: ${displayedCount} GPX`;
     }
 
     showDisplayError(fileName) {
 
-        this.element.textContent = `GPXを表示できません: ${fileName}`;
+        this.message.textContent = `GPXを表示できません: ${fileName}`;
     }
 }

@@ -326,6 +326,7 @@ async function testManifestAndAssets() {
     "collapsed Maintenance actions are not separated from diagnostics");
     assert(mainSource.includes("mapBuildInfo") &&
         mainSource.includes("mapIndicator: true") &&
+        mainSource.includes("statusBar.attachBuildInfo(mapBuildInfo)") &&
         !/["'][0-9a-f]{8}["']/.test(mainSource),
     "Map build indicator is missing or hard-codes a commit");
     assert(mainSource.includes("new TrackSourceResolver") &&
@@ -348,9 +349,10 @@ async function testManifestAndAssets() {
     "localhost build detail is not contained by Library diagnostics");
     assert(themeSource.includes(".map-build-indicator") &&
         themeSource.includes("pointer-events:none") &&
-        themeSource.includes("bottom:max(130px") &&
+        themeSource.includes(".statusbar .map-build-indicator") &&
+        themeSource.includes("position:static") &&
         themeSource.includes("env(safe-area-inset-bottom)"),
-    "Map build indicator can intercept input or overlap mobile Map controls");
+    "Map build indicator is not contained by the safe-area status bar");
 
     const workflow = await fetch(new URL(
         "../../.github/workflows/pages.yml", location.href

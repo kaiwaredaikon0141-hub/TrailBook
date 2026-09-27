@@ -5,6 +5,9 @@ import LibraryAccessPanel from "../../src/js/ui/LibraryAccessPanel.js";
 import LibraryDiagnosticsPanel from "../../src/js/ui/LibraryDiagnosticsPanel.js";
 import FolderColorControl from "../../src/js/ui/FolderColorControl.js";
 import DisplayState from "../../src/js/state/DisplayState.js";
+import StatusBar from "../../src/js/ui/StatusBar.js";
+import { createBuildInfoElement } from "../../src/js/ui/BuildInfoView.js";
+import Config from "../../src/js/core/Config.js";
 
 const output = document.getElementById("result");
 let assertions = 0;
@@ -54,6 +57,118 @@ function testLeafletZoomPresentation() {
 
     corner.remove();
     document.body.classList.remove("leaflet-touch");
+}
+
+function testMobileMapControlPresentation() {
+    const frame = document.createElement("section");
+    const toolbar = new Toolbar(Config.version);
+    const controls = document.createElement("div");
+    const currentPositionControl = document.createElement("div");
+    const currentPosition = document.createElement("button");
+    const statusBar = new StatusBar();
+    const buildInfo = createBuildInfoElement({
+        config: Config,
+        runtimeBuild: { commit: "1234567890abcdef" },
+        runtimeBuildIdentifier: "12345678",
+        locationObject: { hostname: "example.github.io" },
+        compact: true,
+        mapIndicator: true
+    });
+
+    frame.className = "mobile-map-control-test-frame";
+    toolbar.setMobileLayout(true);
+    toolbar.element.classList.add("is-mobile-layout");
+    controls.className = "mobile-map-controls";
+    controls.innerHTML = `
+        <button class="mobile-base-map-toggle" type="button">Map</button>
+        <button class="mobile-map-mode-toggle" type="button">Mode</button>
+    `;
+    currentPositionControl.className = "current-position-control";
+    currentPosition.className = "current-position-button";
+    currentPosition.textContent = "Position";
+    currentPositionControl.append(currentPosition);
+    statusBar.showDisplaySummary(12, 0);
+    statusBar.attachBuildInfo(buildInfo);
+    frame.append(
+        toolbar.element,
+        controls,
+        currentPositionControl,
+        statusBar.element
+    );
+    document.body.append(frame);
+
+    assert(statusBar.buildSlot.contains(buildInfo) &&
+        statusBar.element.querySelectorAll(".map-build-indicator").length === 1 &&
+        document.querySelectorAll(".map-build-indicator").length === 1,
+    "mobile build indicator is not uniquely contained by the status bar");
+    assert(statusBar.message.textContent.includes("12 GPX") &&
+        buildInfo.textContent === `v${Config.version} \u00b7 12345678`,
+    "status updates removed or changed the full build indicator");
+
+    const folder = toolbar.sidebarToggleButton;
+    const map = controls.querySelector(".mobile-base-map-toggle");
+    const monochrome = controls.querySelector(".mobile-map-mode-toggle");
+    const mobile = matchMedia(
+        "(max-width: 768px), (max-height: 500px) and (pointer: coarse)"
+    ).matches;
+
+    if (mobile) {
+        const iconControls = [folder, map, monochrome, currentPosition];
+        const backgrounds = iconControls.map(control =>
+            getComputedStyle(control).backgroundColor
+        );
+
+        assert(iconControls.every(control =>
+            control.getBoundingClientRect().height >= 44 &&
+            getComputedStyle(control).pointerEvents !== "none" &&
+            !control.disabled
+        ), "mobile icon translucency reduced a touch target or disabled input");
+        assert(backgrounds.every(color => /rgba\(.+, 0\.[0-9]+\)/.test(color)),
+            "mobile icon controls do not share translucent surfaces");
+        map.setAttribute("aria-pressed", "true");
+        currentPosition.disabled = true;
+        assert(getComputedStyle(map).backgroundColor !== backgrounds[1] &&
+            getComputedStyle(currentPosition).backgroundColor !== backgrounds[3],
+        "active and disabled icon states are not distinct from enabled controls");
+        map.setAttribute("aria-pressed", "false");
+        currentPosition.disabled = false;
+        assert(buildInfo.getBoundingClientRect().right <=
+                statusBar.element.getBoundingClientRect().right + 1 &&
+            buildInfo.getBoundingClientRect().left >=
+                statusBar.message.getBoundingClientRect().right - 1,
+        "mobile build indicator is not right-aligned without status overlap");
+
+        const landscape = matchMedia(
+            "(max-height: 500px) and (pointer: coarse)"
+        ).matches;
+        const folderRect = folder.getBoundingClientRect();
+        const mapRect = map.getBoundingClientRect();
+        const monochromeRect = monochrome.getBoundingClientRect();
+
+        if (landscape) {
+            assert(folderRect.bottom <= mapRect.top &&
+                mapRect.bottom <= monochromeRect.top &&
+                Math.abs(folderRect.left - mapRect.left) <= 1 &&
+                Math.abs(mapRect.left - monochromeRect.left) <= 1,
+            "landscape controls are not Folder -> Map -> Monochrome vertically");
+            assert(monochromeRect.right <= innerWidth &&
+                monochromeRect.bottom <=
+                    statusBar.element.getBoundingClientRect().top &&
+                monochromeRect.right <=
+                    currentPositionControl.getBoundingClientRect().left,
+            "landscape control stack overflows or overlaps the bottom bar");
+        } else {
+            assert(Math.abs(mapRect.top - monochromeRect.top) <= 1 &&
+                mapRect.right <= monochromeRect.left,
+            "portrait Map / Monochrome row changed arrangement");
+        }
+    } else {
+        assert(getComputedStyle(controls).display === "none" &&
+            getComputedStyle(toolbar.element).position !== "fixed",
+        "desktop map toolbar layout changed with mobile presentation polish");
+    }
+
+    frame.remove();
 }
 
 class FakeEventBus {
@@ -360,6 +475,7 @@ async function testLargeColorProjection() {
 
 async function run() {
     testLeafletZoomPresentation();
+    testMobileMapControlPresentation();
     testSidebarVisualHierarchy();
     const media = new FakeMedia(false);
     const fixture = createFixture(media);
@@ -514,9 +630,19 @@ async function run() {
     );
     assert(themeCss.includes(".map-build-indicator") &&
         themeCss.includes("pointer-events:none") &&
-        themeCss.includes("bottom:max(130px") &&
-        themeCss.includes("calc(env(safe-area-inset-bottom) + 122px)"),
-    "mobile Map build indicator can overlap controls or capture input");
+        themeCss.includes(".statusbar .map-build-indicator") &&
+        themeCss.includes("position:static") &&
+        themeCss.includes(".statusbar-build-slot"),
+    "mobile Map build indicator is not contained by the status bar");
+    assert(themeCss.includes("--mobile-icon-surface") &&
+        themeCss.includes("--mobile-icon-surface-feedback") &&
+        themeCss.includes(".current-position-button") &&
+        themeCss.includes(".leaflet-control-zoom a"),
+    "shared translucent mobile icon presentation contract missing");
+    assert(themeCss.includes("top:max(130px") &&
+        themeCss.includes("flex-direction:column") &&
+        themeCss.includes("left:max(8px, env(safe-area-inset-left))"),
+    "mobile landscape Folder / Map / Monochrome stack contract missing");
     assert(themeCss.includes("grid-column:1 / -1") &&
         themeCss.includes(".folder-color-readonly") &&
         themeCss.includes("flex:0 0 18px") &&
