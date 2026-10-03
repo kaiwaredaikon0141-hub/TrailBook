@@ -1,4 +1,5 @@
 const FIT_PADDING = [20, 20];
+const UNFOCUSED_OPACITY = 0.1;
 
 /**
  * Manages independent Track and Waypoint layers for displayed GPX files.
@@ -14,11 +15,12 @@ export default class LayerManager {
         this.layers = new Map();
         this.suppressedTrackPaths = new Set();
         this.selectedPath = null;
+        this.focusedPath = null;
     }
 
     displayGPX(path, result, style, options = {}) {
 
-        this.removeGPX(path);
+        this.removeGPX(path, { preserveFocus: true });
 
         const trackPresentationVisible = !this.suppressedTrackPaths.has(path);
         const trackLayerGroup = L.layerGroup();
@@ -38,7 +40,7 @@ export default class LayerManager {
 
                 if (latLngs.length > 0) {
                     const mainLayer = L.polyline(latLngs, {
-                        ...trackStyle,
+                        ...this.#presentationStyle(path, trackStyle),
                         renderer: this.trackRenderer,
                         interactive: true,
                         bubblingMouseEvents: false,
@@ -112,7 +114,7 @@ export default class LayerManager {
         entry.waypointLayerGroup = null;
     }
 
-    removeGPX(path) {
+    removeGPX(path, { preserveFocus = false } = {}) {
 
         const entry = this.layers.get(path);
 
@@ -122,6 +124,9 @@ export default class LayerManager {
 
         if (this.selectedPath === path) {
             this.clearSelectionHighlight();
+        }
+        if (!preserveFocus && this.focusedPath === path) {
+            this.setFocusedPath(null);
         }
 
         entry.trackLayerGroup.remove();
@@ -133,6 +138,7 @@ export default class LayerManager {
     clear() {
 
         this.clearSelectionHighlight();
+        this.focusedPath = null;
 
         this.layers.forEach(entry => {
             entry.trackLayerGroup.remove();
@@ -171,6 +177,29 @@ export default class LayerManager {
     getDisplayedPaths() {
 
         return [...this.layers.keys()];
+    }
+
+    getFocusedPath() {
+
+        return this.focusedPath;
+    }
+
+    setFocusedPath(path) {
+
+        const next = path ?? null;
+        if (next && !this.layers.get(next)?.trackPresentationVisible) {
+            return false;
+        }
+        if (next === this.focusedPath) return false;
+        this.focusedPath = next;
+        this.layers.forEach((entry, entryPath) => {
+            const style = entryPath === this.selectedPath
+                ? entry.selectedMainStyle : entry.normalStyle;
+            entry.segments.forEach(({ mainLayer }) => {
+                mainLayer.setStyle(this.#presentationStyle(entryPath, style));
+            });
+        });
+        return true;
     }
 
     setTrackPresentationVisible(path, visible) {
@@ -300,9 +329,8 @@ export default class LayerManager {
         }
 
         entry.segments.forEach(({ mainLayer }) => {
-            mainLayer.setStyle(
-                isSelected ? entry.selectedMainStyle : entry.normalStyle
-            );
+            mainLayer.setStyle(this.#presentationStyle(path,
+                isSelected ? entry.selectedMainStyle : entry.normalStyle));
         });
 
         if (isSelected) {
@@ -346,7 +374,8 @@ export default class LayerManager {
                 interactive: false,
                 bubblingMouseEvents: false
             }).addTo(entry.outlineLayerGroup);
-            mainLayer.setStyle(entry.selectedMainStyle);
+            mainLayer.setStyle(this.#presentationStyle(path,
+                entry.selectedMainStyle));
             if (entry.trackPresentationVisible) {
                 mainLayer.bringToFront();
             }
@@ -369,13 +398,21 @@ export default class LayerManager {
         entry.outlineLayerGroup?.remove();
         entry.outlineLayerGroup = null;
         entry.segments.forEach(({ mainLayer }) => {
-            mainLayer.setStyle(entry.normalStyle);
+            mainLayer.setStyle(this.#presentationStyle(this.selectedPath,
+                entry.normalStyle));
         });
         entry.selectedMainStyle = null;
         entry.selectedOutlineStyle = null;
         this.selectedPath = null;
 
         return true;
+    }
+
+    #presentationStyle(path, style) {
+
+        if (!this.focusedPath || path === this.focusedPath) return style;
+        return { ...style, opacity: Math.min(style.opacity ?? 1,
+            UNFOCUSED_OPACITY) };
     }
 
     #isValidWeight(weight) {

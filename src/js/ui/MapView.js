@@ -282,7 +282,11 @@ export default class MapView {
     removeGPX(path) {
 
         if (this.layerManager) {
+            const focusedPath = this.layerManager.getFocusedPath();
             this.layerManager.removeGPX(path);
+            if (focusedPath && !this.layerManager.getFocusedPath()) {
+                this.eventBus.emit("map:track-focus-changed");
+            }
             this.eventBus.emit("library-refresh:entry-diagnostic", {
                 path,
                 stage: "map layer",
@@ -505,6 +509,24 @@ export default class MapView {
         return this.layerManager?.getDisplayedPaths() ?? [];
     }
 
+    getFocusedPath() {
+        return this.layerManager?.getFocusedPath() ?? null;
+    }
+
+    setFocusedPath(path) {
+        const changed = this.layerManager?.setFocusedPath(path) ?? false;
+        if (changed) this.eventBus.emit("map:track-focus-changed");
+        return changed;
+    }
+
+    setTrackFocusControlPresentation(available, active) {
+        const button = this.sidebarDisplayControls.querySelector(
+            ".mobile-track-focus");
+        button.hidden = !available;
+        button.setAttribute("aria-pressed", String(active));
+        button.textContent = active ? "全Track表示へ戻す" : "選択Trackに集中";
+    }
+
     setSelectionInteractionEnabled(enabled) {
 
         this.selectionInteractionEnabled = Boolean(enabled);
@@ -638,8 +660,9 @@ export default class MapView {
     clear() {
 
         if (this.layerManager) {
-
+            const focusedPath = this.layerManager.getFocusedPath();
             this.layerManager.clear();
+            if (focusedPath) this.eventBus.emit("map:track-focus-changed");
         }
 
         this.showEmpty();
@@ -896,6 +919,8 @@ export default class MapView {
             <button class="mobile-sidebar-clear" type="button">
                 表示をクリア
             </button>
+            <button class="mobile-track-focus" type="button"
+                aria-pressed="false" hidden>選択Trackに集中</button>
         `;
 
         section.querySelector("input").addEventListener("change", event => {
@@ -910,6 +935,9 @@ export default class MapView {
         section.querySelector("button").addEventListener(
             "click",
             () => this.eventBus.emit("map:clear-requested")
+        );
+        section.querySelector(".mobile-track-focus").addEventListener(
+            "click", () => this.eventBus.emit("map:track-focus-toggle-requested")
         );
 
         return section;

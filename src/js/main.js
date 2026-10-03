@@ -20,6 +20,7 @@ import OfflineMapPackagesController from
     "./core/OfflineMapPackagesController.js";
 import OfflineMapsController from "./core/OfflineMapsController.js";
 import TrackEditingCoordinator from "./core/TrackEditingCoordinator.js";
+import TrackFocusCoordinator from "./core/TrackFocusCoordinator.js";
 import TrackSourceResolver from "./core/TrackSourceResolver.js";
 import OfflineMapsRepository from "./services/OfflineMapsRepository.js";
 import OfflineMapArchiveStore from "./services/OfflineMapArchiveStore.js";
@@ -50,6 +51,13 @@ window.addEventListener("DOMContentLoaded", () => {
     const app = new App();
 
     app.initialize();
+    new TrackFocusCoordinator({
+        eventBus: app.eventBus,
+        mapView: app.mapView,
+        selectionState: app.selectionState,
+        displayState: app.displayState,
+        view: app.trackDiscoveryCoordinator.trackInfo.view
+    });
     const libraryMaintenance = new LibraryMaintenancePanel(app.eventBus);
     const serviceWorkerRegistration = registerTrailBookServiceWorker();
     const appUpdateCoordinator = new AppUpdateCoordinator({

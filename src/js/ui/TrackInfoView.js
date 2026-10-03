@@ -22,13 +22,27 @@ export default class TrackInfoView {
             [...this.element.querySelectorAll("[data-track-info-field]")]
                 .map(node => [node.dataset.trackInfoField, node])
         );
+        this.focusButton = this.element.querySelector(".track-info-focus");
+        this.focusButton.addEventListener("click", () => this.onFocusToggle?.());
         this.showEmpty();
+    }
+
+    setFocusToggleHandler(handler) {
+        this.onFocusToggle = handler;
+    }
+
+    setFocusPresentation(available, active) {
+        this.focusButton.disabled = !available;
+        this.focusButton.setAttribute("aria-pressed", String(active));
+        this.focusButton.textContent = active
+            ? "全Track表示へ戻す" : "選択Trackに集中";
     }
 
     showEmpty() {
 
         this.element.classList.remove("has-track-info", "is-mobile-dismissed");
         this.state.textContent = "Trackを選択すると情報を表示します。";
+        this.setFocusPresentation(false, false);
         this.#setAllEmpty();
     }
 
@@ -44,6 +58,7 @@ export default class TrackInfoView {
 
         this.element.classList.remove("has-track-info", "is-mobile-dismissed");
         this.state.textContent = "このTrackの情報を表示できません。";
+        this.setFocusPresentation(false, false);
         this.#setAllEmpty();
     }
 
@@ -101,6 +116,8 @@ export default class TrackInfoView {
                     aria-label="Track Infoを閉じる">×</button>
             </div>
             <p class="track-info-state" aria-live="polite"></p>
+            <button class="track-info-focus" type="button"
+                aria-pressed="false" disabled>選択Trackに集中</button>
             <dl class="track-info-list">
                 <dt>名前</dt><dd data-track-info-field="displayName"></dd>
                 <dt>Folder</dt><dd data-track-info-field="folderPath"></dd>

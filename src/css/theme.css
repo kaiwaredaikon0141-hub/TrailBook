@@ -1604,6 +1604,29 @@ body.is-track-info-resizing{
     color:#555;
 }
 
+.track-info-focus{
+
+    min-height:32px;
+
+    margin:0 0 8px;
+
+    border:1px solid var(--border);
+
+    border-radius:4px;
+
+    background:#fff;
+}
+
+.track-info-focus[aria-pressed="true"],
+.mobile-track-focus[aria-pressed="true"]{
+
+    border-color:var(--accent);
+
+    background:#dbeafe;
+
+    color:#1d4ed8;
+}
+
 .track-info-list{
 
     display:grid;
@@ -1635,6 +1658,11 @@ body.is-track-info-resizing{
 }
 
 .track-info:not(.has-track-info) .track-info-list{
+
+    display:none;
+}
+
+.track-info:not(.has-track-info) .track-info-focus{
 
     display:none;
 }
@@ -2981,6 +3009,18 @@ body.is-track-info-resizing{
         min-height:44px;
 
         padding:4px 8px;
+    }
+
+    .mobile-track-focus{
+
+        grid-column:1 / -1;
+
+        min-height:44px;
+    }
+
+    .mobile-track-focus[hidden]{
+
+        display:none;
     }
 
     .trailbook-build-info{
