@@ -180,7 +180,7 @@ function testMobileMapControlPresentation() {
         const initialFootprints = JSON.stringify(controlFootprints());
         const alpha = color => Number(color.match(/,\s*([\d.]+)\)$/)?.[1]);
         const whiteSurfaceAlpha = control => control === folder &&
-            folder.getAttribute("aria-pressed") === "true" ? 0.46 : 0.36;
+            folder.getAttribute("aria-pressed") === "true" ? 0.54 : 0.44;
         const currentStyle = getComputedStyle(currentPosition);
         const drivingStyle = getComputedStyle(drivingButton);
         const currentRect = currentPosition.getBoundingClientRect();
@@ -202,7 +202,16 @@ function testMobileMapControlPresentation() {
         assert(backgrounds.every((color, index) => Math.abs(alpha(color) -
             whiteSurfaceAlpha(iconControls[index])) < 0.001) &&
             iconControls.every(control => getComputedStyle(control).opacity === "1"),
-        "mobile backgrounds are not halfway to transparent or faded the icons");
+        "mobile backgrounds do not match surface tokens or faded the icons");
+        const statusStyle = getComputedStyle(statusBar.element);
+        assert(statusStyle.backgroundColor === "rgba(248, 250, 252, 0.72)" &&
+            alpha(statusStyle.backgroundColor) > Math.max(
+                ...backgrounds.map(alpha), alpha(activeSurface)
+            ), "mobile status bar is not translucent and more opaque than icons");
+        assert(statusStyle.opacity === "1" &&
+            getComputedStyle(buildInfo).opacity === "1" &&
+            statusStyle.pointerEvents === "none",
+        "mobile status translucency faded text or blocked map interaction");
         assert(Math.round(currentRect.width) === Math.round(drivingRect.width) &&
             Math.round(currentRect.height) === Math.round(drivingRect.height) &&
             Math.round(currentRect.width) === 48 &&
@@ -233,7 +242,7 @@ function testMobileMapControlPresentation() {
         "mobile tracking active states do not share the translucent blue token");
         assert([map, monochrome, currentPosition, drivingButton].every(control =>
             getComputedStyle(control).backgroundColor === activeSurface &&
-            Math.abs(alpha(getComputedStyle(control).backgroundColor) - 0.42) < 0.001 &&
+            Math.abs(alpha(getComputedStyle(control).backgroundColor) - 0.50) < 0.001 &&
             getComputedStyle(control).color === "rgb(255, 255, 255)"
         ), "mobile Map/Monochrome ON backgrounds are not translucent blue");
         assert(JSON.stringify(controlFootprints()) === initialFootprints,
@@ -350,6 +359,9 @@ function testMobileMapControlPresentation() {
             ]), "Driving Mode duplicated or moved the Driving control");
         document.body.classList.remove("is-driving-mode");
     } else {
+        assert(getComputedStyle(statusBar.element).backgroundColor ===
+            "rgb(248, 250, 252)",
+        "mobile status translucency changed the desktop status background");
         assert(getComputedStyle(controls).display === "none" &&
             getComputedStyle(toolbar.element).position !== "fixed",
         "desktop map toolbar layout changed with mobile presentation polish");
