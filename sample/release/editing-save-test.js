@@ -422,6 +422,11 @@ async function testConfirmationDialog() {
     assert(dialog.dialog.querySelector("[data-save-backup]").textContent
         .includes(TRAILBOOK_BACKUP_FOLDER_NAME),
     "first Save did not explain the Backup lifecycle");
+    assert(dialog.dialog.querySelector("[data-save-preview-note]")?.textContent
+        .includes("未適用のPreviewは含まれません") &&
+        dialog.dialog.querySelector("[data-save-preview-note]").textContent
+            .includes("Previewを作り直して"),
+    "Save confirmation did not warn that unapplied simplification is excluded");
     assert(document.activeElement === dialog.dialog.querySelector(
         "[data-save-confirm='cancel']"
     ), "Save confirmation did not default focus to Cancel");

@@ -1404,6 +1404,13 @@ function testPanelAccessibility() {
     });
     assert(!panel.actionButtons.get("apply").disabled,
         "completed preview did not enable Apply");
+    assert(panel.status.dataset.state === "warning" &&
+        panel.status.textContent.includes("保存するにはApply") &&
+        panel.status.textContent.includes("ポイントを編集すると"),
+    "unapplied simplification preview was not explained before point editing");
+    assert(panel.element.querySelector(".editor-save-scope")?.textContent
+        .includes("未適用の簡略化Previewは含みません"),
+    "Save controls do not explain which working result is persisted");
     panel.configureTranslation({ northMeters: 0, eastMeters: 0 });
     assert(!panel.actionButtons.get("apply").disabled,
         "translation feedback changed simplification Apply availability");

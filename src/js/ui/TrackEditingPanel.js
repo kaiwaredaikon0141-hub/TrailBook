@@ -329,7 +329,11 @@ export default class TrackEditingPanel {
     showPreview(metrics) {
 
         this.#setProgress(null);
-        this.#setStatus("Previewを更新しました。", "ready");
+        this.#setStatus(
+            "簡略化はPreviewのみです。保存するにはApplyを押してください。" +
+            "先にポイントを編集すると未適用Previewは破棄されます。",
+            "warning"
+        );
         this.actionButtons.get("apply").disabled = false;
         this.setSaveEnabled(this.saveEnabled);
         this.#showMetrics(metrics);
@@ -553,6 +557,9 @@ export default class TrackEditingPanel {
                     hidden></progress>
                 <p class="editor-status" role="status" aria-live="polite"></p>
                 <p class="editor-backup-status"></p>
+                <p class="editor-save-scope">
+                    保存対象は現在のWorking copyです。未適用の簡略化Previewは含みません。
+                </p>
                 <div class="editor-actions">
                     <button type="button" data-editor-action="undo">Undo</button>
                     <button type="button" data-editor-action="redo">Redo</button>

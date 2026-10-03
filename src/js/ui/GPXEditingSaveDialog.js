@@ -70,6 +70,12 @@ export default class GPXEditingSaveDialog {
                 <dt>Distance difference</dt><dd data-save-distance></dd>
                 <dt>Output</dt><dd>UTF-8, no BOM, LF</dd>
             </dl>
+            <p data-save-preview-note>
+                簡略化PreviewはApplyした結果のみ保存します。
+                未適用のPreviewは含まれません。
+                簡略化も保存する場合はCancelし、必要ならPreviewを作り直して
+                Applyを押してください。
+            </p>
             <p data-save-backup></p>
             <p>原本Backup作成前に元GPXを変更しません。</p>
             <div class="dialog-actions">

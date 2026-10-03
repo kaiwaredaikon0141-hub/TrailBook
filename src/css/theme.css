@@ -950,6 +950,14 @@ body.is-track-info-resizing{
     font-weight:600;
 }
 
+.editor-save-scope,
+.editor-save-dialog [data-save-preview-note]{
+
+    color:#8a4b08;
+
+    font-weight:600;
+}
+
 .editor-metrics{
 
     display:grid;
