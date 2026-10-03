@@ -387,8 +387,8 @@ function testFolderDisplayBatchScale() {
             `${count} Track Folder toggle amplified notifications or Tree refresh`);
         assert(starts === count && stops === count,
             `${count} Track Map delta requests were incomplete`);
-        assert(statusUpdates === 2 && searchUpdates === 0 && refocuses === 2,
-            `${count} Track Folder toggle amplified aggregate refresh`);
+        assert(statusUpdates === 2 && searchUpdates === 0 && refocuses === 0,
+            `${count} Track Folder toggle changed the Map view`);
         assert(on.displayNotificationCount === 1 &&
             on.snapshotScheduleCount === 1 &&
             on.geometryLoadRequestCount === count - cachedCount &&

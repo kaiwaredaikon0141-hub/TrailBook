@@ -10,6 +10,8 @@ const HEX_COLOR_PATTERN = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/;
 const DEFAULT_MAP_MODE = "color";
 const MAP_MODES = new Set([DEFAULT_MAP_MODE, "monochrome"]);
+const DEFAULT_TRACK_BLEND_MODE = "screen";
+const TRACK_BLEND_MODES = new Set([DEFAULT_TRACK_BLEND_MODE, "multiply"]);
 
 function createDictionary() {
 
@@ -85,12 +87,18 @@ function normalizeMapMode(mode) {
     return MAP_MODES.has(mode) ? mode : DEFAULT_MAP_MODE;
 }
 
+function normalizeTrackBlendMode(mode) {
+
+    return TRACK_BLEND_MODES.has(mode) ? mode : DEFAULT_TRACK_BLEND_MODE;
+}
+
 function createDefaultSettings(schemaVersion) {
 
     return {
         version: schemaVersion,
         global: {
-            mapMode: DEFAULT_MAP_MODE
+            mapMode: DEFAULT_MAP_MODE,
+            trackBlendMode: DEFAULT_TRACK_BLEND_MODE
         },
         libraries: createDictionary()
     };
@@ -110,6 +118,8 @@ function sanitizePayload(payload, schemaVersion) {
 
     if (isPlainObject(payload.global)) {
         settings.global.mapMode = normalizeMapMode(payload.global.mapMode);
+        settings.global.trackBlendMode = normalizeTrackBlendMode(
+            payload.global.trackBlendMode);
     }
 
     Object.keys(payload.libraries).forEach(libraryId => {
@@ -202,6 +212,20 @@ export default class DisplaySettingsStore {
         this.settings.global.mapMode = normalizedMode;
         this.#save();
 
+        return true;
+    }
+
+    getTrackBlendMode() {
+
+        return normalizeTrackBlendMode(this.settings.global?.trackBlendMode);
+    }
+
+    setTrackBlendMode(mode) {
+
+        const normalized = normalizeTrackBlendMode(mode);
+        if (this.getTrackBlendMode() === normalized) return false;
+        this.settings.global.trackBlendMode = normalized;
+        this.#save();
         return true;
     }
 

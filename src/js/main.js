@@ -45,12 +45,15 @@ import LibraryDiagnosticsPanel from "./ui/LibraryDiagnosticsPanel.js";
 import LibraryMaintenancePanel from "./ui/LibraryMaintenancePanel.js";
 import AppUpdateCoordinator from "./core/AppUpdateCoordinator.js";
 import OfflineMapsPanel from "./ui/OfflineMapsPanel.js";
+import TrackBlendModeControl from "./ui/TrackBlendModeControl.js";
 
 window.addEventListener("DOMContentLoaded", () => {
 
     const app = new App();
 
     app.initialize();
+    app.libraryAccessPanel.bindDisplayActions(app.eventBus);
+    new TrackBlendModeControl(app.mapView, app.displaySettingsStore).attach();
     new TrackFocusCoordinator({
         eventBus: app.eventBus,
         mapView: app.mapView,

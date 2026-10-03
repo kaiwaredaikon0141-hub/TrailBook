@@ -93,6 +93,17 @@ export default class LibraryAccessPanel {
         return PANEL_ID;
     }
 
+    bindDisplayActions(eventBus) {
+
+        this.element.querySelector(".waypoint-toggle input").addEventListener(
+            "change", event => eventBus.emit("map:waypoint-visibility-toggled",
+                { visible: event.target.checked })
+        );
+        this.element.querySelector(".map-clear").addEventListener(
+            "click", () => eventBus.emit("map:clear-requested")
+        );
+    }
+
     showInitial() {
 
         this.#show(
@@ -394,6 +405,13 @@ export default class LibraryAccessPanel {
                     <button class="library-refresh-action" type="button" hidden>
                         更新を確認
                     </button>
+                    <div class="library-display-actions">
+                        <label class="waypoint-toggle">
+                            <input type="checkbox" aria-label="Waypointを表示">
+                            <span>Waypoint</span>
+                        </label>
+                        <button class="map-clear" type="button">表示をクリア</button>
+                    </div>
                 </div>
             </details>
             <small class="previous-library-status">

@@ -2275,6 +2275,52 @@ body.is-track-info-resizing{
     color:#334155;
 }
 
+.track-blend-control{
+
+    display:inline-flex;
+
+    align-items:center;
+
+    gap:4px;
+
+    color:#334155;
+
+    white-space:nowrap;
+}
+
+.library-display-actions{
+
+    display:flex;
+
+    flex-wrap:wrap;
+
+    align-items:center;
+
+    gap:8px;
+
+    padding-top:8px;
+
+    border-top:1px solid var(--border);
+}
+
+.map--no-basemap{
+
+    background:#f4f4f4;
+}
+
+.track-blend-control select{
+
+    min-height:28px;
+
+    border:1px solid #cbd5e1;
+
+    border-radius:4px;
+
+    background:#fff;
+
+    color:#1f2937;
+}
+
 .map-toolbar-label{
 
     color:#64748b;
@@ -2992,6 +3038,22 @@ body.is-track-info-resizing{
         padding-top:4px;
 
         border-top:1px solid var(--border);
+    }
+
+    .mobile-sidebar-display-controls .track-blend-control{
+
+        grid-column:1 / -1;
+
+        justify-content:space-between;
+
+        min-width:0;
+    }
+
+    .mobile-sidebar-display-controls .track-blend-control select{
+
+        min-height:44px;
+
+        max-width:50%;
     }
 
     .mobile-sidebar-display-title{

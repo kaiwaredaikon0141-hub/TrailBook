@@ -651,6 +651,9 @@ function testMapViewCatalogApi() {
         cycleButton.dataset.state === "package:test",
     "package selected through MapView did not become the offline cycle slot");
     cycleButton.click();
+    assert(mapView.getBaseMap() === "none" && mapView.baseTileLayer === null,
+        "single-package cycle omitted no-map mode");
+    cycleButton.click();
     assert(mapView.getBaseMap() === "osm",
         "single-package cycle did not return PMTiles to OSM");
 }

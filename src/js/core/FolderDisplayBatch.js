@@ -33,7 +33,7 @@ export function queueUnavailableFolderRollback(app, path) {
 export function applyFolderDisplayBatch(app, {
     fileEntries = [],
     checked,
-    preserveMapView = false,
+    preserveMapView = true,
     preserveSelection = false,
     descendantEnumerationMs = 0
 } = {}) {

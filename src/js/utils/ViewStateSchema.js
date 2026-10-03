@@ -3,7 +3,7 @@ import { isValidLibraryId } from "./LibraryIdentity.js";
 const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/;
 const TOP_LEVEL_FIELDS = new Set(["version", "global", "libraries"]);
-const BASE_MAPS = new Set(["osm", "gsiStandard"]);
+const BASE_MAPS = new Set(["osm", "gsiStandard", "none"]);
 
 function createDictionary() {
 

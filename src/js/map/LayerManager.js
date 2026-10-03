@@ -42,6 +42,7 @@ export default class LayerManager {
                     const mainLayer = L.polyline(latLngs, {
                         ...this.#presentationStyle(path, trackStyle),
                         renderer: this.trackRenderer,
+                        trackBlend: true,
                         interactive: true,
                         bubblingMouseEvents: false,
                         gpxPath: path
@@ -374,6 +375,7 @@ export default class LayerManager {
                 interactive: false,
                 bubblingMouseEvents: false
             }).addTo(entry.outlineLayerGroup);
+            mainLayer.options.trackBlend = false;
             mainLayer.setStyle(this.#presentationStyle(path,
                 entry.selectedMainStyle));
             if (entry.trackPresentationVisible) {
@@ -398,6 +400,7 @@ export default class LayerManager {
         entry.outlineLayerGroup?.remove();
         entry.outlineLayerGroup = null;
         entry.segments.forEach(({ mainLayer }) => {
+            mainLayer.options.trackBlend = true;
             mainLayer.setStyle(this.#presentationStyle(this.selectedPath,
                 entry.normalStyle));
         });

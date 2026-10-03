@@ -4,6 +4,7 @@ import ViewStateCoordinator from "../../src/js/core/ViewStateCoordinator.js";
 import ViewStateStore from "../../src/js/services/ViewStateStore.js";
 import DisplayState from "../../src/js/state/DisplayState.js";
 import SelectionState from "../../src/js/state/SelectionState.js";
+import LibraryAccessPanel from "../../src/js/ui/LibraryAccessPanel.js";
 import MapView, {
     BASE_MAPS,
     DEFAULT_BASE_MAP
@@ -103,6 +104,9 @@ function run() {
     const storage = new MemoryStorage();
     const store = new ViewStateStore({ ...Config.viewState, storage });
     const mapView = new MapView(Config, eventBus);
+    const libraryPanel = new LibraryAccessPanel();
+    libraryPanel.bindDisplayActions(eventBus);
+    document.body.append(libraryPanel.element);
 
     mapView.element.style.width = "900px";
     mapView.element.style.height = "400px";
@@ -224,19 +228,19 @@ function run() {
 
     assert(legacyStore.getBaseMap() === "osm",
         "legacy view state did not default to OSM");
-    assert(mapView.element.querySelector(".base-map-select").options.length === 2,
+    assert(mapView.element.querySelector(".base-map-select").options.length === 3,
         "base map selector exposes an unsupported provider");
 
     const toolbar = mapView.element.querySelector(".map-toolbar");
     const toolbarControls = [...toolbar.children];
     const toolbarBounds = toolbar.getBoundingClientRect();
 
-    assert(toolbarControls.length === 4 &&
+    assert(toolbarControls.length === 2 &&
         toolbar.querySelector(".base-map-control") &&
         toolbar.querySelector(".map-mode-control") &&
-        toolbar.querySelector(".waypoint-toggle") &&
-        toolbar.querySelector(".map-clear"),
-    "desktop Map toolbar does not contain the four existing controls");
+        !toolbar.querySelector(".waypoint-toggle") &&
+        !toolbar.querySelector(".map-clear"),
+    "desktop Map toolbar still contains relocated Library actions");
     assert(toolbar.querySelector(".base-map-control .map-toolbar-label")
         ?.textContent === "地図" &&
         toolbar.querySelector(".map-mode-control .map-toolbar-label")
@@ -266,11 +270,11 @@ function run() {
     baseMapSelect.dispatchEvent(new Event("change"));
     displayModeSelect.value = "monochrome";
     displayModeSelect.dispatchEvent(new Event("change"));
-    toolbar.querySelector(".waypoint-toggle input").checked = true;
-    toolbar.querySelector(".waypoint-toggle input").dispatchEvent(
+    libraryPanel.element.querySelector(".waypoint-toggle input").checked = true;
+    libraryPanel.element.querySelector(".waypoint-toggle input").dispatchEvent(
         new Event("change")
     );
-    toolbar.querySelector(".map-clear").click();
+    libraryPanel.element.querySelector(".map-clear").click();
     assert(mapView.getBaseMap() === "osm" &&
         mapView.getMapDisplayMode() === "monochrome" &&
         waypointVisible === true && clearRequests === 1,
@@ -291,6 +295,18 @@ function run() {
         mobileBaseMap.getAttribute("aria-pressed") === "true",
     "mobile base map toggle did not switch to GSI");
     mobileBaseMap.click();
+    assert(mapView.getBaseMap() === "none" && mapView.baseTileLayer === null &&
+        [...layers].filter(layer => layer.kind === "tile").length === 0,
+    "mobile cycle did not remove the background map");
+    assert(mapView.map === map && map.getCenter().lat === center.lat &&
+        map.getCenter().lng === center.lng && map.getZoom() === zoom &&
+        mapView.layerManager.layers.get("track.gpx") === visibleEntry &&
+        mapView.layerManager.selectedPath === "track.gpx",
+    "no-map mode changed map view, Track visibility, or selection");
+    assert(new ViewStateStore({ ...Config.viewState,
+        storage: new MemoryStorage(storage.value) }).getBaseMap() === "none",
+    "no-map choice was not persisted");
+    mobileBaseMap.click();
     assert(mapView.getBaseMap() === "osm" &&
         mobileBaseMap.dataset.state === "osm" &&
         mobileBaseMap.title.includes("地理院標準"),
@@ -308,18 +324,14 @@ function run() {
     assert(mobileBaseMap.querySelector("svg") && mobileMapMode.querySelector("svg"),
         "mobile map toggles do not use inline SVG icons");
 
-    waypointVisible = null;
-    clearRequests = 0;
-    const sidebarWaypoint = mapView.sidebarDisplayControls.querySelector("input");
-
-    sidebarWaypoint.checked = true;
-    sidebarWaypoint.dispatchEvent(new Event("change"));
-    mapView.sidebarDisplayControls.querySelector("button").click();
-    assert(waypointVisible === true &&
-        mapView.element.querySelector(".waypoint-toggle input").checked,
-    "mobile Sidebar Waypoint control does not use the existing event path");
-    assert(clearRequests === 1,
-        "mobile Sidebar Clear does not use the existing event path");
+    assert(!mapView.sidebarDisplayControls.querySelector("input") &&
+        !mapView.sidebarDisplayControls.querySelector(".mobile-sidebar-clear"),
+    "mobile display controls retained relocated actions");
+    assert(libraryPanel.libraryChangeContainer.contains(
+        libraryPanel.element.querySelector(".waypoint-toggle")) &&
+        libraryPanel.libraryChangeContainer.contains(
+            libraryPanel.element.querySelector(".map-clear")),
+    "Waypoint and Clear are not inside Library change");
 
     output.textContent = `PASS: ${assertions} assertions`;
 }

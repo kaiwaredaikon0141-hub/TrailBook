@@ -340,7 +340,7 @@ async function testImportRestartRenderAndDelete() {
         packageSources[0].sourceType === "pmtiles" &&
         packageSources[0].packageId === "tiny-raster",
     "ready package was not restored as a selectable basemap source");
-    assert(catalog.list().length === 3,
+    assert(catalog.list().length === staticProviders.list().length + 1,
         "installed package was not composed with static providers");
     await reopenedRepository.updatePackage("tiny-raster", {
         tileType: "mvt"

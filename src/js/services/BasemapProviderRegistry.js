@@ -45,7 +45,12 @@ export default class BasemapProviderRegistry {
 
         this.#providers = new Map([
             [DEFAULT_BASE_MAP, osm],
-            [GSI_STANDARD.id, GSI_STANDARD]
+            [GSI_STANDARD.id, GSI_STANDARD],
+            ["none", Object.freeze({
+                id: "none", name: "地図なし", sourceType: "none",
+                attribution: "", minZoom: 0,
+                maxZoom: mapConfig.tileMaxZoom, offlineDownloadAllowed: false
+            })]
         ]);
 
         for (const provider of additionalProviders) {

@@ -1,4 +1,5 @@
 import LayerManager from "../map/LayerManager.js";
+import createTrackBlendRenderer from "../map/TrackBlendRenderer.js";
 import drivePerformance from "../services/DrivePerformanceMonitor.js";
 import BasemapProviderRegistry, {
     BASE_MAPS,
@@ -142,9 +143,8 @@ export default class MapView {
 
             this.#replaceBaseLayer();
 
-            this.trackRenderer = L.canvas({
-                tolerance: this.config.map.trackStyle.hitTolerance
-            });
+            this.trackRenderer = createTrackBlendRenderer(L,
+                this.config.map.trackStyle.hitTolerance);
 
             this.layerManager = new LayerManager(
                 this.map,
@@ -712,6 +712,8 @@ export default class MapView {
         }
 
         const definition = this.#getBaseMapDefinition(this.baseMap);
+        this.element.querySelector(".map-canvas").classList.toggle(
+            "map--no-basemap", definition.sourceType === "none");
 
         const layerOptions = {
             attribution: definition.attribution,
@@ -720,7 +722,7 @@ export default class MapView {
         this.baseTileLayer = this.basemapLayerFactory.create(
             definition, layerOptions
         );
-        this.baseTileLayer.addTo(this.map);
+        this.baseTileLayer?.addTo(this.map);
     }
 
     #getBaseMapDefinition(value) {
@@ -754,9 +756,11 @@ export default class MapView {
 
     #getNextBaseMap() {
         const offline = this.#getOfflineCycleBaseMap();
-        const cycle = offline
-            ? ["osm", "gsiStandard", offline]
-            : ["osm", "gsiStandard"];
+        const cycle = ["osm", "gsiStandard"];
+        if (offline) cycle.push(offline);
+        if (this.basemapProviders.get("none")?.sourceType === "none") {
+            cycle.push("none");
+        }
         const currentIndex = cycle.indexOf(this.baseMap);
 
         return cycle[(currentIndex + 1) % cycle.length];
@@ -775,7 +779,7 @@ export default class MapView {
             "option[data-offline-package='true']"
         )) option.remove();
         for (const provider of this.basemapProviders.list?.() ?? []) {
-            if (["osm", "gsiStandard"].includes(provider.id)) continue;
+            if (["osm", "gsiStandard", "none"].includes(provider.id)) continue;
             const option = document.createElement("option");
             option.value = provider.id;
             option.textContent = provider.name;
@@ -803,6 +807,7 @@ export default class MapView {
                     <select class="base-map-select" aria-label="背景地図">
                         <option value="osm">OSM</option>
                         <option value="gsiStandard">地理院 標準</option>
+                        <option value="none">地図なし</option>
                     </select>
                 </label>
                 <label class="map-mode-control">
@@ -812,11 +817,6 @@ export default class MapView {
                         <option value="monochrome">Monochrome</option>
                     </select>
                 </label>
-                <label class="waypoint-toggle">
-                    <input type="checkbox" aria-label="Waypointを表示">
-                    <span>Waypoint</span>
-                </label>
-                <button class="map-clear" type="button">表示をクリア</button>
             </div>
             <div class="mobile-map-controls" aria-label="地図表示設定">
                 <button class="mobile-base-map-toggle" type="button">
@@ -839,27 +839,6 @@ export default class MapView {
             <div class="map-canvas" role="application" aria-label="GPX地図"></div>
             <div class="map-state" aria-live="polite"></div>
         `;
-
-        section.querySelector(".map-clear").addEventListener(
-            "click",
-            () => this.eventBus.emit("map:clear-requested")
-        );
-
-        section.querySelector(".waypoint-toggle input").addEventListener(
-            "change",
-            event => {
-                const visible = event.target.checked;
-
-                const sidebarInput = this.sidebarDisplayControls
-                    ?.querySelector("input");
-
-                if (sidebarInput) sidebarInput.checked = visible;
-                this.eventBus.emit(
-                    "map:waypoint-visibility-toggled",
-                    { visible }
-                );
-            }
-        );
 
         section.querySelector(".map-mode-select").addEventListener(
             "change",
@@ -912,30 +891,10 @@ export default class MapView {
         section.setAttribute("aria-label", "表示");
         section.innerHTML = `
             <strong class="mobile-sidebar-display-title">表示</strong>
-            <label class="mobile-sidebar-waypoint-toggle">
-                <input type="checkbox" aria-label="Waypointを表示">
-                <span>Waypointを表示</span>
-            </label>
-            <button class="mobile-sidebar-clear" type="button">
-                表示をクリア
-            </button>
             <button class="mobile-track-focus" type="button"
                 aria-pressed="false" hidden>選択Trackに集中</button>
         `;
 
-        section.querySelector("input").addEventListener("change", event => {
-            const visible = event.target.checked;
-
-            this.element.querySelector(".waypoint-toggle input").checked = visible;
-            this.eventBus.emit(
-                "map:waypoint-visibility-toggled",
-                { visible }
-            );
-        });
-        section.querySelector("button").addEventListener(
-            "click",
-            () => this.eventBus.emit("map:clear-requested")
-        );
         section.querySelector(".mobile-track-focus").addEventListener(
             "click", () => this.eventBus.emit("map:track-focus-toggle-requested")
         );

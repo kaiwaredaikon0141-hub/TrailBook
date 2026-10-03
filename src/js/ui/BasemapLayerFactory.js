@@ -56,6 +56,7 @@ export default class BasemapLayerFactory {
         const sourceType = provider.sourceType ??
             (provider.offlineDownloadAllowed === true
                 ? "offline-xyz" : "xyz");
+        if (sourceType === "none") return null;
         const leaflet = this.leaflet ?? globalThis.L;
         if (!leaflet?.tileLayer) {
             throw new Error("Leaflet is unavailable.");
