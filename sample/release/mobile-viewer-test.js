@@ -173,6 +173,14 @@ function testMobileMapControlPresentation() {
         const backgrounds = iconControls.map(control =>
             getComputedStyle(control).backgroundColor
         );
+        const controlFootprints = () => iconControls.map(control => {
+            const rect = control.getBoundingClientRect();
+            return [rect.x, rect.y, rect.width, rect.height];
+        });
+        const initialFootprints = JSON.stringify(controlFootprints());
+        const alpha = color => Number(color.match(/,\s*([\d.]+)\)$/)?.[1]);
+        const whiteSurfaceAlpha = control => control === folder &&
+            folder.getAttribute("aria-pressed") === "true" ? 0.46 : 0.36;
         const currentStyle = getComputedStyle(currentPosition);
         const drivingStyle = getComputedStyle(drivingButton);
         const currentRect = currentPosition.getBoundingClientRect();
@@ -191,6 +199,10 @@ function testMobileMapControlPresentation() {
         ), "mobile icon translucency reduced a touch target or disabled input");
         assert(backgrounds.every(color => /rgba\(.+, 0\.[0-9]+\)/.test(color)),
             "mobile icon controls do not share translucent surfaces");
+        assert(backgrounds.every((color, index) => Math.abs(alpha(color) -
+            whiteSurfaceAlpha(iconControls[index])) < 0.001) &&
+            iconControls.every(control => getComputedStyle(control).opacity === "1"),
+        "mobile backgrounds are not halfway to transparent or faded the icons");
         assert(Math.round(currentRect.width) === Math.round(drivingRect.width) &&
             Math.round(currentRect.height) === Math.round(drivingRect.height) &&
             Math.round(currentRect.width) === 48 &&
@@ -208,6 +220,7 @@ function testMobileMapControlPresentation() {
             drivingButton.getAttribute("aria-label") === "Driving Mode",
         "mobile tracking controls retained visible labels or lost accessible names");
         map.setAttribute("aria-pressed", "true");
+        monochrome.setAttribute("aria-pressed", "true");
         currentPosition.setAttribute("aria-pressed", "true");
         drivingButton.setAttribute("aria-pressed", "true");
         currentPositionStatus.textContent = "Current position ±8 m";
@@ -218,6 +231,13 @@ function testMobileMapControlPresentation() {
             getComputedStyle(currentPosition).color === "rgb(255, 255, 255)" &&
             getComputedStyle(drivingButton).color === "rgb(255, 255, 255)",
         "mobile tracking active states do not share the translucent blue token");
+        assert([map, monochrome, currentPosition, drivingButton].every(control =>
+            getComputedStyle(control).backgroundColor === activeSurface &&
+            Math.abs(alpha(getComputedStyle(control).backgroundColor) - 0.42) < 0.001 &&
+            getComputedStyle(control).color === "rgb(255, 255, 255)"
+        ), "mobile Map/Monochrome ON backgrounds are not translucent blue");
+        assert(JSON.stringify(controlFootprints()) === initialFootprints,
+            "mobile button ON styling changed position or dimensions");
         assert(getComputedStyle(currentPositionStatus).position === "absolute" &&
             getComputedStyle(drivingStatus).position === "absolute" &&
             getComputedStyle(currentPositionStatus).clipPath === "inset(50%)" &&
@@ -235,10 +255,16 @@ function testMobileMapControlPresentation() {
             drivingButton.getBoundingClientRect().height
         ]), "mobile tracking activation or status text shifted the controls");
         map.setAttribute("aria-pressed", "false");
+        monochrome.setAttribute("aria-pressed", "false");
         currentPosition.setAttribute("aria-pressed", "false");
         drivingButton.setAttribute("aria-pressed", "false");
         currentPositionStatus.textContent = "";
         drivingStatus.textContent = "";
+        assert(iconControls.every(control => Math.abs(alpha(
+            getComputedStyle(control).backgroundColor) -
+                whiteSurfaceAlpha(control)) < 0.001) &&
+            JSON.stringify(controlFootprints()) === initialFootprints,
+        "mobile OFF styling did not restore translucency and fixed footprints");
         assert(JSON.stringify(currentOrigin) === JSON.stringify([
             currentPosition.getBoundingClientRect().x,
             currentPosition.getBoundingClientRect().y,

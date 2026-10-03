@@ -13,13 +13,13 @@
     --map-monochrome-filter:
         grayscale(100%) brightness(108%) contrast(82%);
 
-    --mobile-icon-surface:rgba(255, 255, 255, 0.72);
+    --mobile-icon-surface:rgba(255, 255, 255, 0.36);
 
-    --mobile-icon-surface-feedback:rgba(255, 255, 255, 0.92);
+    --mobile-icon-surface-feedback:rgba(255, 255, 255, 0.46);
 
     --mobile-icon-foreground:rgba(40, 50, 60, 0.84);
 
-    --mobile-tracking-active-surface:rgba(37, 99, 235, 0.84);
+    --mobile-tracking-active-surface:rgba(37, 99, 235, 0.42);
 
     --mobile-tracking-control-width:48px;
 
@@ -2867,7 +2867,7 @@ body.is-track-info-resizing{
 
         border-color:rgba(148, 163, 184, 0.55);
 
-        background:rgba(255, 255, 255, 0.46);
+        background:rgba(255, 255, 255, 0.23);
 
         color:rgba(71, 85, 105, 0.42);
 
@@ -2878,7 +2878,7 @@ body.is-track-info-resizing{
 
         border-color:var(--accent);
 
-        background:var(--accent);
+        background:var(--mobile-tracking-active-surface);
 
         color:white;
     }
