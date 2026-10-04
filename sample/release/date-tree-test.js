@@ -7,6 +7,8 @@ import TrackDiscoveryEntry, {
     DATE_SOURCES
 } from "../../src/js/models/TrackDiscoveryEntry.js";
 import DateTreeBuilder from "../../src/js/services/DateTreeBuilder.js";
+import GPXGeometryLoader from "../../src/js/services/GPXGeometryLoader.js";
+import GPXParser from "../../src/js/services/GPXParser.js";
 import DiscoveryViewStateStore from "../../src/js/services/DiscoveryViewStateStore.js";
 import DisplayState from "../../src/js/state/DisplayState.js";
 import DateTreeView from "../../src/js/ui/DateTreeView.js";
@@ -832,6 +834,87 @@ async function testOldCachedMetadataSelfHeals() {
     sidebar.remove();
 }
 
+async function testReconciledIncompleteDates() {
+    for (const dateAlreadyOpen of [false, true]) {
+        let actual = false;
+        let reads = 0;
+        let writes = 0;
+        const pathsRead = [];
+        const fileEntries = Array.from({ length: 1127 }, (_, index) => {
+            const name = `log-${index}.gpx`;
+            const path = `trips/${name}`;
+            return { path, fileHandle: {
+                name, kind: "file",
+                async getFile() {
+                    reads += 1;
+                    pathsRead.push(path);
+                    return new File([
+                        '<gpx version="1.1"><metadata><time>2025-04-15T01:00:00Z</time></metadata>' +
+                        '<trk><trkseg><trkpt lat="35" lon="135"/></trkseg></trk></gpx>'
+                    ], name, { lastModified: 123 });
+                },
+                createWritable() { writes += 1; throw new Error("Unexpected GPX write"); }
+            } };
+        });
+        const cachedEntries = fileEntries.map(({ path, fileHandle }, index) => new TrackDiscoveryEntry({
+            relativePath: path, folderPath: "trips", originalFileName: fileHandle.name,
+            displayName: fileHandle.name, metadataComplete: index === 0,
+            resolvedDate: index === 0 ? new Date("2026-09-01T00:00:00Z") : null
+        }));
+        const loader = new GPXGeometryLoader({
+            parser: new GPXParser(),
+            repository: { async getWithSummary() { return null; }, async set() { return true; } }
+        });
+        const coordinator = new TrackDiscoveryCoordinator({
+            eventBus: new EventBus(), displayState: new DisplayState(), loader,
+            modeStore: new DiscoveryViewStateStore({ storage: memoryStorage() })
+        });
+        const handles = new Map(fileEntries.map(({ path, fileHandle }) => [path, fileHandle]));
+        coordinator.setSourceResolver({ resolve(path) {
+            return actual
+                ? { status: "ready", relativePath: path, actualFileHandle: handles.get(path) }
+                : { status: "unavailable", relativePath: path, reason: "provisional-only" };
+        } });
+        coordinator.setProvisionalLibrary({ namespace: "date-repair", libraryId: "root-name:DateRepair",
+            fileEntries, entries: cachedEntries, mode: "folder", filter: {} });
+        if (dateAlreadyOpen) coordinator.setMode("date");
+        await flush();
+        assert(reads === 0 && coordinator.index.getEntries().length === 1127,
+            "provisional Date restore attempted GPX access or lost cached entries");
+        actual = true;
+        coordinator.reconcileLibrary({ namespace: "date-repair", fileEntries, entries: cachedEntries });
+        if (!dateAlreadyOpen) {
+            assert(reads === 0, "Folder reconciliation eagerly read incomplete GPX metadata");
+            coordinator.setMode("date");
+        }
+        await coordinator.index.build();
+        await flush();
+        const entries = coordinator.index.getEntries();
+        assert(reads === 1126 && !pathsRead.includes(fileEntries[0].path),
+            "Date repair did not target only the 1126 incomplete cached entries");
+        assert(entries.length === 1127 && entries.every(value => value.metadataComplete) &&
+            entries.every(value => value.resolvedDate instanceof Date),
+            "actual GPX dates did not replace Unknown Date placeholders");
+        assert(coordinator.dateTree.groups.every(group => group.kind !== "unknown") &&
+            coordinator.dateTree.groups.map(group => group.label).join(",") === "2026年,2025年",
+            "Date groups did not converge after actual filesystem reconciliation");
+        coordinator.setMode("folder");
+        coordinator.setMode("date");
+        await flush();
+        assert(reads === 1126, "complete Date metadata was read again when reopening Date");
+        assert(writes === 0, "Date repair wrote GPX files");
+        const unknown = new TrackDiscoveryEntry({ relativePath: "undated.gpx",
+            originalFileName: "undated.gpx", displayName: "Undated", metadataComplete: true });
+        const newFiles = [...fileEntries, { path: unknown.relativePath, fileHandle: { name: "undated.gpx" } }];
+        coordinator.reconcileLibrary({ namespace: "date-repair", fileEntries: newFiles,
+            entries: [...entries, unknown] });
+        assert(reads === 1126 && coordinator.dateTree.groups.at(-1)?.kind === "unknown" &&
+            coordinator.dateTree.groups.at(-1).children.length === 1,
+            "genuine complete-but-undated GPX was reloaded or given an invented date");
+        coordinator.clearLibrary();
+    }
+}
+
 try {
     testBuilder();
     testModeStore();
@@ -845,6 +928,7 @@ try {
     await testCoordinator();
     await testFolderOrderingMetadataFlow();
     await testOldCachedMetadataSelfHeals();
+    await testReconciledIncompleteDates();
     output.textContent = `PASS: ${assertions} assertions`;
 } catch (error) {
     output.textContent = `FAIL after ${assertions} assertions: ${error.stack || error}`;

@@ -326,8 +326,8 @@ async function testManifestAndAssets() {
     "collapsed Maintenance actions are not separated from diagnostics");
     assert(mainSource.includes("mapBuildInfo") &&
         mainSource.includes("mapIndicator: true") &&
-        mainSource.includes("attachMapBuildInfoElement(mapBuildInfo") &&
-        mainSource.includes("statusBar: app.statusBar, mapContainer: app.mapView.element") &&
+        mainSource.includes("statusBar.attachBuildInfo(mapBuildInfo)") &&
+        mainSource.includes("statusBar.attachElevationPanel(app.mapView.element)") &&
         !/["'][0-9a-f]{8}["']/.test(mainSource),
     "Map build indicator is missing or hard-codes a commit");
     assert(mainSource.includes("new TrackSourceResolver") &&
@@ -350,10 +350,12 @@ async function testManifestAndAssets() {
     "localhost build detail is not contained by Library diagnostics");
     assert(themeSource.includes(".map-build-indicator") &&
         themeSource.includes("pointer-events:none") &&
+        themeSource.includes(".statusbar .map-build-indicator") &&
+        themeSource.includes(".current-elevation-panel:not([hidden])") &&
         themeSource.includes("top:calc(var(--mobile-driving-top) + 8px)") &&
         themeSource.includes("var(--mobile-tracking-control-width) + 8px") &&
         themeSource.includes("env(safe-area-inset-bottom)"),
-    "Map build indicator does not use the independent safe-area mobile panel");
+    "footer build indicator and independent mobile elevation panel are missing");
 
     const workflow = await fetch(new URL(
         "../../.github/workflows/pages.yml", location.href

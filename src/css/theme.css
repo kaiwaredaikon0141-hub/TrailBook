@@ -3642,12 +3642,28 @@ body.is-track-info-resizing{
         justify-content:flex-end;
     }
 
+    .statusbar .map-build-indicator{
+        position:static;
+        box-sizing:content-box;
+        height:auto;
+        margin:0;
+        padding:0;
+        border:0;
+        border-radius:0;
+        background:transparent;
+    }
+
+    .leaflet-bottom.leaflet-right .leaflet-control-attribution{
+        margin-bottom:max(32px, calc(env(safe-area-inset-bottom) + 32px));
+        margin-right:calc(var(--mobile-driving-right) + var(--mobile-tracking-control-width) + 8px);
+    }
+
 }
 
 @media (max-width:768px), (max-height:500px) and (pointer:coarse),
     (max-width:1366px) and (pointer:coarse){
 
-    .map-build-indicator{
+    .current-elevation-panel:not([hidden]){
         position:fixed;
         z-index:1740;
         top:calc(var(--mobile-driving-top) + 8px);
@@ -3666,6 +3682,9 @@ body.is-track-info-resizing{
         border:1px solid rgba(100, 116, 139, 0.25);
         border-radius:6px;
         background:rgba(248, 250, 252, 0.60);
+        color:#52606d;
+        font-size:12px;
+        line-height:1.2;
         white-space:normal;
         overflow-wrap:anywhere;
         pointer-events:none;

@@ -24,7 +24,7 @@ export default class StatusBar {
         footer.setAttribute("aria-atomic", "true");
         footer.innerHTML = `
             <span class="statusbar-message">ライブラリを開いてください</span>
-            <span class="statusbar-elevation" hidden></span>
+            <span class="statusbar-elevation current-elevation-panel" hidden></span>
             <span class="statusbar-build-slot"></span>
         `;
         this.message = footer.querySelector(".statusbar-message");
@@ -38,6 +38,26 @@ export default class StatusBar {
     attachBuildInfo(element) {
 
         this.buildSlot.replaceChildren(element);
+    }
+
+    attachElevationPanel(mapContainer, {
+        mobileMedia = globalThis.matchMedia?.(
+            "(max-width: 768px), (max-height: 500px) and (pointer: coarse), " +
+            "(max-width: 1366px) and (pointer: coarse)"
+        )
+    } = {}) {
+        this.detachElevationPanel?.();
+        const place = () => {
+            if (mobileMedia?.matches) mapContainer.append(this.elevation);
+            else this.buildSlot.before(this.elevation);
+        };
+        place();
+        mobileMedia?.addEventListener("change", place);
+        this.detachElevationPanel = () => {
+            mobileMedia?.removeEventListener("change", place);
+            this.buildSlot.before(this.elevation);
+        };
+        return this.detachElevationPanel;
     }
 
     showCurrentElevation(result, reason = "") {

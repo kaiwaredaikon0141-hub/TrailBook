@@ -4,6 +4,7 @@ import TrackDiscoveryEntry, {
 } from "../../src/js/models/TrackDiscoveryEntry.js";
 import GeometryCacheRepository from "../../src/js/services/GeometryCacheRepository.js";
 import GPXGeometryLoader from "../../src/js/services/GPXGeometryLoader.js";
+import GPXParser from "../../src/js/services/GPXParser.js";
 import LibraryDiscoveryIndexService from "../../src/js/services/LibraryDiscoveryIndexService.js";
 import TrackSummaryBuilder from "../../src/js/services/TrackSummaryBuilder.js";
 
@@ -638,8 +639,47 @@ async function testTargetedEntryReplacement() {
         "same-path refresh created a duplicate Discovery entry");
 }
 
+async function testIncompleteGeometrySummaryRepair() {
+    const sourceFile = new File([
+        '<gpx version="1.1"><metadata><time>2025-04-15T01:00:00Z</time></metadata>' +
+        '<trk><trkseg><trkpt lat="35" lon="135"/></trkseg></trk></gpx>'
+    ], "log.gpx", { lastModified: 123 });
+    const parser = new GPXParser();
+    const repository = new GeometryCacheRepository(Config.geometryCache, { adapter: new MemoryAdapter() });
+    const legacySummary = new TrackSummaryBuilder().build("log.gpx", sourceFile, null);
+    assert(await repository.set("legacy-dates", "log.gpx", sourceFile,
+        parser.parse(await sourceFile.text(), sourceFile.name), legacySummary),
+    "legacy summary fixture was not stored in production Geometry Cache");
+    let parses = 0;
+    let writes = 0;
+    const fileHandle = { kind: "file", name: sourceFile.name,
+        async getFile() { return sourceFile; },
+        createWritable() { writes += 1; throw new Error("Unexpected GPX write"); } };
+    const loader = new GPXGeometryLoader({ repository, parser: {
+        parse(...args) { parses += 1; return parser.parse(...args); }
+    } });
+    loader.setLibraryNamespace("legacy-dates");
+    await loader.load("log.gpx", fileHandle);
+    assert(parses === 0 && loader.getStats().hits === 1,
+        "legacy drawing geometry stopped being reusable before metadata was requested");
+    const first = loader.loadSummary("log.gpx", fileHandle);
+    const second = loader.loadSummary("log.gpx", fileHandle);
+    const [summary, duplicate] = await Promise.all([first, second]);
+    assert(summary === duplicate && parses === 1 && summary.metadataComplete &&
+        summary.dateSource === DATE_SOURCES.METADATA &&
+        summary.resolvedDate.toISOString() === "2025-04-15T01:00:00.000Z",
+    "incomplete drawing-cache metadata overrode the GPX date or parsed twice");
+    const saved = await repository.getWithSummary("legacy-dates", "log.gpx", sourceFile);
+    assert(saved.summary.metadataComplete && saved.summary.resolvedDate.getFullYear() === 2025,
+        "repaired dates were not retained in the regenerable cache");
+    await loader.loadSummary("log.gpx", fileHandle);
+    assert(parses === 1 && writes === 0,
+        "reopening complete metadata reparsed GPX or wrote the source file");
+}
+
 try {
     assert(Config.version === "1.11.0", "Config version is 1.11.0");
+    await testIncompleteGeometrySummaryRepair();
     assert(Config.geometryCache.cacheSchemaVersion === 3,
         "Geometry/discovery cache schema not updated");
     assert(Config.geometryCache.textDecoderSchemaVersion === 1,

@@ -247,11 +247,16 @@ export default class TrackDiscoveryCoordinator {
             cachedEntries: entries,
             generation: this.generation
         });
+        const incomplete = this.index.invalidateIncompleteActualEntries();
         this.trackInfo.setLibrary({
             generation: this.generation,
             isCurrent: this.isCurrent
         });
         this.#applyFilter(entries);
+        if (incomplete > 0 && (this.mode === "date" ||
+            this.filterService.isActive(this.activeFilter))) {
+            void this.#buildIndex();
+        }
         return true;
     }
 
@@ -399,6 +404,7 @@ export default class TrackDiscoveryCoordinator {
             return;
         }
 
+        this.index.invalidateIncompleteActualEntries();
         if (this.index.getStatus() === "ready") {
             this.#applyFilter();
             return;

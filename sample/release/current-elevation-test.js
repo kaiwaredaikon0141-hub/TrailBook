@@ -3,7 +3,6 @@ import CurrentElevationController from "../../src/js/core/CurrentElevationContro
 import CurrentPositionController from "../../src/js/core/CurrentPositionController.js";
 import EventBus from "../../src/js/core/EventBus.js";
 import StatusBar from "../../src/js/ui/StatusBar.js";
-import { attachMapBuildInfoElement } from "../../src/js/ui/BuildInfoView.js";
 
 let assertions = 0;
 function assert(condition, message) {
@@ -218,7 +217,8 @@ function testLayout() {
     build.className = "map-build-indicator";
     build.textContent = "v1.11.0 · 12345678";
     const mapContainer = document.createElement("div");
-    const detachBuildInfo = attachMapBuildInfoElement(build, { statusBar: view, mapContainer });
+    view.attachBuildInfo(build);
+    const detachElevation = view.attachElevationPanel(mapContainer);
     view.showLibraryLoaded({ name: "GPX", gpxFileCount: 1133, folderCount: 10 });
     document.body.append(view.element, mapContainer);
     const message = view.message.textContent;
@@ -227,14 +227,15 @@ function testLayout() {
     for (const meters of [0, 245, -12, 8849]) {
         view.showCurrentElevation(result(meters));
         assert(view.message.textContent === message && build.isConnected &&
-            (mobile ? !view.element.contains(build) : view.buildSlot.contains(build)),
+            view.buildSlot.contains(build),
             "elevation replaced GPX summary/build indicator");
         if (mobile) {
             const after = view.element.getBoundingClientRect();
             assert(after.height === before.height && after.top === before.top &&
                 build.getBoundingClientRect().right <= innerWidth &&
                 view.elevation.getBoundingClientRect().right <= innerWidth &&
-                build.getBoundingClientRect().bottom < after.top &&
+                view.elevation.getBoundingClientRect().bottom < after.top &&
+                !view.element.contains(view.elevation) &&
                 getComputedStyle(view.element).backgroundColor === "rgba(248, 250, 252, 0.72)",
             "mobile elevation changed footer footprint, overflowed, or lost translucency");
         }
@@ -246,7 +247,7 @@ function testLayout() {
     view.hideCurrentElevation();
     assert(view.elevation.hidden && view.elevation.textContent === "", "hidden elevation retained a gap/value");
     view.element.remove();
-    detachBuildInfo();
+    detachElevation();
     mapContainer.remove();
 }
 

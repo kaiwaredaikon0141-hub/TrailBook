@@ -134,6 +134,18 @@ export default class LibraryDiscoveryIndexService {
         return this.status;
     }
 
+    invalidateIncompleteActualEntries() {
+        let invalidated = 0;
+        this.entries.forEach((entry, path) => {
+            if (entry.metadataComplete || entry.status === "error") return;
+            if (this.sourceResolver?.resolve(path)?.status !== "ready") return;
+            this.entries.delete(path);
+            invalidated += 1;
+        });
+        if (invalidated > 0 && this.status === "ready") this.status = "idle";
+        return invalidated;
+    }
+
     getEntries() {
 
         return [...this.entries.values()].sort((first, second) => {

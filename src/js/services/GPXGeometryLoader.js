@@ -66,7 +66,16 @@ export default class GPXGeometryLoader {
 
         const request = this.#request(path, fileHandle);
 
-        request.summary ||= request.bundle.then(value => value.summary);
+        request.summary ||= request.bundle.then(async value => {
+            if (value.summary?.metadataComplete !== false) return value.summary;
+            const source = this.#resolveSource(path, fileHandle);
+            if (isTrackSourceUnavailable(source)) return source;
+            // Old drawing-cache summaries are not authoritative GPX metadata.
+            const refreshed = await this.#load(
+                source.relativePath, source.actualFileHandle, { skipCache: true }
+            );
+            return refreshed.summary;
+        });
         return request.summary;
     }
 
@@ -152,14 +161,14 @@ export default class GPXGeometryLoader {
         return { ...this.stats };
     }
 
-    async #load(path, fileHandle) {
+    async #load(path, fileHandle, { skipCache = false } = {}) {
 
         this.#diagnose(path, fileHandle, "GPXGeometryLoader", "started");
 
         drivePerformance.recordComponentCall("GPXGeometryLoader");
         const driveFileIdentity = this.#createDriveFileIdentity(fileHandle);
 
-        if (this.namespace && driveFileIdentity) {
+        if (this.namespace && driveFileIdentity && !skipCache) {
             const cached = await this.#lookupCache(path, driveFileIdentity);
 
             if (cached) {
@@ -189,7 +198,7 @@ export default class GPXGeometryLoader {
                 throw error;
             }
 
-            if (this.namespace && !driveFileIdentity) {
+            if (this.namespace && !driveFileIdentity && !skipCache) {
                 const cached = await this.#lookupCache(path, file);
 
                 if (cached) {
