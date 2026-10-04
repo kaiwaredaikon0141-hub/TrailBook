@@ -229,6 +229,26 @@ export function createBuildInfoElement({
     return element;
 }
 
+/** Relocate one indicator, retaining its build identity across layout changes. */
+export function attachMapBuildInfoElement(element, {
+    statusBar, mapContainer,
+    mobileMedia = globalThis.matchMedia?.(
+        "(max-width: 768px), (max-height: 500px) and (pointer: coarse), " +
+        "(max-width: 1366px) and (pointer: coarse)"
+    )
+}) {
+    const place = () => {
+        if (mobileMedia?.matches) mapContainer.append(element);
+        else statusBar.attachBuildInfo(element);
+    };
+    place();
+    mobileMedia?.addEventListener("change", place);
+    return () => {
+        mobileMedia?.removeEventListener("change", place);
+        element.remove();
+    };
+}
+
 export async function resolveBuildInfoElements(elements, {
     config = Config,
     runtimeBuild = globalThis.TRAILBOOK_BUILD,

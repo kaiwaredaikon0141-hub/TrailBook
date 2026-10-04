@@ -3477,13 +3477,6 @@ body.is-track-info-resizing{
         width:var(--mobile-tracking-control-width);
     }
 
-    .map-build-indicator{
-
-        right:max(8px, env(safe-area-inset-right));
-
-        bottom:max(130px, calc(env(safe-area-inset-bottom) + 122px));
-    }
-
     .driving-mode-control{
 
         position:fixed;
@@ -3649,23 +3642,33 @@ body.is-track-info-resizing{
         justify-content:flex-end;
     }
 
-    .statusbar .map-build-indicator{
+}
 
-        position:static;
+@media (max-width:768px), (max-height:500px) and (pointer:coarse),
+    (max-width:1366px) and (pointer:coarse){
 
-        box-sizing:content-box;
-
+    .map-build-indicator{
+        position:fixed;
+        z-index:1740;
+        top:calc(var(--mobile-driving-top) + 8px);
+        right:calc(var(--mobile-driving-right) + var(--mobile-tracking-control-width) + 8px);
+        bottom:auto;
+        box-sizing:border-box;
         height:auto;
-
+        min-height:32px;
+        max-width:calc(100vw - var(--mobile-driving-right) -
+            var(--mobile-tracking-control-width) - 8px -
+            max(176px, calc(env(safe-area-inset-left) + 168px)));
+        display:flex;
+        align-items:center;
         margin:0;
-
-        padding:0;
-
-        border:0;
-
-        border-radius:0;
-
-        background:transparent;
+        padding:4px 8px;
+        border:1px solid rgba(100, 116, 139, 0.25);
+        border-radius:6px;
+        background:rgba(248, 250, 252, 0.60);
+        white-space:normal;
+        overflow-wrap:anywhere;
+        pointer-events:none;
     }
 }
 

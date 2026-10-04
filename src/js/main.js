@@ -40,6 +40,7 @@ import SelectedTrackFileResolver from "./services/SelectedTrackFileResolver.js";
 import { registerTrailBookServiceWorker } from "./services/PWAServiceWorker.js";
 import { folderPathFromFilePath } from "./utils/PathUtils.js";
 import {
+    attachMapBuildInfoElement,
     createBuildInfoElement,
     resolveBuildInfoElements
 } from "./ui/BuildInfoView.js";
@@ -150,7 +151,9 @@ window.addEventListener("DOMContentLoaded", () => {
         compact: true,
         mapIndicator: true
     });
-    app.statusBar.attachBuildInfo(mapBuildInfo);
+    attachMapBuildInfoElement(mapBuildInfo, {
+        statusBar: app.statusBar, mapContainer: app.mapView.element
+    });
     const localDevelopment = location.hostname === "localhost" ||
         location.hostname === "127.0.0.1" || location.hostname === "[::1]";
     const developmentBuildInfo = localDevelopment

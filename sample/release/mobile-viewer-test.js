@@ -6,7 +6,7 @@ import LibraryDiagnosticsPanel from "../../src/js/ui/LibraryDiagnosticsPanel.js"
 import FolderColorControl from "../../src/js/ui/FolderColorControl.js";
 import DisplayState from "../../src/js/state/DisplayState.js";
 import StatusBar from "../../src/js/ui/StatusBar.js";
-import { createBuildInfoElement } from "../../src/js/ui/BuildInfoView.js";
+import { attachMapBuildInfoElement, createBuildInfoElement } from "../../src/js/ui/BuildInfoView.js";
 import Config from "../../src/js/core/Config.js";
 
 const output = document.getElementById("result");
@@ -142,7 +142,9 @@ function testMobileMapControlPresentation() {
     drivingStatus.className = "driving-mode-status";
     drivingControl.append(drivingButton, drivingStatus);
     statusBar.showDisplaySummary(12, 0);
-    statusBar.attachBuildInfo(buildInfo);
+    const detachBuildInfo = attachMapBuildInfoElement(buildInfo, {
+        statusBar, mapContainer: frame
+    });
     frame.append(
         toolbar.element,
         controls,
@@ -152,10 +154,13 @@ function testMobileMapControlPresentation() {
     );
     document.body.append(frame);
 
-    assert(statusBar.buildSlot.contains(buildInfo) &&
-        statusBar.element.querySelectorAll(".map-build-indicator").length === 1 &&
+    const mobileBuild = matchMedia(
+        "(max-width: 768px), (max-height: 500px) and (pointer: coarse), " +
+        "(max-width: 1366px) and (pointer: coarse)"
+    ).matches;
+    assert((mobileBuild ? buildInfo.parentElement === frame : statusBar.buildSlot.contains(buildInfo)) &&
         document.querySelectorAll(".map-build-indicator").length === 1,
-    "mobile build indicator is not uniquely contained by the status bar");
+    "build indicator was duplicated or placed in the wrong layout container");
     assert(statusBar.message.textContent.includes("12 GPX") &&
         buildInfo.textContent === `v${Config.version} \u00b7 12345678`,
     "status updates removed or changed the full build indicator");
@@ -285,11 +290,22 @@ function testMobileMapControlPresentation() {
             drivingButton.getBoundingClientRect().width,
             drivingButton.getBoundingClientRect().height
         ]), "mobile tracking deactivation shifted the controls");
-        assert(buildInfo.getBoundingClientRect().right <=
-                statusBar.element.getBoundingClientRect().right + 1 &&
-            buildInfo.getBoundingClientRect().left >=
-                statusBar.message.getBoundingClientRect().right - 1,
-        "mobile build indicator is not right-aligned without status overlap");
+        const overlaps = (left, right) =>
+            left.left < right.right && left.right > right.left &&
+            left.top < right.bottom && left.bottom > right.top;
+        const buildRect = buildInfo.getBoundingClientRect();
+        const buildFootprint = [buildRect.x, buildRect.y, buildRect.width, buildRect.height];
+        assert(buildRect.right <= drivingRect.left - 7 && buildRect.left >= 0 &&
+            buildRect.top >= drivingRect.top && buildRect.bottom <= drivingRect.bottom + 1 &&
+            getComputedStyle(buildInfo).backgroundColor === "rgba(248, 250, 252, 0.6)" &&
+            getComputedStyle(buildInfo).pointerEvents === "none" &&
+            !statusBar.element.contains(buildInfo),
+        "mobile build panel is not translucent and beside Driving without footer overlap");
+        assert(!overlaps(buildRect, folder.getBoundingClientRect()) &&
+            !overlaps(buildRect, map.getBoundingClientRect()) &&
+            !overlaps(buildRect, monochrome.getBoundingClientRect()) &&
+            !overlaps(buildRect, currentPosition.getBoundingClientRect()),
+        "mobile build panel overlaps map controls");
 
         const landscape = matchMedia(
             "(max-height: 500px) and (pointer: coarse)"
@@ -298,10 +314,6 @@ function testMobileMapControlPresentation() {
         const mapRect = map.getBoundingClientRect();
         const monochromeRect = monochrome.getBoundingClientRect();
         const currentControlRect = currentPosition.getBoundingClientRect();
-        const overlaps = (left, right) =>
-            left.left < right.right && left.right > right.left &&
-            left.top < right.bottom && left.bottom > right.top;
-
         if (landscape) {
             assert(folderRect.bottom <= mapRect.top &&
                 mapRect.bottom <= monochromeRect.top &&
@@ -357,6 +369,12 @@ function testMobileMapControlPresentation() {
                 drivingButton.getBoundingClientRect().width,
                 drivingButton.getBoundingClientRect().height
             ]), "Driving Mode duplicated or moved the Driving control");
+        const activeBuildRect = buildInfo.getBoundingClientRect();
+        assert(JSON.stringify(buildFootprint) === JSON.stringify([
+            activeBuildRect.x, activeBuildRect.y, activeBuildRect.width, activeBuildRect.height
+        ]) && getComputedStyle(buildInfo).display !== "none" &&
+            activeBuildRect.height > 0,
+        "Driving Mode hid or moved the independent build panel");
         document.body.classList.remove("is-driving-mode");
     } else {
         assert(getComputedStyle(statusBar.element).backgroundColor ===
@@ -367,6 +385,7 @@ function testMobileMapControlPresentation() {
         "desktop map toolbar layout changed with mobile presentation polish");
     }
 
+    detachBuildInfo();
     frame.remove();
 }
 
@@ -672,9 +691,33 @@ async function testLargeColorProjection() {
         "unchanged Phase B presentation recalculated Track colors");
 }
 
+function testBuildIndicatorRelocation() {
+    const media = new EventTarget();
+    media.matches = false;
+    const statusBar = new StatusBar();
+    const mapContainer = document.createElement("div");
+    const build = createBuildInfoElement({ mapIndicator: true });
+    const initialText = build.textContent;
+    const detach = attachMapBuildInfoElement(build, { statusBar, mapContainer, mobileMedia: media });
+    assert(statusBar.buildSlot.contains(build), "desktop build indicator left its existing host");
+    media.matches = true;
+    media.dispatchEvent(new Event("change"));
+    assert(mapContainer.contains(build) && !statusBar.element.contains(build) &&
+        build.textContent === initialText, "mobile relocation duplicated or changed the build identity");
+    media.matches = false;
+    media.dispatchEvent(new Event("change"));
+    assert(statusBar.buildSlot.contains(build) && mapContainer.children.length === 0,
+        "desktop breakpoint did not restore the same indicator");
+    detach();
+    media.matches = true;
+    media.dispatchEvent(new Event("change"));
+    assert(!build.parentElement, "detached build panel retained a layout listener");
+}
+
 async function run() {
     testLeafletZoomPresentation();
     testMobileMapControlPresentation();
+    testBuildIndicatorRelocation();
     testSidebarVisualHierarchy();
     const media = new FakeMedia(false);
     const fixture = createFixture(media);
@@ -831,10 +874,10 @@ async function run() {
     );
     assert(themeCss.includes(".map-build-indicator") &&
         themeCss.includes("pointer-events:none") &&
-        themeCss.includes(".statusbar .map-build-indicator") &&
-        themeCss.includes("position:static") &&
+        themeCss.includes("top:calc(var(--mobile-driving-top) + 8px)") &&
+        themeCss.includes("var(--mobile-tracking-control-width) + 8px") &&
         themeCss.includes(".statusbar-build-slot"),
-    "mobile Map build indicator is not contained by the status bar");
+    "mobile Map build panel does not share the Driving safe-area anchors");
     assert(themeCss.includes("--mobile-icon-surface") &&
         themeCss.includes("--mobile-icon-surface-feedback") &&
         themeCss.includes(".current-position-button") &&
