@@ -1,6 +1,5 @@
 import App from "./core/App.js";
 import CurrentPositionController from "./core/CurrentPositionController.js";
-import VoiceMapController from "./core/VoiceMapController.js";
 import DrivingModeController from "./core/DrivingModeController.js";
 import DriveLibraryCoordinator from "./core/DriveLibraryCoordinator.js";
 import BatchSimplificationCoordinator, {
@@ -185,11 +184,6 @@ window.addEventListener("DOMContentLoaded", () => {
         eventBus: app.eventBus
     });
     currentPosition.attach(app.mapView.element);
-    new VoiceMapController({
-        zoomIn: () => app.mapView.map?.zoomIn() ?? false,
-        zoomOut: () => app.mapView.map?.zoomOut() ?? false,
-        returnToPosition: () => currentPosition.returnToCurrentPosition()
-    }).attach(app.mapView.element);
     const drivingMode = new DrivingModeController({
         currentPosition, eventBus: app.eventBus,
         viewStateControls: app.viewStateControls, workspace: app.workspace,
