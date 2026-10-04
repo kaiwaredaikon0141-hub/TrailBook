@@ -2542,9 +2542,17 @@ body.is-track-info-resizing{
     white-space:nowrap;
 }
 
+.statusbar-elevation{
+    flex:0 0 auto;
+    margin-left:8px;
+    white-space:nowrap;
+}
+
 .statusbar-build-slot{
 
     margin-left:auto;
+
+    flex:0 0 auto;
 }
 
 .mobile-sidebar-close,

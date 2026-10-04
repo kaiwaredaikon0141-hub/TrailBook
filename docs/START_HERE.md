@@ -4,13 +4,15 @@ TrailBookの開発を始める人とAIのための入口です。
 
 ## Current Status
 
-- Current Version: `1.10.0`
-- Current Release: Release 1.10
-- Completed: Release 0.1からRelease 1.10
+- Current Version: `1.11.0`
+- Current Release: Release 1.11
+- Completed implementation: Release 0.1からRelease 1.11
 - Next Release: Not defined
 - Branch: `main`
 
 Gitの状態は作業開始時に必ず再確認する。
+
+Release 1.11の標高表示はonlineの国土地理院serviceを利用する。座標を送信するが永続保存しない。GPX / Library / offline packageの所有境界は変更せず、offline標高同梱は未実装とする。
 
 ## What is TrailBook?
 

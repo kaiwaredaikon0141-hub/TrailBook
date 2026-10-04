@@ -4,9 +4,11 @@ TrailBookは、GPXを含むFolderをLibraryとして閲覧する、個人利用�
 
 ## Current Status
 
-- Current Release: `1.10.0`
-- Release 1.10: Completed
+- Current Release: `1.11.0`
+- Release 1.11: Implementation completed
 - Next Release: Not defined
+
+Release 1.11は現在地の地表標高をオンラインで取得し、下部バーへ概算表示します。現在地の座標を国土地理院へ送信し、問い合わせは最短30秒間隔、近い地点はsession内で再利用します。位置精度不足・通信失敗では値を表示せず、50m以内の誤差は保証しません。将来のoffline標高取得へ差し替え可能ですが、標高データの同梱は未実装です。
 
 Release 1.10はdevice-local Offline Maps / PMTiles、iPad/iOS向けread-only FileList Folder fallback、Track復元・並び順とPWA updateの安定化、Track EditorとLibrary / Map UIの整理を完了したReleaseです。Folder構造とGPXをデータの正本とする境界は維持します。
 
@@ -47,6 +49,7 @@ Release 1.10はdevice-local Offline Maps / PMTiles、iPad/iOS向けread-only Fil
 - 選択Folder配下またはLibrary全体を対象にした解析後明示実行の一括簡略化
 - 768px以下のresponsive Mobile Viewer、overlay Sidebar、touch target、mobile Track Info
 - session-only GPS現在地、accuracy circle、Follow ON / OFF
+- 現在地の概算地表標高を国土地理院のonline serviceから取得・表示（offline同梱なし）
 - GPS FollowとScreen Wake Lockをまとめる走行中モード
 - OAuth / Pickerによるread-only Google Drive Libraryの直接接続とlazy GPX load
 - Drive geometry cacheのpre-download lookupとcold cache missの最大4並列取得
@@ -63,7 +66,7 @@ Release 1.10はdevice-local Offline Maps / PMTiles、iPad/iOS向けread-only Fil
 
 ## Data Principles
 
-- Current Release 1.10も、利用者の明示`保存`時にoriginal bytesのBackupを検証した後だけGPXを更新します。日付filename renameやTrack Point編集でもBackup originalは変更しません。
+- Current Release 1.11も、利用者の明示`保存`時にoriginal bytesのBackupを検証した後だけGPXを更新します。日付filename renameやTrack Point編集でもBackup originalは変更しません。
 - Backup成功前、自動、backgroundではGPXを変更・移動・削除しません。date-based filename renameは明示`保存`と検証成功後だけ旧source pathを削除します。
 - `trailbook.json`のFolder色は変更後にdebounce自動保存します。自動でpermission promptを表示せず、書き込めない間はpending変更を保持します。
 - SQLiteやIndexedDBをFolder / GPXに代わるLibrary正本として使用しません。

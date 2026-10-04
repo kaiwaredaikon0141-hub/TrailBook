@@ -4,6 +4,23 @@ Version: 1.0.0〜1.5.0 release records
 Status: Release 1.0〜1.5 Completed
 Baseline: v1.4.0 for Release 1.5
 
+## Release 1.11 — Online Current-location Elevation
+
+Current application version: `1.11.0`
+
+- [x] Online GSI elevation lookup, session-only nearby cache, 30-second minimum request interval, timeout and cancellation
+- [x] Safe unavailable/low-position-accuracy state; no GPX, Library, offline-package, or schema changes
+- [x] Preserve GPX summary/build indicator and mobile footer footprint
+- [x] Verify the version-updated focused and regression suites before commit: 16 viewport/suite runs, 1,467 assertions Pass
+- Current Elevation: portrait / landscape / desktop 57 / 57 / 53; Current Position: mobile / desktop 34 / 29
+- Driving Mode: portrait / landscape / desktop 33 / 33 / 27; Mobile Viewer: portrait / landscape / desktop 135 / 130 / 103
+- Base Map 33; View State 374; Discovery Index 104; Display Snapshot 131; PWA 134
+- Reachable production modules: 153; App.js / TreeView.js: 999 / 977 physical lines; `git diff --check`: Pass
+- [ ] Confirm real-device elevation display after deployment
+- [ ] Create a release tag only on a separate explicit request
+
+Offline elevation bundling is a future candidate, not part of this implementation. GPS/terrain uncertainty does not guarantee a 50 m elevation error bound.
+
 ## Release 1.10 — Release Preparation
 
 Current production/release target: `1.10.0`

@@ -4,8 +4,8 @@
 
 ## Current Status
 
-- Current Release: `1.10.0`
-- Completed: Release 0.1からRelease 1.10
+- Current Release: `1.11.0`
+- Completed implementation: Release 0.1からRelease 1.11
 - Next Release: Not defined
 
 Release 1.4 Library Browsing / Track DiscoveryはCompletedです。Release 1.3の前回Library / view restorationとgeometry cacheを維持し、1つのDiscovery IndexからDate Tree、Track Info、Track名 / Folder / date range Search・Filterを提供します。
@@ -21,6 +21,8 @@ Release 1.8はCompletedです。PWA app shell、Previous Library Restore、Mobil
 Release 1.9はCompletedです。Fast Restore / incremental refresh、Folder / Track color ownership、shared settings autosave、Library diagnostics / maintenance、maskable PWA icon、permanent build indicatorを確定します。
 
 Release 1.10はCompletedです。device-local Cached Areas / PMTiles package、raster / vector PMTiles表示、read-only FileList Folder fallback、Track復元・並び順とPWA updateの安定化、Track EditorとLibrary / Map UIの整理を確定します。
+
+Release 1.11はonline現在地標高表示を追加します。国土地理院への座標送信、session内cacheと通信間隔制限、位置精度不足・取得失敗時の安全な表示を実装します。offline標高同梱は将来対応です。
 
 ## Read Order
 

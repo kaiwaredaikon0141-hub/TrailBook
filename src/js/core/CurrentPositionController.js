@@ -15,6 +15,8 @@ export default class CurrentPositionController {
         mapView,
         eventBus,
         service = new CurrentPositionService(),
+        onPosition = () => {},
+        onUnavailable = () => {},
         windowObject = globalThis.window,
         portraitMedia = globalThis.matchMedia?.(
             "(max-width: 768px) and (orientation: portrait)"
@@ -24,6 +26,8 @@ export default class CurrentPositionController {
         this.mapView = mapView;
         this.eventBus = eventBus;
         this.service = service;
+        this.onPosition = onPosition;
+        this.onUnavailable = onUnavailable;
         this.windowObject = windowObject;
         this.portraitMedia = portraitMedia;
         this.following = false;
@@ -73,6 +77,7 @@ export default class CurrentPositionController {
 
         const stopped = this.service.stop();
         this.following = false;
+        this.onUnavailable();
         return stopped;
     }
 
@@ -139,6 +144,7 @@ export default class CurrentPositionController {
         this.mapView.setCurrentPosition(this.lastPosition);
         if (this.following) this.#follow(this.lastPosition);
         this.#showPosition();
+        this.onPosition(this.lastPosition);
     }
 
     #follow(position) {
@@ -199,6 +205,7 @@ export default class CurrentPositionController {
 
     #showError(message) {
 
+        this.onUnavailable();
         this.button.dataset.state = "error";
         this.button.setAttribute("aria-pressed", String(this.following));
         this.status.textContent = message;

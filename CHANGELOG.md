@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.11.0
+
+### Added
+
+- Approximate current-location ground elevation in the status bar using the online Geospatial Information Authority of Japan service
+- Session-only nearby-result reuse, request throttling, and safe unavailable states without changing GPX, Library, or offline-package data
+
+### Notes
+
+- Elevation lookup sends current coordinates to the online service; terrain and GPS uncertainty mean a 50 m error bound is not guaranteed
+- The elevation provider can be replaced in future; offline elevation data is not bundled in this release
+
 ## v1.10.0
 
 ### Added

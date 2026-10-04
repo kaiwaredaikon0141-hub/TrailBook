@@ -1,5 +1,7 @@
 import App from "./core/App.js";
 import CurrentPositionController from "./core/CurrentPositionController.js";
+import CurrentElevationController from "./core/CurrentElevationController.js";
+import GSIElevationProvider from "./services/GSIElevationProvider.js";
 import DrivingModeController from "./core/DrivingModeController.js";
 import DriveLibraryCoordinator from "./core/DriveLibraryCoordinator.js";
 import BatchSimplificationCoordinator, {
@@ -179,9 +181,14 @@ window.addEventListener("DOMContentLoaded", () => {
     );
     app.trackDiscoveryCoordinator.sidebarShell?.append(sidebarFooter);
 
+    const currentElevation = new CurrentElevationController({
+        provider: new GSIElevationProvider(), view: app.statusBar
+    });
     const currentPosition = new CurrentPositionController({
         mapView: app.mapView,
-        eventBus: app.eventBus
+        eventBus: app.eventBus,
+        onPosition: position => currentElevation.update(position),
+        onUnavailable: () => currentElevation.clear()
     });
     currentPosition.attach(app.mapView.element);
     const drivingMode = new DrivingModeController({

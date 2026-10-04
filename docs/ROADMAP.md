@@ -1,7 +1,14 @@
 # ROADMAP.md
 
-Version: 1.10.0 Completed
+Version: 1.11.0 Implementation Completed
 Status: Official
+
+## Release 1.11 — Current-location Ground Elevation
+
+- Status: Implementation completed; real-device acceptance pending.
+- Online GSI ground-elevation lookup with a dedicated status-bar value, session-only cache, throttling, and cancellation.
+- GPS/terrain uncertainty does not guarantee a 50 m error bound.
+- Future candidate: bundle offline elevation data with offline maps through the replaceable provider interface; not implemented here.
 
 ## Release 1.10 — Offline Maps and Cross-device Library Access
 
@@ -25,7 +32,7 @@ Status: Official
 - Persistent Display SnapshotからGeometry Cache hitをLibrary scan前に表示するPhase Aを追加する。
 - Previous Library permission / scan / metadata revalidationはPhase Bとして既存経路を維持する。
 - GPX本文の複製、cache schema変更、Drive自動認証、offline mapは対象外とする。
-Current Release: 1.10.0
+Current Release: 1.11.0
 Next Release: Not defined
 
 Release 1.10 completed Offline Maps / PMTiles packages, read-only FileList Folder access, Track/View State and PWA update stabilization, and Track Editor / Library / Map UI refinements. GPX and Folder structure remain the data source of truth.

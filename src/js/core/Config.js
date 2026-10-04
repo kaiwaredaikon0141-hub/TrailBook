@@ -15,7 +15,7 @@ export function getGoogleDriveRuntimeConfig(
 
 const Config = {
 
-    version: "1.10.0",
+    version: "1.11.0",
 
     uiSettings: {
         storageKey: "trailbook.uiSettings",
