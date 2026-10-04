@@ -61,6 +61,14 @@ export default class CurrentPositionController {
         return this.service.isTracking() && this.following;
     }
 
+    returnToCurrentPosition() {
+
+        const wasFollowing = this.following;
+        if (!this.startFollowing()) return false;
+        if (wasFollowing && this.lastPosition) this.#follow(this.lastPosition);
+        return true;
+    }
+
     stopFollowing() {
 
         if (!this.following) return false;
