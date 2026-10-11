@@ -229,6 +229,18 @@ export default class LibraryRefreshCoordinator {
             hasHandle: Boolean(handle), cachedCount: cached
         });
         if (!handle) {
+            if (this.refreshState.requiresFolderSelection) {
+                // Only the explicit user action may reopen the Folder picker.
+                // Cached paths/name alone cannot prove filesystem identity.
+                const opened = await this.previousLibraryCoordinator.openManual();
+                this.#hydrateCurrentState("manual-folder-reconnection");
+                this.#publishRefreshState({
+                    reason: "manual-refresh",
+                    result: opened ? "reconnected" : "idle",
+                    scannedCount: opened ? this.getLibrary()?.gpxFileCount ?? null : null
+                });
+                return opened;
+            }
             this.#publishRefreshState({ result: "no-handle" });
             return false;
         }
@@ -1110,15 +1122,23 @@ export default class LibraryRefreshCoordinator {
                 ? "ready"
                 : "none";
         const next = { ...this.refreshState, ...values, libraryState };
-        const canManualRefresh = ["granted", "prompt"].includes(next.permission) &&
-            next.hasHandle === true &&
+        const support = !next.hasHandle && libraryState === "provisional"
+            ? this.previousLibraryCoordinator.getSupport?.()
+            : null;
+        const requiresFolderSelection = !next.hasHandle &&
+            libraryState === "provisional" && support?.available === true &&
+            support.mode === "directory-handle" &&
+            typeof this.previousLibraryCoordinator.openManual === "function";
+        const canManualRefresh = (requiresFolderSelection ||
+            (["granted", "prompt"].includes(next.permission) && next.hasHandle === true)) &&
             ["ready", "provisional"].includes(libraryState) &&
             this.getLibrary()?.capabilities?.refreshMode !== "reselect" &&
             this.refreshActionConnected;
 
         const state = {
             ...next,
-            canManualRefresh
+            canManualRefresh,
+            requiresFolderSelection
         };
 
         if (this.lastPublishedState && Object.keys(state).every(

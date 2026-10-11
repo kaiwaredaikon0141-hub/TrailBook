@@ -39,6 +39,7 @@ export default class LibraryAccessPanel {
         this.libraryRefreshButton = this.element.querySelector(
             ".library-refresh-action"
         );
+        this.libraryRefreshGuidance = this.element.querySelector(".library-refresh-guidance");
         this.libraryRefreshDiagnostic = this.element.querySelector(
             ".library-refresh-diagnostic"
         );
@@ -405,6 +406,10 @@ export default class LibraryAccessPanel {
                     <button class="library-refresh-action" type="button" hidden>
                         更新を確認
                     </button>
+                    <p class="library-device-description library-refresh-guidance"
+                        id="library-refresh-guidance" hidden>
+                        実フォルダに未接続です。「更新を確認」で元のGPXフォルダを再選択してください。
+                    </p>
                     <div class="library-display-actions">
                         <label class="waypoint-toggle">
                             <input type="checkbox" aria-label="Waypointを表示">
@@ -454,7 +459,7 @@ export default class LibraryAccessPanel {
         const state = this.libraryRefreshState;
         const manualResult = state.reason === "manual-refresh";
         const running = manualResult && state.result === "checking";
-        const success = manualResult && state.result === "success";
+        const success = manualResult && ["success", "reconnected"].includes(state.result);
         const failureResults = new Set([
             "permission-denied", "no-handle", "not-ready",
             "stale-context", "snapshot-pending", "failure"
@@ -469,10 +474,18 @@ export default class LibraryAccessPanel {
         this.libraryRefreshButton.hidden = fileListRefresh ||
             (state.canManualRefresh !== true && !running && !success && !failure);
         this.libraryRefreshButton.disabled = running;
+        this.libraryRefreshGuidance.hidden = !state.requiresFolderSelection || fileListRefresh;
+        if (!this.libraryRefreshGuidance.hidden) {
+            this.libraryRefreshButton.setAttribute("aria-describedby", "library-refresh-guidance");
+        } else {
+            this.libraryRefreshButton.removeAttribute("aria-describedby");
+        }
         this.libraryRefreshButton.textContent = running
             ? "確認中…"
             : success
-                ? changedCount > 0
+                ? state.result === "reconnected"
+                    ? "再接続完了"
+                    : changedCount > 0
                     ? `更新完了（+${changedCount}件）`
                     : "更新完了（変更なし）"
                 : failure

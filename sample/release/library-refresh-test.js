@@ -11,6 +11,7 @@ import LibrarySnapshotService, {
     normalizeLibrarySnapshot
 } from "../../src/js/services/LibrarySnapshotService.js";
 import PreviousLibraryCoordinator from "../../src/js/core/PreviousLibraryCoordinator.js";
+import PreviousLibraryStore from "../../src/js/services/PreviousLibraryStore.js";
 import TreeView from "../../src/js/ui/TreeView.js";
 import TreeIncrementalReconciler from "../../src/js/ui/TreeIncrementalReconciler.js";
 import LibraryAccessPanel from "../../src/js/ui/LibraryAccessPanel.js";
@@ -1407,6 +1408,128 @@ async function testReadyLibraryManualRefresh() {
     tree.element.remove();
 }
 
+async function testCachedLibraryWithoutSavedHandle() {
+    const eventBus = new EventBus();
+    const panel = new LibraryAccessPanel();
+    const existing = fileHandle("existing.gpx", 10, 1);
+    const added = fileHandle("new.gpx", 20, 2);
+    const root = directoryHandle("GPX", [existing, added]);
+    root.queryPermission = async () => "granted";
+    let permissionRequests = 0;
+    root.requestPermission = async () => { permissionRequests += 1; return "granted"; };
+    const tree = new TreeView(eventBus);
+    await tree.render(library("GPX", [existing]));
+    panel.setProvisionalLibrary(true);
+    panel.libraryChange.open = true;
+    document.body.append(panel.element, tree.element);
+    const displayState = new DisplayState();
+    displayState.registerFile(existing.name, existing, "#123456");
+    displayState.setChecked(existing.name, true);
+    displayState.setLoaded(existing.name, { tracks: [] });
+    const selectionState = new SelectionState();
+    selectionState.select(existing.name, "tree");
+    let currentLibrary = null;
+    let provisional = true;
+    let stored = null;
+    let picks = 0;
+    let scans = 0;
+    let beforeLoads = 0;
+    let cancelPicker = true;
+    const scanner = new FolderScanner();
+    const scan = scanner.scan.bind(scanner);
+    scanner.scan = async handle => { scans += 1; return scan(handle); };
+    const store = new PreviousLibraryStore({ recordKey: "previous" }, {
+        adapter: { async get() { return stored; }, async set(key, value) { stored = value; } },
+        namespaceFactory: () => "new-confirmed-library"
+    });
+    const previous = new PreviousLibraryCoordinator({
+        store, scanner, accessPanel: panel, toolbar: { setFolderPickerState() {} },
+        statusBar: { showLibraryLoading() {} },
+        getCurrentLibrary: () => currentLibrary, hasUsableLibrary: () => true,
+        getSupport: () => ({ available: true, mode: "directory-handle" }),
+        canSwitchLibrary: async () => true, flushViewState() {},
+        beforeLoad() { beforeLoads += 1; },
+        pickDirectory: async () => {
+            picks += 1;
+            if (cancelPicker) throw new DOMException("Cancelled", "AbortError");
+            return root;
+        },
+        async applyLibrary(value, context) {
+            assert(context.cacheNamespace === "new-confirmed-library",
+                "missing Handle reconnection guessed identity from cached Folder name/paths");
+            currentLibrary = value;
+            await tree.render(value);
+            provisional = false;
+            panel.setProvisionalLibrary(false);
+            eventBus.emit("library:provisional-state-changed");
+            return true;
+        }
+    });
+    const coordinator = new LibraryRefreshCoordinator({
+        eventBus, scanner, previousLibraryCoordinator: previous, accessPanel: panel,
+        librarySnapshotService: {
+            isProvisional: () => provisional,
+            getRefreshContext: () => ({ provisional, cachedCount: 1 })
+        },
+        treeView: tree, displayState, selectionState,
+        getLibrary: () => currentLibrary
+    });
+    coordinator.bind();
+    await previous.initialize();
+    const state = coordinator.getDiagnostic();
+    assert(previous.persistenceStatus === "no persistent handle" &&
+        state.permission === "unknown" && !state.hasHandle && state.libraryState === "provisional",
+    "missing persistent Handle fixture did not reproduce the reported Cached state");
+    assert(state.canManualRefresh && state.requiresFolderSelection &&
+        !panel.libraryRefreshButton.hidden && !panel.libraryRefreshGuidance.hidden &&
+        panel.libraryRefreshButton.getAttribute("aria-describedby") === "library-refresh-guidance",
+    "Cached/no-Handle Library did not expose refresh with explicit reconnection guidance");
+    assert(picks === 0 && scans === 0 && permissionRequests === 0,
+        "cached startup automatically opened a picker, scanned, or requested permission");
+    assert(await coordinator.refresh({ reason: "sidebar-open" }) === false && picks === 0,
+        "automatic sidebar refresh opened a picker without a user gesture");
+    panel.libraryRefreshButton.click();
+    await coordinator.activeRefresh;
+    assert(picks === 1 && scans === 0 && beforeLoads === 0 && stored === null &&
+        coordinator.getDiagnostic().result === "idle",
+    "cancelled reconnect scanned/changed the Library or reported failure");
+    assert(tree.hasFile(existing.name) && displayState.getDisplay(existing.name).checked &&
+        displayState.getDisplay(existing.name).state === "loaded" &&
+        selectionState.getSelectedPath() === existing.name &&
+        !panel.libraryRefreshButton.hidden,
+    "picker cancellation lost cached display/selection or the retry action");
+    cancelPicker = false;
+    panel.libraryRefreshButton.click();
+    assert(await coordinator.activeRefresh && picks === 2 && scans === 1 && beforeLoads === 1,
+        "explicit no-Handle refresh did not use the existing Folder picker and actual scanner");
+    assert(tree.hasFile(added.name) && tree.fileNodes.get(added.name)?.isConnected &&
+        currentLibrary.gpxFileCount === 2 && stored.handle === root,
+    "reconnection lost the new GPX or did not persist the selected actual Handle");
+    assert(coordinator.getDiagnostic().hasHandle && coordinator.getDiagnostic().permission === "granted" &&
+        coordinator.getDiagnostic().libraryState === "ready" &&
+        !coordinator.getDiagnostic().requiresFolderSelection && panel.libraryRefreshGuidance.hidden &&
+        panel.libraryRefreshButton.textContent === "再接続完了" && permissionRequests === 0,
+    "completed reconnect retained stale guidance/permission state or claimed a no-op diff");
+    await new Promise(resolve => setTimeout(resolve, 2600));
+    assert(!panel.libraryRefreshButton.hidden && panel.libraryRefreshButton.textContent === "更新を確認",
+        "refresh disappeared after no-Handle reconnection feedback expired");
+    previous.getSupport = () => ({ available: true, mode: "file-list" });
+    previous.previousHandle = null;
+    currentLibrary = null;
+    provisional = true;
+    eventBus.emit("library:provisional-state-changed");
+    assert(!coordinator.getDiagnostic().requiresFolderSelection &&
+        !coordinator.getDiagnostic().canManualRefresh,
+    "file-list fallback was routed through the native directory-Handle reconnect path");
+    previous.getSupport = () => ({ available: false, mode: "unsupported" });
+    eventBus.emit("library:provisional-state-changed");
+    assert(!coordinator.getDiagnostic().canManualRefresh,
+        "unsupported environment exposed a native directory picker action");
+    clearTimeout(panel.libraryRefreshFeedbackTimer);
+    panel.element.remove();
+    tree.element.remove();
+}
+
 function testRefreshCompletionFeedback() {
     const panel = new LibraryAccessPanel();
     const base = {
@@ -1765,6 +1888,7 @@ try {
     await testFastRefreshScale();
     await testNoOpRefreshPresentationInvariance();
     await testReadyLibraryManualRefresh();
+    await testCachedLibraryWithoutSavedHandle();
     testRefreshCompletionFeedback();
     if (!focusedIncremental) {
         await testPromptDoesNotRequestOrScan();
