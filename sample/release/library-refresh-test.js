@@ -1315,6 +1315,98 @@ async function testNoOpRefreshPresentationInvariance() {
         "no-op refresh changed selection");
 }
 
+async function testReadyLibraryManualRefresh() {
+    const oldFile = fileHandle("existing.gpx", 10, 1);
+    const files = [oldFile];
+    const root = directoryHandle("GPX", files);
+    const scanner = new FolderScanner();
+    let currentLibrary = await scanner.scan(root);
+    const eventBus = new EventBus();
+    const tree = new TreeView(eventBus);
+    const panel = new LibraryAccessPanel();
+    const displayState = new DisplayState();
+    const selectionState = new SelectionState();
+    const summaryBuilder = new TrackSummaryBuilder();
+    await tree.render(currentLibrary);
+    document.body.append(tree.element, panel.element);
+    panel.hide();
+    panel.libraryChange.open = true;
+    displayState.setLibrary(root);
+    displayState.registerFile(oldFile.name, oldFile, "#123456");
+    displayState.setChecked(oldFile.name, true);
+    displayState.setLoaded(oldFile.name, { tracks: [] });
+    tree.setDisplayChecked(oldFile.name, true);
+    selectionState.select(oldFile.name, "tree");
+    tree.setSelectedPath(oldFile.name);
+    let entries = [summaryBuilder.build(oldFile.name, await oldFile.getFile(), null)];
+    let scans = 0;
+    let permissionRequests = 0;
+    let reloads = 0;
+    let updates = 0;
+    const originalScan = scanner.scan.bind(scanner);
+    scanner.scan = async handle => { scans += 1; return originalScan(handle); };
+    const snapshotService = new LibrarySnapshotService({
+        treeView: tree, discoveryCoordinator: {
+            getSnapshotState: () => ({ entries, mode: "folder", filter: null })
+        }
+    });
+    const previous = new PreviousLibraryCoordinator({
+        store: {}, scanner, toolbar: {}, accessPanel: panel, statusBar: {},
+        getCurrentLibrary: () => currentLibrary
+    });
+    previous.previousPermission = "granted";
+    root.queryPermission = async () => "granted";
+    root.requestPermission = async () => { permissionRequests += 1; return "granted"; };
+    const coordinator = new LibraryRefreshCoordinator({
+        eventBus, scanner, treeView: tree, accessPanel: panel,
+        displayState, selectionState, librarySnapshotService: snapshotService,
+        previousLibraryCoordinator: previous,
+        discoveryCoordinator: {
+            getSnapshotState: () => ({ entries }),
+            reconcileLibrary(value) { entries = value.entries; }
+        },
+        getLibrary: () => currentLibrary,
+        setLibrary: value => { currentLibrary = value; },
+        getNamespace: () => "local:manual-ready", getColor: () => "#123456",
+        removePath: () => { throw new Error("Unexpected removal"); },
+        reloadVisiblePath: () => { reloads += 1; },
+        onLibraryUpdated: () => { updates += 1; return true; }
+    });
+    coordinator.bind();
+    assert(coordinator.getDiagnostic().libraryState === "ready" &&
+        coordinator.getDiagnostic().canManualRefresh && !panel.libraryRefreshButton.hidden,
+    "ready/granted Library did not expose manual refresh inside Library change");
+    assert(scans === 0, "making manual refresh available automatically scanned the Library");
+    files.push(fileHandle("new.gpx", 20, 2));
+    panel.libraryRefreshButton.click();
+    assert(panel.libraryRefreshButton.disabled, "manual refresh was not disabled while checking");
+    const result = await coordinator.activeRefresh;
+    assert(result?.added === 1 && scans === 1 && updates === 1,
+        "visible manual refresh did not scan the actual Folder and publish the new GPX");
+    assert(tree.hasFile("new.gpx") && tree.fileNodes.get("new.gpx")?.isConnected &&
+        entries.some(entry => entry.relativePath === "new.gpx"),
+    "new GPX did not reach the live Tree/Discovery index");
+    const existing = displayState.getDisplay(oldFile.name);
+    assert(existing.checked && existing.state === "loaded" && existing.color === "#123456" &&
+        selectionState.getSelectedPath() === oldFile.name && reloads === 0,
+    "manual refresh changed visible Track/selection or requested a map reload");
+    assert(!displayState.getDisplay("new.gpx").checked && permissionRequests === 0,
+        "manual refresh auto-displayed the new GPX or requested already-granted permission");
+    await new Promise(resolve => setTimeout(resolve, 2600));
+    assert(!panel.libraryRefreshButton.hidden && !panel.libraryRefreshButton.disabled &&
+        panel.libraryRefreshButton.textContent === "更新を確認",
+    "ready Library refresh action disappeared after completion feedback expired");
+    currentLibrary.capabilities = { refreshMode: "reselect" };
+    panel.setFolderPickerMode("file-list");
+    panel.setFileListSession(true);
+    eventBus.emit("library:provisional-state-changed");
+    assert(!coordinator.getDiagnostic().canManualRefresh && panel.libraryRefreshButton.hidden,
+        "read-only reselect source exposed a live filesystem refresh action");
+    clearTimeout(panel.libraryRefreshFeedbackTimer);
+    panel.element.remove();
+    tree.element.remove();
+}
+
 function testRefreshCompletionFeedback() {
     const panel = new LibraryAccessPanel();
     const base = {
@@ -1672,6 +1764,7 @@ try {
     await testIncrementalTreeDomReconcile();
     await testFastRefreshScale();
     await testNoOpRefreshPresentationInvariance();
+    await testReadyLibraryManualRefresh();
     testRefreshCompletionFeedback();
     if (!focusedIncremental) {
         await testPromptDoesNotRequestOrScan();

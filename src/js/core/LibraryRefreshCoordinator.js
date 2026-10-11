@@ -1110,8 +1110,10 @@ export default class LibraryRefreshCoordinator {
                 ? "ready"
                 : "none";
         const next = { ...this.refreshState, ...values, libraryState };
-        const canManualRefresh = next.permission === "prompt" &&
-            next.hasHandle === true && libraryState === "provisional" &&
+        const canManualRefresh = ["granted", "prompt"].includes(next.permission) &&
+            next.hasHandle === true &&
+            ["ready", "provisional"].includes(libraryState) &&
+            this.getLibrary()?.capabilities?.refreshMode !== "reselect" &&
             this.refreshActionConnected;
 
         const state = {
