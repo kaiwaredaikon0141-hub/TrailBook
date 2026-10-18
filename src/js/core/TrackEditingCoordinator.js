@@ -8,7 +8,6 @@ import TrackSimplificationService from "../services/TrackSimplificationService.j
 import TrackPointEditingService from "../services/TrackPointEditingService.js";
 import TrackEditingInteractionGuard from "../ui/TrackEditingInteractionGuard.js";
 import TrackEditingPanel from "../ui/TrackEditingPanel.js";
-import GPXEditingSaveDialog from "../ui/GPXEditingSaveDialog.js";
 
 const PREVIEW_DEBOUNCE_MS = 150;
 export default class TrackEditingCoordinator {
@@ -28,7 +27,6 @@ export default class TrackEditingCoordinator {
         interactionRoot = null,
         sourceLoader = new GPXEditingSourceLoader(),
         saveService = new GPXEditingSaveService(),
-        saveDialog = new GPXEditingSaveDialog(),
         dateCorrection = new TrackDateCorrectionService(),
         pointEditing = new TrackPointEditingService(),
         simplification = new TrackSimplificationService(),
@@ -56,7 +54,6 @@ export default class TrackEditingCoordinator {
         this.interactionGuard = interactionGuard;
         this.sourceLoader = sourceLoader;
         this.saveService = saveService;
-        this.saveDialog = saveDialog;
         this.dateCorrection = dateCorrection;
         this.pointEditing = pointEditing;
         this.simplification = simplification;
@@ -71,7 +68,6 @@ export default class TrackEditingCoordinator {
         this.requestId = 0;
         this.loading = false;
         this.saving = false;
-        this.confirmingSave = false;
         this.lastSavedMasks = null;
         this.draft = null;
         this.fileNameCandidate = null;
@@ -104,7 +100,6 @@ export default class TrackEditingCoordinator {
     attach(container) {
 
         this.panel.attach(container);
-        this.saveDialog.attach(container);
         this.panel.setSelectedTrack(this.selectionState.getSelectedPath());
         this.#bindPanel();
         this.#bindEvents();
@@ -122,7 +117,7 @@ export default class TrackEditingCoordinator {
     async start() {
 
         if (
-            this.session || this.loading || this.saving || this.confirmingSave ||
+            this.session || this.loading || this.saving ||
             this.isExternalBusy()
         ) return false;
 
@@ -233,7 +228,7 @@ export default class TrackEditingCoordinator {
     isBusy() {
 
         return Boolean(
-            this.session || this.loading || this.saving || this.confirmingSave
+            this.session || this.loading || this.saving
         );
     }
 
@@ -410,7 +405,7 @@ export default class TrackEditingCoordinator {
     async save() {
 
         if (
-            this.saving || this.confirmingSave || !this.session?.isActive ||
+            this.saving || !this.session?.isActive ||
             !this.session.isDirty || !this.session.source.canSerialize
         ) {
             return false;
@@ -425,58 +420,23 @@ export default class TrackEditingCoordinator {
             return false;
         }
 
-        let backup;
-
-        try {
-            backup = await this.saveService.inspectBackup(
-                entry.parentFolderHandle,
-                session.source.sourceFileName
-            );
-        } catch (error) {
-            this.panel.showSaveError(this.#getSaveErrorMessage(error));
-            return false;
-        }
-
-        const saveMetrics = this.metrics.calculate(
-            session.source,
-            session.getRetainedPointMasks()
-        ).total;
-
-        this.confirmingSave = true;
-        let confirmed = false;
-
-        try {
-            confirmed = await this.saveDialog.confirm({
-                targetPath: this.#targetPath(
-                    sourcePath,
-                    session.getDesiredFileName()
-                ),
-                backupExists: backup.exists,
-                metrics: saveMetrics,
-                origin: this.panel.getSaveButton()
-            });
-        } catch {
-            this.panel.showSaveError("Save confirmation could not be opened.");
-            return false;
-        } finally {
-            this.confirmingSave = false;
-        }
-
-        if (!confirmed || this.session !== session) {
-            if (this.session === session) this.panel.showSaveCancelled();
-            return false;
-        }
-
+        // Lock synchronously, including Backup inspection, so one click starts
+        // one save and the working copy cannot change while awaiting storage.
+        this.saving = true;
         this.#invalidatePendingPreview();
         session.clearPreview();
         this.#showWorkingState();
-        this.saving = true;
         this.setSaveBusy(true);
-        this.panel.showSaving(session.source.sourceFileName, {
-            backupExists: backup.exists
-        });
+        this.panel.showSaving(session.source.sourceFileName);
 
         try {
+            const backup = await this.saveService.inspectBackup(
+                entry.parentFolderHandle,
+                session.source.sourceFileName
+            );
+            this.panel.showSaving(session.source.sourceFileName, {
+                backupExists: backup.exists
+            });
             const savedMasks = session.getRetainedPointMasks();
             const saved = await this.saveService.save({
                 source: session.source,
@@ -553,7 +513,7 @@ export default class TrackEditingCoordinator {
 
     done() {
 
-        if (!this.session || this.saving || this.confirmingSave) return false;
+        if (!this.session || this.saving) return false;
 
         this.#invalidatePendingPreview();
         this.session.clearPreview();
@@ -584,7 +544,7 @@ export default class TrackEditingCoordinator {
     cancel({ restoreFocus = true } = {}) {
 
         if (
-            this.saving || this.confirmingSave ||
+            this.saving ||
             (!this.session && !this.loading && !this.sourcePath)
         ) return false;
 
@@ -902,15 +862,6 @@ export default class TrackEditingCoordinator {
             ),
             timeOffsetMs: this.session.getTimeOffsetMs()
         });
-    }
-
-    #targetPath(sourcePath, fileName) {
-
-        const separator = sourcePath.lastIndexOf("/");
-
-        return separator < 0
-            ? fileName
-            : `${sourcePath.slice(0, separator + 1)}${fileName}`;
     }
 
     #configureFileName() {

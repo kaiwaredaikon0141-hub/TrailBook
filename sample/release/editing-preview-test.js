@@ -181,8 +181,8 @@ class MapViewFake {
 
 class SaveDialogFake {
 
-    attach() {}
-    async confirm(value) { this.value = value; return true; }
+    attach() { throw new Error("Save must not attach a confirmation dialog"); }
+    async confirm() { throw new Error("Save must not request confirmation"); }
 }
 
 async function testCoordinatorLifecycle() {
@@ -1317,17 +1317,11 @@ function testPanelAccessibility() {
     let editCount = 0;
     let saveCount = 0;
     let appliedDate = null;
-    let pointSelectionCleared = 0;
-    let pointAddMode = null;
-    let pointDeleteCount = 0;
     let translationMode = null;
 
     panel.on("edit", () => { editCount += 1; });
     panel.on("save", () => { saveCount += 1; });
     panel.on("date-apply", value => { appliedDate = value; });
-    panel.on("point-selection-clear", () => { pointSelectionCleared += 1; });
-    panel.on("point-add-mode", value => { pointAddMode = value; });
-    panel.on("point-delete", () => { pointDeleteCount += 1; });
     panel.on("translation-mode", value => { translationMode = value; });
     panel.attach(host);
     const simplificationGroup = panel.element.querySelector(
@@ -1352,12 +1346,12 @@ function testPanelAccessibility() {
     assert(!panel.element.querySelector(".editor-point-editing-mode") &&
         panel.element.querySelector(".editor-translation-mode"),
     "point-edit checkbox remains or Track move mode is missing");
-    assert(!simplificationGroup.contains(pointEditingGroup) &&
-        !simplificationGroup.contains(translationGroup),
-    "point editing or translation was nested in simplification");
-    assert(pointEditingGroup.compareDocumentPosition(translationGroup) &
+    assert(!pointEditingGroup &&
+        !panel.element.querySelector(".editor-point-editing-status"),
+    "redundant point editing panel or selection status remains");
+    assert(simplificationGroup.compareDocumentPosition(translationGroup) &
         Node.DOCUMENT_POSITION_FOLLOWING,
-    "point editing is not followed by Track translation");
+    "Track translation no longer follows simplification");
     assert(panel.element.textContent.includes("簡略化ポイント表示"),
         "simplification point preview label is unclear");
     panel.setSelectedTrack("trip.gpx");
@@ -1428,34 +1422,9 @@ function testPanelAccessibility() {
     assert(panel.getMode() === "after" && panel.isModeDisabled(),
         "actual preview radio DOM did not reflect Point Editing After mode");
     panel.setModeDisabled(false);
-    panel.configurePointEditing({
-        enabled: true,
-        selected: { trackIndex: 0, segmentIndex: 1, pointIndex: 2 },
-        canDelete: true
-    });
-    assert(panel.pointEditingStatus.textContent.includes("Point 3") &&
-        !panel.actionButtons.get("point-selection-clear").disabled &&
-        !panel.actionButtons.get("point-delete").disabled,
-    "selected point identity was not presented");
-    panel.actionButtons.get("point-add-mode").click();
-    assert(pointAddMode === true && panel.getPointAddMode(),
-        "point add mode did not toggle");
-    panel.actionButtons.get("point-selection-clear").click();
-    assert(pointSelectionCleared === 1,
-        "point selection clear action was not emitted");
-    panel.actionButtons.get("point-delete").click();
-    assert(pointDeleteCount === 1, "point delete action was not emitted");
-    panel.configurePointEditing({
-        enabled: true,
-        selected: {
-            addedPointId: "added-1",
-            trackIndex: 0,
-            segmentIndex: 0
-        },
-        canDelete: true
-    });
-    assert(panel.pointEditingStatus.textContent.includes("追加point選択中"),
-        "added point selection state was not presented");
+    assert(["point-selection-clear", "point-add-mode", "point-delete"]
+        .every(action => !panel.actionButtons.has(action)),
+    "removed point editing buttons are still present");
     panel.configureTranslation({
         northMeters: -12.3,
         eastMeters: 45.6,

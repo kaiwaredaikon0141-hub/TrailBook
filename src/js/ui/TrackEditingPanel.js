@@ -34,9 +34,6 @@ export default class TrackEditingPanel {
         this.translationEast = this.element.querySelector(
             ".editor-translation-east"
         );
-        this.pointEditingStatus = this.element.querySelector(
-            ".editor-point-editing-status"
-        );
         this.backupStatus = this.element.querySelector(".editor-backup-status");
         this.progress = this.element.querySelector(".editor-progress");
         this.status = this.element.querySelector(".editor-status");
@@ -152,37 +149,6 @@ export default class TrackEditingPanel {
         this.translationMode.checked = Boolean(enabled);
     }
 
-    getPointAddMode() {
-
-        return this.actionButtons.get("point-add-mode")
-            ?.getAttribute("aria-pressed") === "true";
-    }
-
-    setPointAddMode(enabled) {
-
-        const button = this.actionButtons.get("point-add-mode");
-
-        button?.setAttribute("aria-pressed", String(Boolean(enabled)));
-    }
-
-    configurePointEditing({
-        enabled = false,
-        selected = null,
-        canDelete = false,
-        addMode = this.getPointAddMode()
-    } = {}) {
-
-        this.pointEditingStatus.textContent = selected
-            ? selected.addedPointId
-                ? `追加point選択中 (${selected.addedPointId})`
-                : `既存point選択中: Track ${selected.trackIndex + 1}, Segment ${selected.segmentIndex + 1}, Point ${selected.pointIndex + 1}`
-            : enabled ? "ポイント未選択" : "";
-        this.actionButtons.get("point-selection-clear").disabled = !selected;
-        this.actionButtons.get("point-delete").disabled = !selected || !canDelete;
-        this.actionButtons.get("point-add-mode").disabled = !enabled;
-        this.setPointAddMode(enabled && addMode);
-    }
-
     configureTranslation({
         northMeters = 0,
         eastMeters = 0
@@ -198,11 +164,6 @@ export default class TrackEditingPanel {
             "東",
             "西"
         );
-    }
-
-    getSaveButton() {
-
-        return this.actionButtons.get("save");
     }
 
     isDateRenameEnabled() {
@@ -356,11 +317,13 @@ export default class TrackEditingPanel {
         this.actionButtons.get("apply").disabled = true;
     }
 
-    showSaving(fileName, { backupExists = false } = {}) {
+    showSaving(fileName, { backupExists = null } = {}) {
 
         this.#setControlsDisabled(true, { allowCancel: false });
         this.#setStatus(
-            backupExists
+            backupExists === null
+                ? "保存内容とBackupを確認中…"
+                : backupExists
                 ? `Backup済み。${fileName}へ編集結果を保存中…`
                 : `原本をBackup後、${fileName}へ編集結果を保存中…`,
             "loading"
@@ -391,11 +354,6 @@ export default class TrackEditingPanel {
 
         this.#restoreAfterSave();
         this.#setStatus(message, "error");
-    }
-
-    showSaveCancelled() {
-
-        this.#setStatus("保存をCancelしました。working draftは維持されています。", "ready");
     }
 
     setHistoryState({ canUndo, canRedo }) {
@@ -524,22 +482,6 @@ export default class TrackEditingPanel {
                     </dl>
                     <button type="button" data-editor-action="apply">Apply</button>
                 </fieldset>
-                <fieldset class="editor-point-editing">
-                    <legend>ポイント編集</legend>
-                    <p>After Trackのポイントを直接選択・移動</p>
-                    <span class="editor-point-editing-status" role="status"
-                        aria-live="polite"></span>
-                    <button type="button" data-editor-action="point-selection-clear">
-                        選択解除
-                    </button>
-                    <button type="button" data-editor-action="point-add-mode"
-                        aria-pressed="false">
-                        ポイント追加
-                    </button>
-                    <button type="button" data-editor-action="point-delete">
-                        選択ポイントを削除
-                    </button>
-                </fieldset>
                 <fieldset class="editor-translation">
                     <legend>Track移動</legend>
                     <label>
@@ -586,13 +528,6 @@ export default class TrackEditingPanel {
                 ?.dataset.editorAction;
 
             if (action) {
-                if (action === "point-add-mode") {
-                    const enabled = !this.getPointAddMode();
-
-                    this.setPointAddMode(enabled);
-                    this.#emit(action, enabled);
-                    return;
-                }
                 this.#emit(
                     action,
                     action === "date-apply" ? this.dateInput.value : undefined

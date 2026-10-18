@@ -1,5 +1,7 @@
 // Static contract for Original Backup + In-place Edited GPX saving.
 import EditedGPXLibraryRefreshCoordinator from "../../src/js/core/EditedGPXLibraryRefreshCoordinator.js";
+import TrackEditingCoordinator from "../../src/js/core/TrackEditingCoordinator.js";
+import EventBus from "../../src/js/core/EventBus.js";
 import GPXEditingSaveService from "../../src/js/services/GPXEditingSaveService.js";
 import GPXEditingSaveVerifier from "../../src/js/services/GPXEditingSaveVerifier.js";
 import GPXEditingSourceLoader from "../../src/js/services/GPXEditingSourceLoader.js";
@@ -8,7 +10,8 @@ import {
     TRAILBOOK_BACKUP_FOLDER_NAME,
     isReservedLibraryFolderName
 } from "../../src/js/services/LibraryReservedFolderPolicy.js";
-import GPXEditingSaveDialog from "../../src/js/ui/GPXEditingSaveDialog.js";
+import SelectionState from "../../src/js/state/SelectionState.js";
+import TrackEditingPanel from "../../src/js/ui/TrackEditingPanel.js";
 
 const output = document.getElementById("result");
 const encoder = new TextEncoder();
@@ -401,38 +404,135 @@ async function testInPlaceRefresh() {
     "in-place refresh did not update Catalog, cache, Discovery, and Viewer once");
 }
 
-async function testConfirmationDialog() {
-    const dialog = new GPXEditingSaveDialog();
-    const origin = document.createElement("button");
-
-    document.body.append(origin);
-    dialog.attach(document.body);
-    const confirmation = dialog.confirm({
-        targetPath: "rides/source.gpx",
-        backupExists: false,
-        metrics: {
-            sourcePointCount: 3,
-            retainedPointCount: 2,
-            distanceDifferenceMeters: -1.5
+async function testDirectSaveButton() {
+    const { handle, source } = await createEditingSource();
+    const directory = new MemoryDirectoryHandle("rides", [handle], "granted");
+    const selectionState = new SelectionState();
+    selectionState.select("rides/source.gpx", "system");
+    const entry = {
+        path: "rides/source.gpx", parentPath: "rides",
+        fileHandle: handle, parentFolderHandle: directory
+    };
+    const panel = new TrackEditingPanel();
+    const host = document.createElement("div");
+    document.body.append(host);
+    const service = new GPXEditingSaveService();
+    const inspectBackup = service.inspectBackup.bind(service);
+    let holdInspection = false;
+    let releaseInspection;
+    service.inspectBackup = async (...args) => {
+        if (holdInspection) {
+            await new Promise(resolve => { releaseInspection = resolve; });
+        }
+        return inspectBackup(...args);
+    };
+    let editPoint;
+    let refreshed = 0;
+    const busy = [];
+    const coordinator = new TrackEditingCoordinator({
+        eventBus: new EventBus(), selectionState,
+        mapView: { setEditingTargetSuppressed() {} },
+        getFileEntry: () => entry,
+        getLibraryToken: () => directory,
+        getAvailabilityContext: () => ({
+            directoryHandle: directory, permission: "granted"
+        }),
+        sourceLoader: { async load() { return source; } },
+        saveService: service, panel,
+        previewLayers: {
+            setSource() {}, setCandidate() {}, setMode() {}, setPointMode() {},
+            setPointEditingMode(enabled) { this.pointEditingMode = enabled; },
+            setPointEditHandler(handler) { editPoint = handler; },
+            clear() {}
         },
-        origin
+        interactionGuard: { setLocked() {} },
+        setSaveBusy: value => busy.push(value),
+        async refreshEditedFile() { refreshed += 1; return true; }
     });
+    const nativeConfirm = window.confirm;
+    const showModal = HTMLDialogElement.prototype.showModal;
+    let confirmations = 0;
+    const rejectConfirmation = () => {
+        confirmations += 1;
+        throw new Error("Save must not open a confirmation window");
+    };
+    window.confirm = rejectConfirmation;
+    HTMLDialogElement.prototype.showModal = rejectConfirmation;
+    try {
+        coordinator.attach(host);
+        assert(!host.querySelector(".editor-save-dialog") &&
+            !host.querySelector(".editor-point-editing"),
+        "Editor still attaches a save dialog or redundant point panel");
+        assert(await coordinator.start(), "direct-save Editor did not start");
+        // Keep this test focused on an in-place save, not date renaming.
+        panel.renameCheckbox.checked = false;
+        panel.renameCheckbox.dispatchEvent(new Event("change", { bubbles: true }));
+        const identity = { trackIndex: 0, segmentIndex: 0, pointIndex: 1 };
+        assert(editPoint(identity, { latitude: 35.1, longitude: 135.1 }),
+            "direct map point edit did not reach the working copy");
+        const button = panel.actionButtons.get("save");
+        assert(!button.disabled && handle.createWritableCalls === 0,
+            "editing wrote the source before an explicit Save click");
+        const performSave = coordinator.save.bind(coordinator);
+        let saved;
+        coordinator.save = () => { saved = performSave(); return saved; };
+        holdInspection = true;
+        button.click();
+        const firstSave = saved;
+        assert(coordinator.saving && button.disabled &&
+            panel.actionButtons.get("cancel").disabled,
+        "Save did not lock editing synchronously during Backup inspection");
+        assert(await performSave() === false && handle.createWritableCalls === 0,
+            "duplicate Save wrote the source during Backup inspection");
+        assert(!coordinator.undo() && !coordinator.done() && !coordinator.cancel() &&
+            !editPoint(identity, { latitude: 35.2, longitude: 135.2 }),
+        "working copy could change while Save was pending");
+        holdInspection = false;
+        releaseInspection();
+        const result = await firstSave;
+        assert(result?.fileName === "source.gpx" &&
+            handle.createWritableCalls === 1 && refreshed === 1,
+        "one Save click did not write, verify, and refresh exactly once");
+        const backup = await directory.getDirectoryHandle(TRAILBOOK_BACKUP_FOLDER_NAME);
+        assert((await backup.getFileHandle("source.gpx")).text === SOURCE_XML,
+            "direct Save did not preserve the original Backup bytes");
+        const savedDocument = new DOMParser().parseFromString(handle.text, "application/xml");
+        const points = savedDocument.getElementsByTagName("trkpt");
+        assert(points.length === 3 && Number(points[1].getAttribute("lat")) === 35.1 &&
+            Number(points[1].getAttribute("lon")) === 135.1,
+        "direct Save omitted the point edit or applied an unapplied Preview");
+        assert(panel.status.dataset.state === "saved" &&
+            !coordinator.session.isDirty && !coordinator.saving &&
+            busy.join() === "true,false",
+        "direct Save did not report success and release its busy state");
 
-    assert(dialog.dialog.open, "Save confirmation did not open");
-    assert(dialog.dialog.querySelector("[data-save-backup]").textContent
-        .includes(TRAILBOOK_BACKUP_FOLDER_NAME),
-    "first Save did not explain the Backup lifecycle");
-    assert(dialog.dialog.querySelector("[data-save-preview-note]")?.textContent
-        .includes("未適用のPreviewは含まれません") &&
-        dialog.dialog.querySelector("[data-save-preview-note]").textContent
-            .includes("Previewを作り直して"),
-    "Save confirmation did not warn that unapplied simplification is excluded");
-    assert(document.activeElement === dialog.dialog.querySelector(
-        "[data-save-confirm='cancel']"
-    ), "Save confirmation did not default focus to Cancel");
-    dialog.dialog.querySelector("[data-save-confirm='save']").click();
-    assert(await confirmation, "explicit confirmation did not allow Save");
-    assert(document.activeElement === origin, "Save confirmation lost focus return");
+        assert(editPoint(identity, { latitude: 35.2, longitude: 135.2 }),
+            "editing could not continue after direct Save");
+        const savedBytes = handle.text;
+        service.inspectBackup = async () => {
+            throw Object.assign(new Error("Backup inspection failed"), {
+                code: "BACKUP_CHECK_FAILED"
+            });
+        };
+        button.click();
+        assert(await saved === false && panel.status.dataset.state === "error",
+            "Backup inspection failure was hidden after removing confirmation");
+        assert(handle.text === savedBytes && handle.createWritableCalls === 1 &&
+            coordinator.session.isDirty && !button.disabled && !coordinator.saving,
+        "failed direct Save changed the source, lost the draft, or prevented retry");
+        service.inspectBackup = inspectBackup;
+        button.click();
+        assert(await saved && handle.createWritableCalls === 2 && refreshed === 2,
+            "direct Save could not retry after Backup inspection failure");
+        assert(confirmations === 0 && !host.querySelector("dialog"),
+            "Save used native or app confirmation instead of saving directly");
+    } finally {
+        releaseInspection?.();
+        coordinator.cancel({ restoreFocus: false });
+        window.confirm = nativeConfirm;
+        HTMLDialogElement.prototype.showModal = showModal;
+        host.remove();
+    }
 }
 
 async function run() {
@@ -440,7 +540,7 @@ async function run() {
     await testFailureSafety();
     await testReservedFolderScan();
     await testInPlaceRefresh();
-    await testConfirmationDialog();
+    await testDirectSaveButton();
     output.textContent = `PASS: ${assertions} assertions`;
 }
 
